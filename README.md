@@ -4,8 +4,10 @@ Arcade-Automat mit echtem Roboterarm. Besucher steuern per Teleoperation einen
 SO-101-Follower und schätzen gegen die Uhr den Wert eines Tabletts voller Pucks.
 Auftragsarbeit für eine MINT-Messe.
 
-Die vollständige Dokumentation — Konzept, Spielablauf, Layout, Hardware,
-Entwurfsentscheidungen — steht in **[`picknplay-overview.md`](picknplay-overview.md)**.
+Die vollständige Dokumentation (Konzept, Spielablauf, Layout, Hardware,
+Entwurfsentscheidungen) steht in **[`picknplay-overview.md`](picknplay-overview.md)**.
+Wie man den Automaten startet, prüft und wartet, steht in
+**[`docs/betrieb.md`](docs/betrieb.md)**.
 
 ## Aufbau
 
