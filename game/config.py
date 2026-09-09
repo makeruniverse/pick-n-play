@@ -56,11 +56,14 @@ FONT_PATH  = os.path.join(os.path.dirname(__file__), "assets",
 FONT_SIZES = {"big": 168, "mid": 88, "small": 48, "tiny": 32}
 
 # ── CRT-Overlay ───────────────────────────────────────────────────────────
-CRT            = True
+# PNP_CRT=0 und PNP_BARREL=0 schalten die beiden zum Messen ab, ohne die Datei
+# anzufassen. Gedacht fuer A/B-Laeufe auf dem Pi, der Automat nimmt die Defaults.
+CRT            = os.environ.get("PNP_CRT", "1") != "0"
 SCANLINE_STEP  = 3     # jede dritte Zeile abdunkeln
 SCANLINE_ALPHA = 60    # in der Halle einstellen, im Zweifel runter
 VIGNETTE_ALPHA = 90    # Abdunklung in den Ecken
-BARREL_K       = 0.05  # Woelbung. 0 schaltet nur sie ab, Scanlines bleiben —
+BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
+                       # Woelbung. 0 schaltet nur sie ab, Scanlines bleiben —
                        # das ist der teure Posten, falls der Pi nicht mitkommt
 
 # ── Sound ─────────────────────────────────────────────────────────────────
