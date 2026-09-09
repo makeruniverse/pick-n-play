@@ -7,8 +7,11 @@ import pygame
 # ein abweichendes Panel ab, ohne dass hier etwas geaendert werden muss.
 WIDTH, HEIGHT = 1920, 1200
 FPS = 60
-IDLE_FPS = 20        # der Idle-Screen aendert sich zweimal pro Sekunde. 60 Hz
+IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "20"))
+                     # der Idle-Screen aendert sich zweimal pro Sekunde. 60 Hz
                      # dafuer sind sechs Stunden Waerme fuer nichts.
+                     # PNP_IDLE_FPS=60 laesst den Renderpfad unter Spielszenen-Last
+                     # messen, ohne dass jemand einen Knopf druecken muss.
 # Default ist der Automat. Zum Entwickeln und fuer Fernwartung ueber SSH lassen
 # sich die drei per Umgebungsvariable umschalten, ohne die Datei zu aendern
 # (sonst ueberschreibt das naechste git pull die lokale Anpassung):
