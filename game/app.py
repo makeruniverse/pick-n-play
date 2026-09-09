@@ -95,6 +95,7 @@ def run_game(scene, width, height, fps):
     overlay = crt_overlay(width, height) if CRT else None
     maps    = barrel_maps(width, height, BARREL_K) if CRT and BARREL_K else None
     frame   = pygame.Surface((width, height)).convert(screen) if maps else screen
+    ticks   = 0
 
     while scene is not None:
         for e in pygame.event.get():
@@ -126,6 +127,11 @@ def run_game(scene, width, height, fps):
         # Tickrate der Szene, die gerade lief — vor dem Wechsel, damit der
         # Uebergang nicht mit der Rate der naechsten Szene abgerechnet wird.
         dt = clock.tick(scene.TICK or fps) / 1000
+        # Ohne Ausgabe ist eine Messung auf dem Pi blind: dort haengt kein
+        # Entwickler am Bildschirm, sondern eine SSH-Sitzung am stdout.
+        ticks += 1
+        if FPSLOG and ticks % 60 == 0:
+            print(f"{clock.get_fps():5.1f} fps  {type(scene).__name__}", flush=True)
         scene = scene.next
 
     pygame.quit()

@@ -9,7 +9,14 @@ WIDTH, HEIGHT = 1920, 1200
 FPS = 60
 IDLE_FPS = 20        # der Idle-Screen aendert sich zweimal pro Sekunde. 60 Hz
                      # dafuer sind sechs Stunden Waerme fuer nichts.
-FULLSCREEN = True   # ponytail: am Automaten True, beim Entwickeln Fenster
+# Default ist der Automat. Zum Entwickeln und fuer Fernwartung ueber SSH lassen
+# sich die drei per Umgebungsvariable umschalten, ohne die Datei zu aendern
+# (sonst ueberschreibt das naechste git pull die lokale Anpassung):
+#   PNP_FULLSCREEN=0  Fenster statt Vollbild
+#   PNP_CAMERA=0      FakeDetector, kein Kamerazugriff
+#   PNP_FPSLOG=1      Bildrate einmal pro Sekunde auf stdout
+FULLSCREEN = os.environ.get("PNP_FULLSCREEN", "1") != "0"
+FPSLOG     = os.environ.get("PNP_FPSLOG") == "1"
 
 # Die eine Zeile, die sagt was die vier Knoepfe tun -- in jeder Szene an
 # derselben Stelle. Szeneninhalt endet ueber SAFE_BOTTOM, damit eine
@@ -119,11 +126,15 @@ KEYMAP = {
 KEY_REPEAT = (400, 60)
 
 # ── Hardware ──────────────────────────────────────────────────────────────
-CAMERA        = True   # False = FakeDetector, kein Kamerazugriff
+CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
 # (Arm-Kamera, Top-Down). Zweimal derselbe Index = eine Webcam in beiden
-# Panes, das ist der Layout-Mock. Echte Hardware: (0, 1).
+# Panes, das ist der Layout-Mock.
 # Der Detector haengt immer an der zweiten, der Top-Down-Kamera.
-CAM_INDEXES   = (0, 0)
+#
+# Am Automaten (9.9.2026 am Bild geprueft, nicht geraten): video0 steht seitlich
+# und um 90 Grad gedreht am Arm, video2 schaut senkrecht auf das Tablett.
+# NICHT (0, 1): video1 und video3 sind Metadata-Nodes und liefern kein Bild.
+CAM_INDEXES   = (0, 2)
 CAM_SIZE      = (1280, 720)
 CAM_VIEW      = (880, 495)     # 16:9 wie CAM_SIZE — andere Ratio verzerrt
 CAM_POS       = ((490, 740), (1430, 740))   # Mittelpunkte, links Arm
