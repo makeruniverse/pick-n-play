@@ -19,8 +19,9 @@ Die beiden benutzen getrennte Python-Umgebungen und fassen sich nicht an:
 Hardware: Raspberry Pi 5 (8 GB) mit Ubuntu 24.04, zwei SO-101-Arme über CH343-Adapter,
 zwei USB-Kameras, Display an HDMI-A-1.
 
-> Das Spiel läuft **noch nicht** auf dem Pi. Bisher ist nur Teleop aufgesetzt.
-> Was dafür noch fehlt, steht unten unter „Offen".
+> Das Spiel ist seit dem 9.9.2026 auf dem Pi installiert und startet. Es ist
+> aber **nicht abgenommen**: es erreicht die Zielbildrate nicht und treibt den
+> Pi zusammen mit der Teleop ins Drosseln. Siehe „Stand der Abnahme".
 
 ## Reinkommen
 
@@ -115,6 +116,29 @@ lose oder ID verstellt.
 Ein Port **taucht gar nicht auf**. Dann ist ein USB-Adapter ab, und das ist der
 gefährliche Fall, siehe nächster Abschnitt.
 
+### Der Fall, der wie ein Servodefekt aussieht und keiner ist
+
+Am 9.9.2026 fielen über Stunden Motoren aus, und zwar wechselnd: erst 2 und 4,
+dann alle sechs, dann 4 und 6. Der Scan fand jedes Mal alle sechs, LeRobot
+scheiterte trotzdem. Die Ursache war das **Netzteil, das auf 5 V stand**.
+
+Der Grund, warum das so schwer zu sehen ist: ein Ping zieht fast keinen Strom,
+deshalb antworten bei Unterspannung alle Motoren brav im Scan. Sobald LeRobot
+aber Torque aktiviert, brechen die zwei ein, die am meisten ziehen — bei einem
+SO-101 sind das 4 (Wrist-Flex) und 6 (Greifer), weil die gegen die Schwerkraft
+arbeiten. Sie fallen vom Bus, und die Fehlermeldung sagt „Missing motor IDs".
+
+**Merkregel: wechselnde Motor-IDs bedeuten Spannung, feste bedeuten Hardware.**
+Fällt immer derselbe Motor aus, ist es der Motor oder sein Stecker. Wechselt es,
+miss zuerst die Spannung. Follower 12 V, Leader 7,4 V.
+
+### Der erste Startversuch scheitert manchmal
+
+Auch bei korrekter Spannung schlägt der erste Verbindungsversuch gelegentlich
+fehl und der zweite läuft. Deshalb steht `Restart=on-failure` im Override, und
+deshalb ist `NRestarts=1` nach einem Start kein Grund zur Sorge. Erst eine
+steigende Zahl ist einer.
+
 ## Welcher Adapter ist welcher Arm
 
 ```sh
@@ -204,22 +228,73 @@ Minuten stehen und meldet das, statt zu heizen.
 | `NRestarts` steigt | `journalctl -u teleop.service -b \| tail -30` | Hardware, nie Software |
 | „Missing motor IDs" | `ls -l /dev/serial/by-id/` | Adapter ab, Nummern verrutscht |
 | Ein Bus schweigt komplett | Servo-Netzteil und Buskabel | Strom fehlt, nicht die Servos |
+| Einzelne Motoren fehlen sprunghaft, mal 2 und 4, mal 4 und 6 | **Spannung am Netzteil messen** | Unterspannung. Siehe unten |
 | Über 80 °C | `systemctl show teleop.service -p NRestarts` | Crash-Loop heizt den Pi |
 | Platte über 85 % | `journalctl --disk-usage` | siehe „Wartung" |
 
+## Das Spiel starten
+
+```sh
+cd ~/picknplay
+.venv/bin/python game/main.py
+```
+
+Läuft über KMSDRM im Vollbild, ohne Desktop. **Achtung:** über SSH gibt es dabei
+keine Tastatureingabe, SDL liest bei KMSDRM aus `/dev/input`. Zum Bedienen
+gehört eine USB-Tastatur an den Pi, zum Beenden `q`.
+
+Startest du es aus einer SSH-Sitzung, hänge immer ein `timeout` davor. Sonst
+läuft es weiter, wenn die Sitzung abbricht, und ein ausgelasteter Pi lässt keine
+neue Anmeldung mehr zu:
+
+```sh
+timeout -s KILL 30 .venv/bin/python game/main.py
+```
+
+### Schalter zum Messen und Entwickeln
+
+Alle per Umgebungsvariable, Default ist immer der Automat. Die Datei muss man
+dafür nicht anfassen, was wichtig ist, weil das nächste `git pull` lokale
+Änderungen einkassiert.
+
+| Variable | Wirkung |
+|---|---|
+| `PNP_FULLSCREEN=0` | Fenster statt Vollbild |
+| `PNP_CAMERA=0` | `FakeDetector`, kein Kamerazugriff |
+| `PNP_FPSLOG=1` | Bildrate und Szene, einmal pro Sekunde auf stdout |
+| `PNP_CRT=0` | CRT-Overlay komplett aus |
+| `PNP_BARREL=0` | nur die Wölbung aus, Scanlines bleiben |
+| `PNP_IDLE_FPS=60` | Idle-Screen auf Spielszenen-Last, für Messungen ohne Tastatur |
+
+## Stand der Abnahme
+
+Installiert und geprüft: `uv`, Python 3.13, OpenCV 5.0, pygame-ce 2.5.8, alle
+vier Selbsttests grün, beide Kameras liefern Bild, KMSDRM startet, Ton über
+HDMI vorhanden.
+
+Nicht abgenommen: **die Bildrate.** Ziel sind 60 fps, gemessen wurden 19,6 mit
+vollem CRT und 40 im entkernten Zustand. Mit Spiel und Teleop gleichzeitig geht
+der Pi in unter einer Minute auf 83 °C und drosselt. Die Zahlen und die drei
+Stellschrauben stehen im Overview unter „Messung auf dem Pi".
+
+**Bis das entschieden ist, nicht beides gleichzeitig dauerhaft laufen lassen.**
+
 ## Offen
 
-Das Spiel läuft noch nicht auf dem Pi. Dafür fehlt:
+1. Entscheidung zur Bildrate: Wölbung streichen, auf 1920 × 1080 nativ umziehen,
+   oder Zielbildrate auf 30 senken. Entwurfsfrage, keine Konfigurationsfrage.
+2. Aktive Kühlung. Ohne Lüfter drosselt der Pi unter Doppellast.
+3. Layout auf 1080, falls Punkt 1 so ausgeht. `FOOTER_Y = 1120` liegt sonst
+   außerhalb des Bildes.
+4. Ton am Automatenlautsprecher abhören. Es gibt nur HDMI-Audio, keine USB-Karte.
+   Beim Testlauf traten ALSA-Underruns auf.
+5. ArUco-Erkennungsrate gegen die gedruckten Marker. Beim Testlauf lagen keine
+   auf dem Tablett.
+6. `picknplay.service` schreiben, mit `After=teleop.service`, aber ohne
+   `Requires` — das Spiel soll auch ohne Arme starten.
+7. Die Arm-Kamera hängt um 90° verdreht. Der Passthrough steht damit quer.
 
-1. `uv` installieren, Repo klonen, `sudo usermod -aG render ubuntu`
-2. `CAM_INDEXES` auf `(0, 2)` korrigieren. Die Capture-Nodes sind `video0` und `video2`,
-   `video1` und `video3` sind Metadata-Nodes und liefern kein Bild.
-3. Audio. Es gibt nur `vc4hdmi0` und `vc4hdmi1`, weder `alsa-utils` noch Pipewire sind
-   installiert. So findet SDL kein Ausgabegerät.
-4. Auflösung klären. HDMI-A-1 meldet 1920×1080, `config.py` rechnet mit 1920×1200.
-5. `picknplay.service` schreiben, mit `After=teleop.service`, aber ohne `Requires`.
-   Das Spiel soll auch ohne Arme starten.
-
-Dazu die zwei Stabilitätsumbauten: Seriennummern statt `ttyACM*` in `run_teleop.sh`, und
-Kameras über `/dev/v4l/by-path/` statt über Indizes. Beide Kameras melden denselben
-USB-Serial, `by-id` unterscheidet sie also nicht, nur der physische Port tut das.
+Dazu die zwei Stabilitätsumbauten: Seriennummern statt `ttyACM*` in
+`run_teleop.sh`, und Kameras über `/dev/v4l/by-path/` statt über Indizes. Beide
+Kameras melden denselben USB-Serial, `by-id` unterscheidet sie also nicht, nur
+der physische Port tut das.

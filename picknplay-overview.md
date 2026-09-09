@@ -110,7 +110,8 @@ sehen. Schritt 1–3 sind heute machbar, 4–5 brauchen Hardware.
    lauter. Die Melodien stehen als Zeichenketten in `PIECES` — nachbessern ist
    eine Zeile ändern, kein Umbau.
 3. ~~CRT-Overlay in `run_game`~~ — erledigt, inklusive Wölbung und Pixelfont.
-   Offen bleibt die Einstellung in der Halle und die Messung auf dem Pi.
+   Die Messung auf dem Pi liegt seit dem 9.9.2026 vor und ist negativ, siehe
+   „Messung auf dem Pi". Offen bleibt die Einstellung in der Halle.
 4. ~~`Camera` + `ArucoDetector`~~ — erledigt, inkl. Passthrough-Inset. Offen
    bleibt die Erkennungsrate gegen die *gedruckten* Marker unter Hallenlicht.
 5. Teleop-Prozess: Torque-Zustandsmaschine, Heartbeat-Empfänger, Weckrampe.
@@ -170,7 +171,7 @@ Der Skill liegt im Rückschluss („was war das Ding wert?"), nicht in der Feinm
   - *Top-Down*, fest montiert, Autofokus und Belichtung fixiert — liefert die Marker-Erkennung
   - *Arm-Kamera*, reiner Passthrough auf dem Display, keine Auswertung — das
     gilt weiterhin, das Overlay liegt nur auf der Top-Down-Kamera
-- **Display: Asus 15", 1920 × 1200 (16:10).** Vorhanden und gesetzt. Das Spiel rendert nicht in dieser Auflösung, siehe „Auflösung und Vollbild". Zweites Display optional für Zuschauer
+- **Display: Asus MB169CK, 15,6", 1920 × 1080 (16:9).** Am 9.9.2026 per EDID am Pi ausgelesen. **Korrektur:** hier stand vorher „1920 × 1200 (16:10)", das war falsch — die MB169-Reihe ist FHD. Die Entwurfsauflösung in `config.py` steht weiterhin auf 1200, `pygame.SCALED` rechnet also mit Faktor 0,9 herunter. Das kostet Schärfe an der Pixelfont und Rechenzeit, siehe „Messung auf dem Pi". Zweites Display optional für Zuschauer
 - **Vier Arcade-Buttons** (hoch/runter/links/rechts) an GPIO, plus Not-Aus. **Panel 3 mm** — Snap-in (Sanwa OBSF-30, spezifiziert für 2–4 mm) liegt im Bereich, aber bei Sperrholz sind Schraubtaster (Seimitsu PS-14-KN, OBSN-30) mit Mutter die haltbarere Wahl. Lochmaß 30 mm, Flachstecker 2,8 mm.
 - WS2812B-Streifen. Auf Pi 5 funktioniert `rpi_ws281x` nicht (RP1); Optionen: PIOLib, SPI-Weg (`rpi5-ws2812`, `Pi5Neo`) oder Auslagerung auf einen ESP32 mit WLED via UDP/DDP. Letzteres nimmt Timing, Netzteil und Pegelwandlung aus dem Pi.
 - 3D-gedruckte Pucks: flacher Boden, tiefer Schwerpunkt, einheitliche Greifrippe, ArUco-Marker plan oben
@@ -970,6 +971,47 @@ Die Vignette deckt nebenbei die schwarzen Ecken ab, die die Wölbung erzeugt.
 Der CRT-Anteil sind rund **3,3 ms**. Auf dem Pi ist das der Posten, der als
 erstes kippt — dort ist zu messen, nicht zu schätzen.
 
+#### Messung auf dem Pi, 9. September 2026
+
+Gemessen am Automaten: Pi 5 (8 GB), Ubuntu 24.04, KMSDRM-Vollbild, beide Kameras
+aktiv, Teleop gestoppt. Der Idle-Screen wurde über `PNP_IDLE_FPS=60` auf
+Spielszenen-Last getrieben, weil über SSH bei KMSDRM keine Taste ankommt und die
+Spielszene sonst nicht erreichbar ist.
+
+| Ziel 60 fps | CPU | erreicht |
+|---|---|---|
+| alles an | 268 % | **19,6** |
+| ohne Wölbung (`BARREL_K = 0`) | 195 % | **26,5** |
+| ohne CRT | 189 % | **36,6** |
+| ohne CRT, ohne Kameras | 92 % | **40,0** |
+
+**60 fps sind auf diesem Pi nicht erreichbar.** Auch nicht entkernt. Die letzte
+Zeile ist der eigentliche Befund: 40 fps bei 92 % CPU heißt, dass da nichts mehr
+zu parallelisieren ist, der Pfad hängt an einem Thread.
+
+Drei Hypothesen wurden geprüft, zwei davon widerlegt:
+
+**Textrendering war es nicht.** `font.render()` lief für jede Zeichenkette in
+jedem Bild neu, Press Start 2P in bis zu 168 px. Ein `lru_cache` darauf brachte
+in einer Variante 10 %, sonst nichts. Der Cache bleibt drin, er kostet nichts
+und schadet nicht, aber er war nicht die Ursache.
+
+**`vsync=1` kostet 12 bis 19 %**, erkauft sich das aber mit Tearing und bringt
+die 60 trotzdem nicht. Bleibt drin.
+
+**Native 1080 statt herunterskalierter 1200 bringt am meisten**, in der Variante
+ohne Wölbung 26,5 → 34,2 fps. Das ist der Grund, warum die Auflösungsfrage oben
+unter „Offene Punkte" steht.
+
+Dazu ein Wärmebefund, unabhängig von der Bildrate: mit Spiel **und** Teleop
+gleichzeitig läuft der Pi in unter einer Minute auf 83 °C und drosselt
+(`throttled=0xe0008`), die Bildrate fällt dabei weiter. Ohne aktive Kühlung ist
+der Dauerbetrieb am Messetag so nicht zu halten.
+
+Die Entscheidung, welche der drei Stellschrauben gezogen wird — Wölbung streichen,
+auf 1080 umziehen, Zielbildrate auf 30 senken — steht noch aus. Sie ist eine
+Entwurfsentscheidung, keine Konfigurationsfrage.
+
 **Der Zielkonflikt gehört benannt:** Scanlines nehmen Helligkeit weg, und
 Lesbarkeit aus 8 m in einer hellen Halle ist das oberste Prinzip dieses
 Projekts. `SCANLINE_ALPHA` steht deshalb in `config.py` und wird **in der Halle**
@@ -1313,10 +1355,10 @@ Jetson, Browser-Frontend, WebSocket, Flask, Kubernetes, ConfigSync, GCS, Vertex-
 - `TRAY_ROI` am aufgebauten Automaten einstellen — hängt an Kamerahöhe und Tablettgröße
 - CRT-Scanline-Stärke unter Hallenlicht: ab wann kostet der Effekt mehr Lesbarkeit als er Optik bringt (`SCANLINE_ALPHA`, `VIGNETTE_ALPHA`)
 - Ob der Pi die 3,3 ms für die Wölbung übrig hat. Falls nicht: `BARREL_K = 0`
-- Ob `cv2` neben `pygame` auf Raspberry OS sauber lädt — auf macOS meldet es doppelte SDL2-Symbole (Warnung, kein Fehler)
+- ~~Ob `cv2` neben `pygame` auf dem Pi sauber lädt~~ — erledigt am 9.9.2026. Auf Ubuntu 24.04 laden OpenCV 5.0.0 und pygame-ce 2.5.8 unter Python 3.13 ohne Symbolkonflikt
 - Audioausgabe am Pi (Klinke, HDMI oder USB) und ob am Stand überhaupt etwas hörbar ist
 - Ob die 60-px-Balken oben/unten hinter der Kabinettblende verschwinden — sonst 1280 × 800 als Entwurfsauflösung erwägen
-- Ob der Asus 15" der endgültige Monitor ist (bestimmt, ob sich 16:10 als Entwurfsauflösung lohnt)
+- Ob bei 1920 × 1080 nativ gerendert wird statt bei 1200 herunterskaliert. Das Panel kann kein 16:10, die Frage ist also nicht mehr *ob* 16:10 sich lohnt, sondern ob das Layout in `scenes.py` auf 1080 umgezogen wird (`FOOTER_Y = 1120` liegt sonst außerhalb des Bildes)
 - Snap-in vs. Schraubtaster bei 3 mm Sperrholz — Ausrissverhalten testen
 - Zwei Kameras gleichzeitig: Bandbreite am realen Pi verifizieren (Index der Arm-Kamera steht noch nicht fest, `CAM_INDEX` ist einer)
 - FPV-Latenz, falls Hard Mode kommt
