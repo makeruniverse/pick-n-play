@@ -1,10 +1,27 @@
 import pygame
+from functools import lru_cache
 from balance import gap
 from config import *
 from app import SceneBase
 
+
+@lru_cache(maxsize=256)
+def render(font, text, color):
+    """Gerenderte Textflaeche, gemerkt statt jedes Bild neu gebaut.
+
+    Press Start 2P in 168 px war der teuerste Posten im Renderpfad: der
+    Schirm zeigt hoechstens ein paar Dutzend verschiedene Zeichenketten, und
+    die allermeisten stehen sekundenlang unveraendert da. Gemessen auf dem
+    Pi 5 am 9.9.2026, Idle-Screen auf 60 Hz getrieben.
+
+    256 Eintraege reichen mit Abstand: Ziffern, Restzeit und Initialen sind
+    die einzigen, die sich oft aendern, und LRU wirft den Rest von allein raus.
+    """
+    return font.render(text, False, color)
+
+
 def draw(screen, font, text, x, y, color):
-    surf = font.render(str(text), False, color)
+    surf = render(font, str(text), color)
     screen.blit(surf, surf.get_rect(center=(x,y)))
 
 
@@ -199,7 +216,7 @@ class GameScene(SceneBase):
         # sich selbst -- ein gelber Rahmen drumherum sagt nichts, was das Bild
         # nicht schon zeigt, und verdeckt den Puck.
         for i, quad in self.marks.items():
-            v = f.render(str(VALUES[i]), False, YELLOW)
+            v = render(f, str(VALUES[i]), YELLOW)
             screen.blit(v, v.get_rect(center=(
                 r.x + sum(x for x, _ in quad) / 4 * r.w,
                 r.y + sum(y for _, y in quad) / 4 * r.h)))
