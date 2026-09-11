@@ -169,22 +169,21 @@ anderen an Masse. Der Pull-up sitzt im Chip, es kommt kein Widerstand und kein
 Kondensator ins Kabel — entprellt wird in Software (`bounce_time` in
 `hw.Buttons`).
 
-| Funktion | GPIO (BCM) | Header-Pin | Masse daneben |
+| Funktion | Farbe | GPIO (BCM) | Header-Pin |
 |---|---|---|---|
-| hoch   | 17 | 11 | 9  |
-| runter | 27 | 13 | 14 |
-| links  | 22 | 15 | 14 |
-| rechts | 23 | 16 | 20 |
+| hoch   | blau | 25 | 22 |
+| rechts | grün | 8  | 24 |
+| links  | rot  | 7  | 26 |
+| runter | gelb | 1  | 28 |
+| Masse  |      |    | 30 |
 
-Vier benachbarte Löcher, drei Masse-Pins dazwischen. Ein Pfostenstecker, keine
-Springerei über das Board.
+Eine Reihe, gemeinsame Masse an 30. So verdrahtet am 11.9.2026.
 
-**Warum ausgerechnet diese vier:** der Header ist zur Hälfte vergeben, und die
-Kollision merkt man erst, wenn das Kabel dran ist. Belegt sind 0/1 (HAT-EEPROM),
-2/3 (I²C mit festen Pull-ups auf dem Board), 4 (1-Wire), 7–11 (SPI0), 12/13
-(Hardware-PWM), 14/15 (serielle Konsole), 18–21 (PCM/I²S). **GPIO 7–11 bleiben
-frei**, weil der LED-Streifen dort landet, falls er nicht an einen ESP32 geht —
-GPIO 10 (Header 19) ist dann der Datenpin.
+**Zwei Pins mit Vorgeschichte:** GPIO 7 und 8 sind die Chip-Selects von SPI0.
+SPI0 muss deshalb **aus** sein (`dtparam=spi=on` auskommentiert), sonst belegt
+der Kernel die Pins und gpiozero meldet „GPIO busy". GPIO 1 ist ID_SC des
+HAT-EEPROMs und wird nur beim Booten gelesen — den gelben Knopf beim Einschalten
+nicht gedrückt halten.
 
 **Der Not-Aus hängt nicht an GPIO.** Er sitzt in der 12-V-Versorgung der Servos
 und trennt sie. Ein Not-Aus, der erst durch Python muss, ist keiner.
@@ -202,38 +201,59 @@ von selbst auf 0 (`config.MAC`), und der Import wird dort nie ausgeführt.
 
 ## LED-Streifen
 
-Daten an **GPIO 10 (Header 19)** über einen Pegelwandler 3,3 → 5 V, Masse des
-Streifennetzteils mit Pi-Masse verbinden, Strom nie über den Pi. `hw.Leds`
-schreibt direkt auf `/dev/spidev0.0`; fehlt das Gerät, läuft das Spiel mit
-stummen LEDs weiter und sagt beim Start `LEDs aus: …`.
+WS2812, Daten an **GPIO 14 (Header 8)**. Strom kommt aus dem eigenen Netzteil
+(5 V, 18 A), dessen Masse mit Pi-Masse verbunden (Header 6). Der Pi hängt an
+seinem USB-C-Netzteil, **nicht** am LED-Netzteil über Header-Pin 4: so versorgt
+startete er am 11.9.2026 immer wieder neu.
 
-Einmalig auf dem Pi:
+`hw.Leds` schreibt auf `/dev/spidev5.0`. Der RP1 des Pi 5 führt auf GPIO 14 den
+MOSI von SPI5 heraus; das Overlay belegt außerdem 12 (CS), 13 und 15. Fehlt das
+Gerät, läuft das Spiel mit stummen LEDs weiter und sagt beim Start `LEDs aus: …`.
+
+GPIO 14 ist ab Werk UART0 mit Kernelkonsole und Login-Prompt. Die müssen weg,
+sonst gehen Bootmeldungen als Farben auf den Streifen. Einmalig auf dem Pi:
 
 ```sh
-# SPI einschalten
-echo "dtparam=spi=on" | sudo tee -a /boot/firmware/config.txt
-# spidev nimmt sonst nur 4096 Byte pro Schreibvorgang. Ein Bild mit 480 LEDs
-# hat 11 820, wird gestückelt, und in der Lücke latcht ein älterer WS2812B
-# mitten im Bild. Ans Ende der EINEN Zeile in cmdline.txt, keine neue Zeile:
-sudo sed -i 's/$/ spidev.bufsiz=65536/' /boot/firmware/cmdline.txt
-sudo usermod -aG spi $USER
+cd /boot/firmware
+sudo cp config.txt config.txt.pnp-bak && sudo cp cmdline.txt cmdline.txt.pnp-bak
+sudo sed -i 's/^dtparam=spi=on/#dtparam=spi=on/' config.txt   # SPI0 aus, GPIO 7/8 frei
+echo "dtparam=uart0=off"         | sudo tee -a config.txt      # GPIO 14/15 frei
+echo "dtoverlay=spi5-1cs-pi5"    | sudo tee -a config.txt      # SPI5-MOSI auf GPIO 14
+sudo sed -i 's/console=serial0,115200 //' cmdline.txt
+# spidev nimmt sonst nur 4096 Byte pro Schreibvorgang; 480 LEDs sind 11 820.
+# Ans Ende der EINEN Zeile in cmdline.txt, keine neue Zeile:
+sudo sed -i 's/$/ spidev.bufsiz=65536/' cmdline.txt
+sudo systemctl mask serial-getty@ttyAMA0.service
 sudo reboot
 ```
 
-Prüfen: `ls /dev/spidev0.0` und `cat /sys/module/spidev/parameters/bufsiz`
-→ 65536. Stückelt das Spiel trotzdem, steht das beim Start im Log.
+Prüfen: `ls -l /dev/spidev5.0` (Gruppe `dialout`), kein `/dev/ttyAMA0` mehr,
+`cat /sys/module/spidev/parameters/bufsiz` → 65536.
 
-Farben falsch (Rot und Grün vertauscht)? `LED_ORDER` in `config.py` — WS2812B
-ist `GRB`, WS2811-Streifen sind oft `RGB`. Nur ein Teil leuchtet? `LED_COUNT`.
+Erster Test am Streifen, klein und dunkel, ohne Datei zu ändern:
 
+```sh
+PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1 timeout -s KILL 20 .venv/bin/python -c "
+import sys, time; sys.path.insert(0, 'game')
+from hw import Leds
+l = Leds()
+for s in ('idle', 'game', 'hurry', 'score'):
+    print(s); l.show(s, 0.5); time.sleep(4)
+l.close()"
+```
+
+Mit offener Datenleitung leuchten ein paar LEDs am Anfang zufällig — das ist
+Rauschen, kein Defekt. Farben falsch (Rot und Grün vertauscht)? `LED_ORDER` in
+`config.py` — WS2812B ist `GRB`, WS2811-Streifen sind oft `RGB`. Nur ein Teil
+leuchtet? `LED_COUNT` bzw. `PNP_LED_COUNT`.
 
 Prüfen, ob ein Taster ankommt, ohne das Spiel zu starten:
 
 ```sh
-.venv/bin/python -c "
+timeout -s KILL 15 .venv/bin/python -c "
 from gpiozero import Button
 import time
-b = {p: Button(p) for p in (17, 27, 22, 23)}
+b = {p: Button(p) for p in (25, 8, 7, 1)}
 for _ in range(200):
     print({p: v.is_pressed for p, v in b.items()}, end='\r')
     time.sleep(0.05)"

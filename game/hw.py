@@ -481,9 +481,12 @@ if __name__ == "__main__":
     btn.btns["up"].is_pressed = False
     assert btn.pump(0.125) == [] and btn.wait == {}, "losgelassen nicht vergessen"
 
-    # 5 · FakeDetector hat dieselbe Schnittstelle
-    f = FakeDetector().fresh()
-    assert len(f) == 5 and all(len(q) == 4 for q in f.values())
+    # 5 · FakeDetector hat dieselbe Schnittstelle: startet leer, legt nach
+    fk = FakeDetector(period=0.05)
+    assert fk.fresh() == {}, "Attrappe startet nicht leer"
+    time.sleep(0.08)                  # > period, < 3 x period (sonst raeumt sie ab)
+    f = fk.fresh()
+    assert len(f) == 1 and all(len(q) == 4 for q in f.values())
 
     # 6 · LED-Kodierung: Reihenfolge GRB, MSB zuerst, ein SPI-Byte pro Bit.
     #     Das ist die Stelle, die sich ohne Streifen nicht ansehen laesst.

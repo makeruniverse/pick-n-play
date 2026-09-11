@@ -300,40 +300,41 @@ MARK_FONT     = "tiny"    # Schriftgroesse der eingeblendeten Preise. Wird
                           # Kamera will man sehen, WELCHEN Marker sie erkennt.
 MARK_WIDTH    = 5         # Strichstaerke des Detektionsfensters
 # ── Knoepfe ───────────────────────────────────────────────────────────────
-# BCM-Nummern, nicht Header-Pins. 17 · 27 · 22 · 23 sind Header 11 · 13 · 15 · 16,
-# also vier benachbarte Loecher mit Masse bei 9, 14 und 20 gleich daneben --
-# ein Pfostenstecker, keine Springerei ueber das Board.
+# BCM-Nummern, nicht Header-Pins. So verdrahtet am 11.9.2026: Header 22 · 24 ·
+# 26 · 28 sind GPIO 25 · 8 · 7 · 1, gemeinsame Masse an Header 30. Eine Reihe,
+# ein Stecker.
 #
-# Warum nicht irgendwelche: der Header ist zur Haelfte schon vergeben und die
-# Kollisionen fallen erst auf, wenn das Kabel dran ist.
-#   0, 1       ID-EEPROM des HAT-Steckplatzes
-#   2, 3       I2C, haben feste 1,8-kOhm-Pull-ups auf dem Board
-#   4          1-Wire, Standardpin
-#   7..11      SPI0 -- bleibt frei, da haengt der LED-Streifen dran, falls er
-#              nicht an einen ESP32 geht. GPIO 10 (MOSI) ist der Datenpin.
-#   12, 13     Hardware-PWM
-#   14, 15     serielle Konsole
-#   18..21     PCM/I2S, falls Ton ueber ein Audio-HAT geht
-# Uebrig bleiben 5, 6, 16, 17, 22, 23, 24, 25, 26, 27. Vier davon, benachbart.
+# Zwei davon waren frueher als vergeben gefuehrt und sind es jetzt nicht mehr:
+#   1          ID_SC des HAT-EEPROMs. Wird nur beim Booten gelesen, danach
+#              ein normaler Pin. Knopf beim Einschalten nicht gedrueckt halten.
+#   7, 8       CE1/CE0 von SPI0. Deshalb darf SPI0 NICHT an sein
+#              (dtparam=spi=on), sonst belegt der Kernel die Pins und gpiozero
+#              meldet "GPIO busy". Der Streifen laeuft ueber SPI5, siehe unten.
 #
 # Taster gegen GND, interner Pull-up, gedrueckt = LOW. Kein Widerstand,
 # kein Kondensator: das Entprellen macht gpiozero.
 #
 # Der Not-Aus ist NICHT hier. Er sitzt in der Servo-Stromversorgung und trennt
 # 12 V. Ein Not-Aus, der erst durch Python muss, ist keiner.
-BUTTON_PINS   = {17: "up", 27: "down", 22: "left", 23: "right"}
+BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blau, gelb, rot, gruen
 # Wie CAMERA: Default ist der Automat, PNP_BUTTONS=0 zum Entwickeln ohne GPIO.
 BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
 
 # ── LED-Streifen ──────────────────────────────────────────────────────────
-# WS2812-Protokoll ueber SPI0, Daten auf GPIO 10 (Header 19), Pegelwandler
-# 3,3 -> 5 V dazwischen. Kein Umschalter noetig: fehlt das Geraet (Mac, SPI
-# nicht aktiviert), bleiben die LEDs stumm -- wie Music ohne Audiogeraet.
-LED_DEV     = "/dev/spidev0.0"
-LED_COUNT   = 480     # ponytail: geraten, 3 m x 160/m. Zaehlt, sobald der Streifen da ist
+# WS2812-Protokoll ueber SPI5, Daten auf GPIO 14 (Header 8). Der RP1 des Pi 5
+# fuehrt dort SPI5-MOSI heraus (dtoverlay=spi5-1cs-pi5, belegt auch 12, 13, 15),
+# also bleibt der Treiber derselbe wie auf SPI0. GPIO 14 ist sonst UART0 mit
+# der Bootkonsole: die muss aus, sonst gehen Kernelmeldungen als Farben raus.
+# Einrichtung in docs/betrieb.md. Fehlt das Geraet (Mac, SPI aus), bleiben die
+# LEDs stumm -- wie Music ohne Audiogeraet.
+LED_DEV     = "/dev/spidev5.0"
+# Anzahl und Helligkeit per Umgebung, damit der erste Test am Streifen keine
+# Dateiaenderung auf dem Pi braucht: PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1
+LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 480))   # ponytail: geraten, 3 m x 160/m
 LED_ORDER   = "GRB"   # WS2812B. WS2811-Streifen (12/24 V) sind oft RGB -- am Streifen pruefen
-LED_BRIGHT  = 0.3     # Strombudget: 3 m FCOB bei Vollweiss ~8,5 A an 5 V. Das ist
-                      # Netzteil- und Waermefrage in einer Zahl, nicht Geschmack
+LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 0.3))
+                      # Strombudget: 3 m FCOB bei Vollweiss ~8,5 A an 5 V. Das ist
+                      # Netzteil- und Waermefrage in einer Zahl, nicht Geschmack.
 LED_FPS     = 30
 LED_STRIPES = 24      # Zuckerstangen-Streifen ueber die ganze Laenge, dichteunabhaengig
 # LED_A / LED_B (Zuckerstange, Balken) kommen aus dem Thema; Rot bleibt HPI:
