@@ -6,6 +6,71 @@
 
 ---
 
+## Wertung (11. September 2026)
+
+Das Punktesystem war seit dem 10.9. als Ganzes offen und ist es jetzt nicht mehr.
+
+**Vorher:** `score = |Zielwert − Tablettsumme|`, klein ist gut, Bestenliste
+aufsteigend — plus zwei Erklärzeilen (`THE LOWER THE BETTER`,
+`LOWER MEANS BETTER`), ohne die man die Liste falsch herum liest. Dass die
+Zahl eine Gebrauchsanweisung brauchte, war der Befund.
+
+**Jetzt:** 0 bis 1000, hoch ist gut, aus zwei Teilen:
+
+```
+genauigkeit = 900 · (1 − off/distanz) ²      distanz = Abstand bei Rundenbeginn
+zeit        = 100 · restzeit/(30 − 3)        ist nur ≠ 0, wenn perfekt
+```
+
+Drei Entscheidungen stecken darin:
+
+**Gewertet wird der Anteil der geschlossenen Distanz, nicht der absolute
+Fehler.** Eine absolute Skala braucht eine Konstante („so viele Punkte je 10
+Cent"), die bei jeder Preisänderung neu geraten werden muss. Der Anteil
+braucht keine. Nebenwirkung, die das Gleichstandsproblem fast alleine löst:
+zwei Spieler, beide 0,30 € daneben, bekommen bei verschiedener Startdistanz
+verschiedene Punkte.
+
+**Der Zeitbonus ist nur für Perfekte zu holen — ohne Sonderzweig.** Die Runde
+endet vorzeitig ausschließlich über `PERFECT_HOLD`, also ist Restzeit > 0
+gleichbedeutend mit einem Treffer. Wer daneben liegt und nachdenkt statt zu
+hetzen, verliert dadurch nichts, und das ist wichtig: der Skill des Spiels ist
+das Schätzen.
+
+**Die Datenbank speichert weiter die physische Wahrheit** (`off`, `dist`,
+`secs`), nicht die Punktzahl. Eine geänderte Formel gilt damit rückwirkend
+auch für alte Runden. Der Preis: die Bestenliste ist kein `ORDER BY` mehr,
+weil die Punktzahl ein Verhältnis ist — `top()` liest alle Zeilen und rechnet
+in Python. Ein Messetag sind ein paar hundert Zeilen.
+
+**Preise statt Punkte.** Zehn Cupcakes zu 1,40 € bis 5,20 €. Gerechnet wird in
+10-Cent-Einheiten, weil die Preise teilerfremd sein müssen — glatte Preise in
+Cent hätten ggT 10, und damit wäre das Spiel wieder binär (Distanz durch den
+Teiler teilbar → ein Griff genügt, sonst gar nicht erreichbar). Geteilt wird
+genau einmal, in `euro()` in `scenes.py`.
+
+**Rundenlänge und Schwierigkeit sind jetzt ein Modus.** `MODES` in
+`config.py`, umschaltbar mit `PNP_MODE`, einzelne Werte mit
+`PNP_ROUND_SECONDS=20` — die Zahlen werden noch viel durchprobiert und ein
+Hard Mode ist ein weiterer Eintrag im Dict, keine Codeänderung.
+
+**Zwei Folgebefunde, beide gemessen statt geraten:**
+
+`GAP_MOVES` musste von 3 auf 2. Ein teleoperierter Pick dauert 10–20 s; bei 30
+Sekunden Rundenzeit wären drei Züge ein Versprechen, das der Arm nicht hält —
+und der alte Selbsttest zeigte, dass 113 von 200 Runden tatsächlich drei
+gebraucht hätten.
+
+Der Balken hatte die falsche Skala. Sie war die Summe aller zehn Cupcakes
+(31,10 €), aber seit das Tablett leer startet, spielt sich alles unter
+`GAP_MAX` (9,80 €) ab — Ziellinie und Füllung saßen im linken Viertel. Jetzt
+ist `SCALE = GAP_MAX`.
+
+**Offen und nur am Automaten zu klären:** ob `GAP_ONE_MAX = 25` die richtige
+Vielfalt gibt. Am leeren Tablett ist die Menge möglicher Ziele endlich und
+jeden Tag dieselbe — bei 15 wären es 14 Ziele, bei 25 sind es 21. Der
+Selbsttest in `balance.py` gibt die Zahl bei jedem Lauf aus.
+
 ## Stand: 11. September 2026
 
 **Das Spiel läuft am Mac**, ohne Branch: `config.MAC` setzt dort Fenster,
@@ -209,15 +274,18 @@ Der Arcade-Rahmen ist keine Deko, sondern die Bedienungsanleitung: Jeder versteh
 
 Adaptiert von Googles *Price-a-Tray* (GDC-Demo). Ablauf:
 
-1. Auf dem Tablett liegen vorbeladene Objekte, jedes mit einem verdeckten Punktwert.
-2. Auf dem Display steht ein Zielwert.
-3. 60 Sekunden: Objekte tauschen, entfernen, hinzufügen.
-4. Score = Betrag der Differenz zwischen Tablettsumme und Zielwert. **Über und unter zählen gleich — es gibt kein Scheitern, nur eine Zahl.** Steht `OFF BY 0` fünf Sekunden lang, endet die Runde vorzeitig (`PERFECT_HOLD`) — die Hände liegen am Leader-Arm, ein „Fertig"-Knopf wäre unerreichbar.
-5. Am Ende: Reveal der gesamten Preistabelle. Lernmoment und zweite Belohnung.
+1. Das Tablett ist leer. Daneben liegt die Auslage: zehn Cupcakes, jeder mit einem verdeckten Preis.
+2. Auf dem Display steht ein Zielpreis, z. B. `GOAL €6.30`.
+3. 30 Sekunden: Cupcakes auf das Tablett legen (und wieder herunter, wer sich vertut).
+4. Während der Runde steht **keine Punktzahl** auf dem Schirm, nur der Preis. Über und unter zählen gleich — es gibt kein Scheitern, nur eine Zahl. Stimmt die Summe `PERFECT_HOLD` Sekunden lang, endet die Runde vorzeitig — die Hände liegen am Leader-Arm, ein „Fertig"-Knopf wäre unerreichbar.
+5. Danach dreht der Score-Screen die Punktzahl hoch, wie eine Boxmaschine. Siehe „Wertung".
+6. Darunter: Reveal der gesamten Preistabelle. Lernmoment und zweite Belohnung.
 
 Der Skill liegt im Rückschluss („was war das Ding wert?"), nicht in der Feinmotorik. Das ist bewusst so gewählt — der Arm hat zu viel Getriebespiel für ein Präzisionsspiel.
 
-**Vorbeladenes Tablett** ist die zentrale Anpassung gegenüber Google: Teleoperierte Picks dauern 10–20 s statt 1–2 s mit der Hand. Tauschen statt Aufbauen hält die Runde spielbar.
+**Leeres Tablett und 30 Sekunden** sind die zentrale Anpassung gegenüber Google: teleoperierte Picks dauern 10–20 s statt 1–2 s mit der Hand, also sind zwei Züge eine volle Runde. Das Tablett wird nach jeder Runde geräumt — damit startet jeder bei demselben Zustand, und niemand erbt die Aufgabe seines Vorgängers.
+
+Bis zum 11. September war es umgekehrt gedacht (vorbeladenes Tablett, tauschen statt aufbauen, 60 s). Das Räumen zwischen den Runden hat es gekippt: wer leer anfängt, kann nicht tauschen.
 
 ## Arcade-Framing
 
@@ -518,26 +586,24 @@ Ecken nicht, und ein zweiter Detector kostete Rechenzeit für Dekoration.
 `CameraView(cam, det=None)` trägt die Zuordnung: das Pane weiß, ob es etwas
 einzublenden hat.
 
-**Gezeichnet wird nur die Zahl**, in `MARK_FONT`/`YELLOW`, zentriert auf dem
-Schwerpunkt der vier Marker-Ecken. Kein Viereck und keine Unterlage: der Marker
-markiert sich selbst, ein Rahmen darum sagt nichts, was das Bild nicht schon
-zeigt, und verdeckt den Puck. Entschieden am 27. August, nachdem beides einmal
-auf dem Schirm stand.
+**Die Preise stehen seit dem 11. September nicht mehr im Bild.** Bis dahin
+zeichnete das Overlay den Wert jedes erkannten Markers auf den Schwerpunkt
+seiner vier Ecken. Das war ein Widerspruch zur Grundregel des Spiels: „EVERY
+TREAT HAS A HIDDEN PRICE" — wer die Preise während der Runde ablesen kann,
+rechnet, statt zu schätzen, und der Reveal am Ende verliert seinen
+Lernmoment. Aus 8 m las das ohnehin niemand; am Automaten, wo die Hände am
+Leader-Arm liegen und der Schirm eine Armlänge entfernt ist, schon.
 
-Der Preis ist benannt und in Kauf genommen: Gelb auf einem hellen Puck hat
-keinen garantierten Kontrast mehr. Wenn das in der Halle nicht steht, ist ein
-schwarzer Schatten hinter der Ziffer (dieselbe Zahl 2 px versetzt in `BLACK`)
-die nächstkleinere Stufe — nicht die Unterlage zurück.
+Der Code steht auskommentiert in `GameScene.overlay`, weil er beim Einrichten
+der Kamera das Einzige ist, was zeigt, *welchen* Marker die Erkennung sieht und
+nicht nur, dass sie einen sieht. `MARK_FONT` in `config.py` existiert nur noch
+dafür.
 
-Gemessen 1,5 ms pro Frame für die ganze Szene inklusive beider Kamerabilder.
-Vorgerenderte Zahl-Surfaces waren geplant und sind gemessen überflüssig: acht
-`font.render` kosten 0,01 ms. Ein Cache für nichts.
+Übrig bleibt das Detektionsfenster — Chrome in `GREY`, kein Spielwert.
 
-**Verdeckte Marker bleiben stehen**, exakt so lange wie in der Summe — Overlay
-und `TOTAL` lesen dieselbe `MARKER_HOLD`-Frist aus derselben Momentaufnahme,
-die `update()` einmal pro Frame zieht. Sie können gar nicht widersprechen. Ohne
-das stünde „TOTAL 165" da, während nur vier von fünf Rahmen zu sehen sind, und
-das sähe nach einem Fehler aus, weil es einer wäre.
+**Verdeckte Marker bleiben stehen**, exakt so lange wie in der Summe: `TOTAL`
+und die Summe lesen dieselbe `MARKER_HOLD`-Frist aus derselben Momentaufnahme,
+die `update()` einmal pro Frame zieht. Sie können gar nicht widersprechen.
 
 ### Detektionsfenster (`TRAY_ROI`)
 
@@ -1425,39 +1491,48 @@ Die einzige Datei, die `scenes` **und** `hw` importiert. Der Umstieg auf echte H
 - **DSGVO:** Bei Erfassung von Kontaktdaten überwiegend Minderjährige. Vorab klären.
 - **Autostart:** Beide Prozesse als systemd-Services. Der Automat muss nach Stromausfall ohne Tastatur hochkommen.
 
-## Balancing: Werte und Zielwert
+## Balancing: Preise und Zielwert
 
-Entschieden am 27. August 2026, nachdem die Bestenliste zur Frage wurde.
+Entschieden am 27. August 2026, überarbeitet am 11. September mit der Wertung.
 
-**Der Zielwert wird nicht mehr frei gewürfelt.** `randrange(50, 300, 5)` neben
-einer Tablettsumme, die der Vorgänger hinterlassen hat, heißt: der Zufall
-entscheidet, ob jemand 3 oder 200 Punkte zu überbrücken hat. Das war die
-eigentliche Unfairness — nicht die Werte, sondern die Kopplung, die fehlte.
-`balance.gap()` liest deshalb das echte Tablett und wählt die *Distanz*:
+**Der Zielwert wird nicht frei gewürfelt.** `randrange(50, 300, 5)` neben einer
+Tablettsumme hieß: der Zufall entscheidet, ob jemand 0,30 € oder 20 € zu
+überbrücken hat. Das war die eigentliche Unfairness — nicht die Werte, sondern
+die fehlende Kopplung. `balance.gap()` liest deshalb das echte Tablett und
+wählt die *Distanz*:
 
-1. in `GAP_MOVES` (3) Zügen exakt schließbar — keine Runde ist unmöglich
+1. in `GAP_MOVES` (2) Zügen exakt schließbar — keine Runde ist unmöglich
 2. der beste einzelne Zug landet zwischen `GAP_ONE_MISS` (2) und
-   `GAP_ONE_MAX` (15) daneben
+   `GAP_ONE_MAX` (25) daneben, also 0,20 € bis 2,50 €
 
-Die Untergrenze verhindert den Glückspuck, der direkt auf null führt. Die
-Obergrenze verhindert das Gegenteil: ohne sie streute derselbe Test von 2 bis
-67, und eine Runde, die nach dem besten Einzelzug noch 67 offen lässt, ist in
-60 Sekunden nicht zu holen. Gemessen über 400 zufällige Tablettzustände: im
-Median 49 zulässige Distanzen zur Auswahl, minimal 34, nie null; Rechenzeit
-unter einer Millisekunde, einmal in `GameScene.__init__`.
+Die Untergrenze verhindert den Glücksgriff, der direkt auf null führt. Die
+Obergrenze verhindert das Gegenteil: eine Runde, die nach dem besten Einzelzug
+noch 6,70 € offen lässt, ist in der Rundenzeit nicht zu holen.
 
-**Die Werte haben keinen gemeinsamen Teiler mehr.** Alt waren alle zehn durch 5
-teilbar — damit war das Spiel binär: Distanz durch 5 teilbar, dann genügt ein
-Puck; sonst *überhaupt nicht* erreichbar. Von 76 Distanzen im Band 30–120, die
-kein Einzelzug schafft, waren nur 4 in zwei Zügen lösbar. Mit
-`{4, 7, 12, 18, 23, 29, 36, 44, 53, 67}` sind es 71 von 74. Erst dadurch gibt
-es „knapp daneben" — und damit eine Bestenliste mit Auflösung statt einer
-Liste aus Nullen und Unmöglichkeiten.
+**Das Tablett startet leer, und das macht die Zielmenge endlich.** Weil jede
+Runde beim selben Zustand anfängt, ist auch die Menge zulässiger Ziele jede
+Runde dieselbe — mit dem aktuellen Preissatz sind es 21, und sie sind der
+ganze Vorrat an Aufgaben für einen Messetag. Der bindende Regler dafür ist
+`GAP_ONE_MAX`: bei 15 wären es 14 Ziele, bei 25 sind es 21. Das Band
+`GAP_MIN`/`GAP_MAX` ist es *nicht* — es schneidet nichts weg, was die
+Einzelzug-Bedingung nicht ohnehin schon wegnimmt.
 
-**Ein Marker pro physischem Puck, zehn Stück.** `ArucoDetector.marks` ist ein
-Dict mit der ID als Schlüssel: zwei Pucks mit demselben Marker zählen einmal.
-Duplikate zu drucken wäre ein stiller Wertungsfehler, der am Messetag wie ein
-Erkennungsproblem aussieht. Zehn passt außerdem zum 5×2-Raster der
+`gap()` liest trotzdem das echte Tablett statt eine Konstante zu benutzen: ein
+liegengebliebener Cupcake ändert die Aufgabe dann mit, statt sie
+kaputtzumachen.
+
+**Die Preise haben keinen gemeinsamen Teiler.** Gerechnet wird in
+10-Cent-Einheiten — `{14, 17, 21, 24, 28, 32, 36, 41, 46, 52}`, angezeigt als
+1,40 € bis 5,20 €. Wären es glatte Preise in Cent, wäre der ggT 10 und das
+Spiel binär: Distanz durch den Teiler teilbar, dann genügt ein Griff, sonst
+ist sie *überhaupt nicht* erreichbar. Erst Teilerfremdheit gibt „knapp
+daneben" — und damit eine Bestenliste mit Auflösung statt einer Liste aus
+Nullen und Unmöglichkeiten.
+
+**Ein Marker pro physischem Cupcake, zehn Stück.** `ArucoDetector.marks` ist
+ein Dict mit der ID als Schlüssel: zwei Cupcakes mit demselben Marker zählen
+einmal. Duplikate zu drucken wäre ein stiller Wertungsfehler, der am Messetag
+wie ein Erkennungsproblem aussieht. Zehn passt außerdem zum Raster der
 Preistabelle im Score-Screen.
 
 ## Preise
@@ -1467,6 +1542,11 @@ Drei Stufen, alle erreichbar — jeder gewinnt etwas:
 - **Teilnahme** — Sticker oder 3D-gedruckter Keychain
 - **Score-Band** — besserer Preis, nach Genauigkeit gestaffelt
 - **Tagesbestenliste** — Hauptpreis am Ende des Messetags
+
+Die Bandgrenzen sind noch nicht gesetzt. Sie gehören an `off` und nicht an die
+Punktzahl, weil `off` die physische Wahrheit der Runde ist: Vorschlag `0` /
+`≤ 5` (also bis 0,50 € daneben) / Rest, zu bestätigen, sobald jemand einen
+Nachmittag lang echte Ergebnisse gesehen hat.
 
 ## MVP-Meilensteine
 

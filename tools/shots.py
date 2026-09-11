@@ -27,7 +27,7 @@ import cv2                                                      # noqa: E402
 import pygame                                                   # noqa: E402
 from app import Ctx, crt_gain, px                               # noqa: E402
 from config import (WIDTH, HEIGHT, FONT_PATH, FONT_SIZES, CRT,  # noqa: E402
-                    BARREL_K, CAM_VIEW, GREY, BG, WARN_SECONDS)
+                    BARREL_K, CAM_VIEW, GREY, BG, WARN_SECONDS, ROUND_SECONDS)
 import scenes                                                   # noqa: E402
 
 
@@ -35,9 +35,15 @@ class Stub:
     """Musik, Datenbank und Detector auf einmal -- sie tun hier alle nichts."""
 
     def __getattr__(self, _):    return lambda *a, **k: None
-    def top(self, n=5):          return [("VAD", 3), ("MAX", 8), ("ANN", 12),
-                                         ("LEO", 19), ("KIM", 26)][:n]
-    def fresh(self):             return {i: [(.3, .3)] * 4 for i in (0, 3, 7, 9)}
+    # Punkte, absteigend -- seit der Wertungssitzung ist hoch gut, und eine
+    # Attrappe mit einstelligen Zahlen zeigt im Build-Log ein Spiel, das es
+    # nicht mehr gibt. Vierstellig ganz oben: das ist eine perfekte Runde.
+    def top(self, n=5):          return [("VAD", 1000), ("MAX", 948), ("ANN", 871),
+                                         ("LEO", 795), ("KIM", 640)][:n]
+    # Leer, wie am Automaten bei Rundenbeginn: nur so bekommt GameScene eine
+    # Distanz, die zu einer echten Runde passt. Was im Bild auf dem Tablett
+    # liegt, setzt der Plan unten ueber `total`.
+    def fresh(self):             return {}
 
 
 class StubView:
@@ -70,21 +76,29 @@ def shots(out):
                      StubView("TOP-DOWN CAM", fonts["tiny"])))
 
     game = scenes.GameScene(ctx)
-    board = scenes.LeaderboardScene(ctx, 3)
+    # Eine Runde, die knapp daneben lag: 0,30 EUR offen bei 5,00 EUR Distanz,
+    # Zeit abgelaufen. Ergibt eine Punktzahl mit drei Stellen statt einer
+    # glatten Zahl, an der man den Hochdreher nicht beurteilen kann.
+    done = scenes.Result(target=67, total=64, dist=50, left=0.0,
+                         marks={0: 1, 3: 1, 7: 1, 9: 1})
+    board = scenes.LeaderboardScene(ctx, done)
     # (Dateiname, Szene, Zustand). Der Zustand wird ins __dict__ geschrieben --
     # dieselbe Technik wie im Selbsttest, damit auch die Zwischenstaende ins
     # Bild kommen, die man von Hand kaum trifft (letzte Sekunden, PERFECT).
     plan = [
         ("1-idle",         scenes.IdleScene(ctx),                     {}),
         ("2-howto",        scenes.HowToScene(ctx),                    {}),
-        ("3-game-add",     game, dict(left=42.0, hit=0.0, confirm=0.0,
-                                      total=game.target - 60)),
-        ("4-game-remove",  game, dict(total=game.target + 23)),
+        ("3-game-add",     game, dict(left=ROUND_SECONDS * 0.7, hit=0.0,
+                                      confirm=0.0, total=game.target - 32)),
+        ("4-game-remove",  game, dict(total=game.target + 17)),
         ("5-game-warning", game, dict(left=WARN_SECONDS * 0.4)),
-        ("6-game-perfect", game, dict(left=42.0, total=game.target, hit=1.0,
+        ("6-game-perfect", game, dict(left=ROUND_SECONDS * 0.7,
+                                      total=game.target, hit=1.0,
                                       fx=scenes.Sprinkles())),
-        ("7-score",        scenes.DisplayScoreScene(ctx, 180,
-                                                    {0: 1, 3: 1, 7: 1, 9: 1}), {}),
+        # done=True: der Screenshot zeigt den Endzustand, nicht die erste
+        # Zehntelsekunde des Hochlaufs.
+        ("7-score",        scenes.DisplayScoreScene(ctx, done),
+                           dict(shown=done.score, done=True, t=2.5)),
         ("8-name",         board, dict(cursor=2)),
     ]
 

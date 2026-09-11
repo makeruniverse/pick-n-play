@@ -51,7 +51,8 @@ heraus, der alte Lauf bleibt stehen, und die Versuche sind vollständig da.
 Die 16 Zeilen der alten `scores`-Tabelle wandern beim ersten Start mit.
 
 ### ○ Rückfrage bei bekanntem Namen
-`db.best(name)` liefert den bisherigen Bestwert. Die Rückfrage gehört in die
+`db.best(name)` liefert die bisherige Bestpunktzahl (seit der Wertungssitzung
+Punkte, nicht mehr `off` — hoch ist gut). Die Rückfrage gehört in die
 neue Namenseingabe und kommt mit dem UI-Umbau.
 
 ---
@@ -69,13 +70,13 @@ Der große Posten. Ziel: jemand, der das Spiel nie gesehen hat, versteht es aus
   Summe aller zehn Pucks, also über alle Runden dieselbe.
 - ● **Vier Knöpfe in Grün, Rot, Blau, Gelb** — jeder Pfeil auf dem Schirm hat
   die Farbe seines Knopfes. Grün ▶, Rot ◀, Blau ▲, Gelb ▼.
-- ✱ **Punktesystem** — wird komplett neu gedacht, eigene Session. Bis dahin
-  bleiben `OFF BY` auf dem Score-Screen und die Zeilen „THE LOWER THE BETTER"
-  / „LOWER MEANS BETTER" stehen: sie sind hässlich, aber solange die
-  Bestenliste aufsteigend sortiert, wäre sie ohne sie falsch zu lesen.
+- ● **Punktesystem** — erledigt am 11.9., siehe „Wertung" im Overview. 0 bis
+  1000, hoch ist gut, Hochdreher im Score-Screen, Preise statt Punkte während
+  der Runde. Beide Krückenzeilen sind weg: die Bestenliste sortiert absteigend
+  und erklärt sich damit selbst.
 - ○ **Erklärung/Onboarding** — drei Textzeilen erklären nichts.
 - ○ **Leaderboard-Flow** — Score-Screen → Namenseingabe → Idle ist heute drei
-  Seiten für ein Ergebnis. Hängt am Punktesystem, deshalb danach.
+  Seiten für ein Ergebnis. Hing am Punktesystem und ist jetzt frei.
 - ○ **Der große `◀` in der Namenseingabe** — trägt noch nicht die Rotfärbung
   seines Knopfes, weil dort Gelb schon „ausgewählt" bedeutet. Fällt mit dem
   Leaderboard-Flow.
@@ -160,7 +161,30 @@ Gefallen am 11.9.2026:
 - UI: **Variante B, „Sugar Rush"**
 - Build-Log: **Screenshots vor jedem Commit**
 
+Wertungssitzung, 11.9.2026:
+
+- **Punktzahl 0–1000, hoch ist gut.** Genauigkeit als *Anteil* der
+  geschlossenen Distanz, Zeitbonus nur für Perfekte
+- **Cupcake-Preise 1,40 € bis 5,20 €**, intern in 10-Cent-Einheiten
+- **Rundenlänge 30 s**, `GAP_MOVES = 2`, `PERFECT_HOLD = 3`
+- **Schwierigkeit ist ein Modus** (`MODES` in `config.py`, `PNP_MODE`,
+  Einzelwerte per `PNP_<KEY>`) — ein Hard Mode ist damit ein Eintrag im Dict
+- **Das Tablett startet leer.** Zwischen den Runden räumt ein Mitarbeiter; was
+  liegen bleibt, bleibt liegen. Kein „Tablett bereit?"-Tor in der Software —
+  `gap()` liest das echte Tablett, ein vergessener Cupcake ändert die Aufgabe
+  also mit, statt sie kaputtzumachen.
+- **Keine Preise im Kamerabild während der Runde.** Die Einblendung an jedem
+  erkannten Marker ist auskommentiert (`GameScene.overlay`): sie stand gegen
+  „EVERY TREAT HAS A HIDDEN PRICE" und machte aus Schätzen Rechnen. Zum
+  Ausrichten der Kamera wieder einkommentierbar, das Detektionsfenster bleibt
+  sichtbar.
+
 Offen:
 
-- **Punktesystem** — eigene Session, das ganze System wird überarbeitet
-- Leaderboard-Flow und Onboarding, beide hängen daran
+- **`GAP_ONE_MAX`** steht auf 25 und bestimmt, wie viele verschiedene Ziele es
+  gibt: am leeren Tablett sind es 21 für den ganzen Messetag. Ob das reicht
+  oder ob die Warteschlange die Wiederholungen merkt, sieht man erst am Stand.
+  Der Selbsttest in `balance.py` gibt die Zahl bei jedem Lauf aus.
+- **Bandgrenzen für die Preisstufen** — Vorschlag `off = 0` / `≤ 5` / Rest,
+  geraten bis jemand einen Nachmittag echte Ergebnisse gesehen hat.
+- Leaderboard-Flow und Onboarding, beide jetzt frei

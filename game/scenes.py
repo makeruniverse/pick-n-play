@@ -2,7 +2,8 @@ import math
 import random
 import pygame
 from functools import lru_cache
-from balance import gap
+from typing import NamedTuple
+from balance import gap, points
 from config import *
 from app import SceneBase
 from sprites import sprite
@@ -31,6 +32,67 @@ def render(font, text, color):
 def draw(screen, font, text, x, y, color):
     surf = render(font, str(text), color)
     screen.blit(surf, surf.get_rect(center=(x,y)))
+
+
+def euro(units, sign=True):
+    """Preis in 10-Cent-Einheiten -> Anzeigetext. Die EINZIGE Stelle, an der
+    aus der Rechengroesse ein Preis wird.
+
+    Gerechnet wird ueberall in Einheiten, weil die Preise teilerfremd sein
+    muessen (siehe VALUES in config.py). Geteilt wird hier und sonst nirgends
+    -- eine andere Einheit ist damit diese Funktion und keine Suche durch
+    sechs Szenen.
+
+    `sign=False` fuer die Preiszeile im Reveal: dort stehen zehn Zellen im
+    168er-Raster, und fuenf Glyphen passen nicht nebeneinander. Das € steht
+    dann in der Ueberschrift.
+    """
+    return f"{'€' if sign else ''}{units * CENTS / 100:.2f}"
+
+
+def tray_sum(marks):
+    """Was auf dem Tablett liegt, in Einheiten.
+
+    Eine Funktion und keine dreimal hingeschriebene Summe: jede eigene
+    Schreibweise ist eine Gelegenheit, VALUES zu vergessen, und ein
+    Wertungsfehler sieht am Messetag wie ein Erkennungsproblem aus.
+    """
+    return sum(VALUES[i] for i in marks)
+
+
+class Result(NamedTuple):
+    """Was eine Runde hinterlaesst.
+
+    Ein Objekt statt wachsender Parameterlisten: Score-Screen und Namens-
+    eingabe brauchen beide alles davon, und die Datenbank noch einmal
+    dasselbe. Ein Modus, der spaeter etwas dazulegt (Zuege, Schwierigkeit),
+    haengt es hier an und nicht an drei Signaturen.
+
+    Gespeichert wird die physische Wahrheit, gerechnet wird daraus -- dieselbe
+    Trennung wie in db.py.
+    """
+
+    target: int          # Zielsumme in Einheiten
+    total: int           # was am Rundenende lag
+    dist:  int           # Abstand bei Rundenbeginn, der Nenner der Wertung
+    left:  float         # Restzeit. > 0 heisst perfekt, sonst endete die Uhr
+    marks: dict          # id -> Viereck, fuer den Preisreveal
+
+    @property
+    def off(self):
+        return abs(self.target - self.total)
+
+    @property
+    def accuracy(self):
+        return points(self.off, self.dist)          # ohne Zeitbonus
+
+    @property
+    def score(self):
+        return points(self.off, self.dist, self.left)
+
+    @property
+    def bonus(self):
+        return self.score - self.accuracy
 
 
 def stamp(screen, name, scale, x, y):
@@ -199,12 +261,13 @@ class IdleScene(SceneBase):
         stamp(screen, LADDER[-1], 8, 1590, 430 + hop(self.t, 1, 8))
         if int(self.t * 2) % 2:
             draw_hint(screen, f["mid"], "PRESS ▶", 960, 430, WHITE)
-        # "LOWEST WINS" ist Pflicht, nicht Deko: jede Bestenliste, die ein Kind
-        # kennt, sortiert die groesste Zahl nach oben. Hier gewinnt die
-        # kleinste, und ohne diese Zeile liest man die Liste falsch herum.
-        draw(screen, f["tiny"], "THE LOWER THE BETTER", 960, 556, GREY)
-        for i, (name, score) in enumerate(self.top):
-            draw(screen, f["small"], f"{i+1}. {name}  {score}", 960, 640 + i * 64, WHITE)
+        # Frueher stand hier "THE LOWER THE BETTER" -- Pflicht, solange die
+        # Liste aufsteigend sortierte. Seit die Punktzahl hoch ist wenn sie gut
+        # ist, erklaert die Liste sich selbst, und die Zeile sagt jetzt was sie
+        # ist statt wie man sie liest.
+        draw(screen, f["tiny"], "TODAY'S BEST", 960, 556, GREY)
+        for i, (name, pts) in enumerate(self.top):
+            draw(screen, f["small"], f"{i+1}. {name}  {pts}", 960, 640 + i * 64, WHITE)
 
 
 class HowToScene(SceneBase):
@@ -262,8 +325,11 @@ class HowToScene(SceneBase):
         # Ohne Clip rueckt der Text in die Mitte statt unter ein schwarzes
         # Loch. DEMO_VIDEO = None ist der Auslieferungszustand, nicht der
         # Ausnahmefall -- die Seite muss auch so fertig aussehen.
+        # {secs} statt einer Zahl im Thema: die Rundenlaenge steht im Modus und
+        # wird viel durchprobiert -- sie darf nicht an zwei Stellen leben.
         for i, line in enumerate(HOWTO):
-            draw(screen, f["tiny"], line, 960, (800 if clip else 476) + i * 50, WHITE)
+            draw(screen, f["tiny"], line.format(secs=ROUND_SECONDS),
+                 960, (800 if clip else 476) + i * 50, WHITE)
         footer(screen, f, "◀ BACK", "▶ START")
 
 
@@ -273,21 +339,31 @@ class GameScene(SceneBase):
 
     # Der Balken, absolute Koordinaten wie alles andere in dieser Datei.
     BAR   = pygame.Rect(240, 250, 1440, 70)
-    # Skala des Balkens: die Summe *aller* zehn Pucks. Damit ist die
-    # Balkenlaenge eine physische Groesse -- "alles, was es ueberhaupt gibt" --
-    # und die Ziellinie steht ueber alle Runden hinweg an einer Stelle, die
-    # dasselbe bedeutet. Eine Skala 0..target haette die Linie immer ans rechte
-    # Ende gelegt und dem Balken damit jede Aussage genommen.
-    SCALE = sum(VALUES.values())
+    # Skala des Balkens: das groesstmoegliche Ziel, nicht die Summe aller zehn
+    # Cupcakes. Solange das Tablett vorbeladen war und umgeraeumt wurde, war
+    # "alles was es ueberhaupt gibt" die richtige Laenge -- die Summe konnte
+    # dorthin wandern. Seit das Tablett leer startet und die perfekte Loesung
+    # zwei Stueck sind, spielt sich alles unter GAP_MAX ab: die Ziellinie stand
+    # damit im linken Viertel und der Balken hatte in dem Bereich, auf den es
+    # ankommt, keine Aufloesung mehr.
+    #
+    # GAP_MAX bleibt ueber alle Runden gleich, die Linie bedeutet also weiter
+    # ueberall dasselbe. Wer mehr auflegt als das groesste Ziel, laeuft rechts
+    # gegen den Anschlag -- _x() klemmt, und "weit drueber" ist als Aussage
+    # genau richtig. Die genaue Zahl steht ohnehin darunter.
+    SCALE = GAP_MAX
     GOAL_W, GOAL_OVER = 9, 18   # Breite und Ueberstand der Ziellinie
 
     def __init__(self, ctx):
         super().__init__(ctx)
         self.marks = ctx.detector.fresh()   # id -> Viereck, eine Momentaufnahme
-        self.total = sum(VALUES[i] for i in self.marks)
-        # Das Ziel folgt dem, was tatsaechlich liegt. Frei gewuerfelt entschied
-        # der Zufall, ob jemand 3 oder 200 Punkte zu ueberbruecken hat.
-        self.target = self.total + gap(self.marks)
+        self.total = tray_sum(self.marks)
+        # Das Ziel folgt dem, was tatsaechlich liegt -- am Automaten ist das
+        # ein leeres Tablett, aber ein liegengebliebener Cupcake aendert die
+        # Aufgabe dann mit, statt sie kaputtzumachen. Frei gewuerfelt entschied
+        # der Zufall, ob jemand 0,30 EUR oder 20 EUR zu ueberbruecken hat.
+        self.dist = gap(self.marks)
+        self.target = self.total + self.dist
         self.left = float(ROUND_SECONDS)
         self.confirm = 0.0
         self.hit = 0.0
@@ -318,7 +394,7 @@ class GameScene(SceneBase):
         # Ein Blick auf den Detector pro Frame: Summe, Overlay und Ton kommen
         # aus derselben Momentaufnahme und koennen sich nicht widersprechen.
         marks = self.ctx.detector.fresh()
-        self.total = sum(VALUES[i] for i in marks)
+        self.total = tray_sum(marks)
         if marks.keys() - self.marks.keys():
             # Nur bei NEU erkannt, sonst feuert es DETECT_HZ-mal pro Sekunde.
             # Fuenf Pucks gleichzeitig geben einen Ton, nicht fuenf: der
@@ -342,32 +418,44 @@ class GameScene(SceneBase):
                            max(0.0, self.left) / ROUND_SECONDS)
         if self.left <= 0 or self.hit >= PERFECT_HOLD:
             self.ctx.music.sfx("finish")
-            # marks statt total: die Summe steckt drin, und der Score-Screen
-            # braucht ausserdem, *welche* Werte lagen (Preiszeile).
-            self.switch_to(DisplayScoreScene(self.ctx, self.target, self.marks))
+            # Ein Ergebnis statt vier Argumenten. left wird hier geklemmt:
+            # die Schleife zaehlt ueber null hinaus, und eine negative Restzeit
+            # waere in der Datenbank eine Luege statt einer Null.
+            self.switch_to(DisplayScoreScene(self.ctx, Result(
+                self.target, self.total, self.dist,
+                max(0.0, self.left), self.marks)))
 
     def overlay(self, screen, r):
-        """Detektionsfenster und erkannte Werte, gezeichnet ins Pane-Rechteck.
+        """Detektionsfenster, gezeichnet ins Pane-Rechteck.
 
         Der Detector liefert Anteile von 0..1, hier wird einmal mit r
         multipliziert — deshalb stimmt das Overlay auch dann, wenn die Kamera
         eine andere Aufloesung liefert als angefordert.
         """
-        f = self.ctx.fonts[MARK_FONT]
         rx, ry, rw, rh = TRAY_ROI
         # GREY, nicht ACCENT: das Fenster ist Chrome, kein Spielwert. Es steht
         # im Bild, damit man beim Ausrichten der Kamera sieht, wo Erkennung
         # aufhoert — sonst stellt man es blind ein.
         pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
                                         rw * r.w, rh * r.h), MARK_WIDTH)
-        # Nur die Zahl, kein Viereck und keine Unterlage. Der Marker markiert
-        # sich selbst -- ein gelber Rahmen drumherum sagt nichts, was das Bild
-        # nicht schon zeigt, und verdeckt den Puck.
-        for i, quad in self.marks.items():
-            v = render(f, str(VALUES[i]), ACCENT)
-            screen.blit(v, v.get_rect(center=(
-                r.x + sum(x for x, _ in quad) / 4 * r.w,
-                r.y + sum(y for _, y in quad) / 4 * r.h)))
+        # Hier stand der Preis an jedem erkannten Cupcake. Entfernt am
+        # 11.9.2026: er stand gegen die Grundregel des Spiels. "EVERY TREAT HAS
+        # A HIDDEN PRICE" — wer die Preise waehrend der Runde ablesen kann,
+        # rechnet, statt zu schaetzen, und der Reveal am Ende verliert seinen
+        # Lernmoment. Aus 8 m las das ohnehin niemand; am Automaten, wo die
+        # Haende am Leader-Arm liegen, schon.
+        #
+        # Bleibt als Kommentar stehen, weil es beim Einrichten der Kamera
+        # nuetzlich ist: es ist die einzige Anzeige, die zeigt, WELCHEN Marker
+        # die Erkennung gerade sieht, nicht nur dass sie einen sieht.
+        # MARK_FONT in config.py existiert nur noch fuer diese Zeilen.
+        #
+        # f = self.ctx.fonts[MARK_FONT]
+        # for i, quad in self.marks.items():
+        #     v = render(f, euro(VALUES[i], sign=False), ACCENT)
+        #     screen.blit(v, v.get_rect(center=(
+        #         r.x + sum(x for x, _ in quad) / 4 * r.w,
+        #         r.y + sum(y for _, y in quad) / 4 * r.h)))
 
     def bg(self):
         k = min(1.0, max(0.0, (WARN_SECONDS - self.left) / WARN_SECONDS))
@@ -418,11 +506,11 @@ class GameScene(SceneBase):
         if self.fx:
             self.fx.draw(screen)    # hinter allem, die Zahlen bleiben oben
         draw(screen, f["small"], "ON TRAY", 490, 60, GREY)
-        draw(screen, f["mid"], self.total, 490, 132, self.acc())
+        draw(screen, f["mid"], euro(self.total), 490, 132, self.acc())
         draw(screen, f["small"], "TIME", 960, 60, GREY)
         draw(screen, f["mid"], int(self.left) + 1, 960, 132, WHITE)
         draw(screen, f["small"], "GOAL", 1430, 60, GREY)
-        draw(screen, f["mid"], self.target, 1430, 132, WHITE)
+        draw(screen, f["mid"], euro(self.target), 1430, 132, WHITE)
         self.bar(screen)
         # Der Schirm sagt, was zu tun ist, statt zu melden, wie es steht.
         # "OFF BY 60" war eine Meldung: richtige Zahl, keine Richtung -- und
@@ -435,7 +523,10 @@ class GameScene(SceneBase):
         if self.hit > 0:
             label, big = f"HOLD {int(PERFECT_HOLD - self.hit) + 1}", "PERFECT"
         else:
-            label, big = ("ADD POINTS" if diff > 0 else "REMOVE POINTS"), abs(diff)
+            # "ADD POINTS 60" war eine Punktzahl -- und die gibt es in der
+            # Runde nicht mehr. Hier steht ein Preis, weil das die einzige
+            # Groesse ist, auf die der Besucher waehrend der Runde schaut.
+            label, big = ("ADD" if diff > 0 else "REMOVE"), euro(abs(diff))
         draw(screen, f["small"], label, 960, 400, GREY)
         draw(screen, f["big"], big, 960, 510, self.acc())
         # Passthrough nur hier: im Idle bleibt die Bandbreite frei und der
@@ -457,20 +548,35 @@ class GameScene(SceneBase):
 
 
 class DisplayScoreScene(SceneBase):
+    """Der Hochdreher: eine Zahl laeuft auf die Punktzahl zu, sonst nichts.
+
+    Waehrend der Runde steht bewusst keine Punktzahl auf dem Schirm -- dort
+    geht es allein darum, den Preis zu treffen. Die Wertung passiert hier, und
+    sie passiert als Ereignis, nicht als Anzeige: erst laeuft die Zahl hoch,
+    dann erscheint, woraus sie besteht, und darunter liegt der Preisreveal.
+
+    Die Reihenfolge ist der ganze Trick. Steht die Aufschluesselung sofort da,
+    kann man das Ende des Hochlaufs ausrechnen, bevor er anfaengt -- und damit
+    ist der Effekt weg, fuer den es ihn gibt.
+    """
 
     # Der Fertigsound braucht Luft. Erst ausklingen lassen, dann blendet die
     # Idle-Musik ein -- die Stille dazwischen ist der Effekt.
     MUSIC_IN = (2.2, 1500)
+    # Sekunden bis die Zahl steht. Kuerzer liest sich wie ein Sprung, laenger
+    # wie ein Ladebalken. Bleibt unter MUSIC_IN, sonst faellt der Einsatz der
+    # Idle-Musik in den Hochlauf.
+    COUNT = 1.8
 
-    def __init__(self, ctx, target, marks):
+    def __init__(self, ctx, res):
         super().__init__(ctx)
-        self.target = target
-        # Ein Marker pro Puck und lauter verschiedene Werte, also ist die
+        self.res = res
+        # Ein Marker pro Cupcake und lauter verschiedene Preise, also ist die
         # Menge verlustfrei -- sie sagt "lag auf dem Tablett", mehr braucht
         # die Preiszeile nicht.
-        self.mine = {VALUES[i] for i in marks}
-        self.total = sum(VALUES[i] for i in marks)
-        self.score = abs(target - self.total)
+        self.mine = {VALUES[i] for i in res.marks}
+        self.shown = 0
+        self.done = False
         self.idle = 0.0
         self.t = 0.0
         self.fx = Sprinkles()   # jeder bekommt den Regen -- kein Scheitern, nur eine Zahl
@@ -479,7 +585,7 @@ class DisplayScoreScene(SceneBase):
     def handle(self, action):
         self.idle = 0.0
         if action == "right":
-            self.switch_to(LeaderboardScene(self.ctx, self.score))
+            self.switch_to(LeaderboardScene(self.ctx, self.res))
         elif action == "left":
             self.switch_to(IdleScene(self.ctx))
         else:
@@ -490,36 +596,67 @@ class DisplayScoreScene(SceneBase):
         self.idle += dt
         self.t += dt
         self.fx.update(dt, more=self.t < 2.5)   # ein Schauer, dann regnet es aus
+        # Schnell an, langsam aus: (1-k)**3 ist die Kurve, mit der eine
+        # Boxmaschine austrudelt. Linear hochzaehlen sieht aus wie ein Fortschritt
+        # und nicht wie ein Ergebnis.
+        k = min(1.0, self.t / self.COUNT)
+        shown = round(self.res.score * (1 - (1 - k) ** 3))
+        if shown // 100 > self.shown // 100:
+            # Ein Tick je Hundert. "blip" ist duenn und leise und genau dafuer
+            # gebaut -- ein eigener Klang waere Arbeit fuer dieselbe Wirkung.
+            self.ctx.music.sfx("blip")
+        self.shown = shown
+        if not self.done and k >= 1.0:
+            self.done = True                    # feuert einmal, auch bei 0 Punkten
+            self.ctx.music.sfx("ok")
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
     def render(self, screen):
         f = self.ctx.fonts
+        res = self.res
         screen.fill(BG)
         self.fx.draw(screen)
-        draw(screen, f["small"], "OFF BY", 960, 130, GREY)
-        draw(screen, f["big"], self.score, 960, 300, ACCENT)
-        # Zwei Spalten mit Label darueber -- dieselbe Anordnung wie in der
-        # Kopfzeile der Runde, die der Besucher gerade 60 s lang gelesen hat.
-        draw(screen, f["small"], "GOAL",   660, 500, GREY)
-        draw(screen, f["mid"], self.target, 660, 590, WHITE)
-        draw(screen, f["small"], "TOTAL", 1260, 500, GREY)
-        draw(screen, f["mid"], self.total, 1260, 590, WHITE)
+        draw(screen, f["small"], "SCORE", 960, 130, GREY)
+        draw(screen, f["big"], self.shown, 960, 300, ACCENT)
+        # Die Runde in drei Spalten -- erst wenn die Zahl steht. Auf den Mitten
+        # der Runde (490 / 960 / 1430): dort hat das Auge gerade eine halbe
+        # Minute lang gelesen, es muss die Stellen nicht neu suchen.
+        #
+        # Die dritte Spalte wechselt, weil sonst eine der beiden Lagen eine
+        # Zahl doppelt zeigt. Wer danebenlag, will wissen wie weit; wer
+        # getroffen hat, sieht das schon daran, dass GOAL und YOURS gleich
+        # sind -- dort ist der Zeitbonus das Einzige, was noch etwas sagt.
+        # Und er sagt genau das, was ihn von den anderen Perfekten trennt.
+        if self.done:
+            draw(screen, f["small"], "GOAL", 490, 500, GREY)
+            draw(screen, f["mid"], euro(res.target), 490, 590, WHITE)
+            draw(screen, f["small"], "YOURS", 960, 500, GREY)
+            draw(screen, f["mid"], euro(res.total), 960, 590, WHITE)
+            label, value = (("TIME BONUS", f"+{res.bonus}") if res.bonus
+                            else ("OFF BY", euro(res.off)))
+            draw(screen, f["small"], label, 1430, 500, GREY)
+            draw(screen, f["mid"], value, 1430, 590, WHITE)
         # Der Reveal. Vorher stand hier "0 = 4, 1 = 7, ..." -- die linke Spalte
-        # war die ArUco-ID, und die steht auf keinem Puck als Ziffer. Der halbe
-        # Tabelleninhalt verlangte eine Zuordnung, deren Schluessel niemand hat.
+        # war die ArUco-ID, und die steht auf keinem Cupcake als Ziffer. Der
+        # halbe Tabelleninhalt verlangte eine Zuordnung, deren Schluessel
+        # niemand hat.
         #
         # Jetzt: jedes Teil als Sprite mit seinem Preis darunter, aufsteigend,
         # und pink und huepfend die, die am Rundenende tatsaechlich lagen.
         # Damit ist es keine Nachschlagetabelle mehr, sondern ein Bild der
-        # Runde -- der Preiskatalog und was man davon hatte. Und es ist der
+        # Runde -- die Auslage und was man davon hatte. Und es ist der
         # Lernmoment: "der Schokokuchen war der teure".
-        draw(screen, f["tiny"], "PRICES", 960, 690, GREY)
+        #
+        # Das € steht in der Ueberschrift und nicht in jeder Zelle: zehn Zellen
+        # im 168er-Raster, da passen vier Glyphen nebeneinander und nicht fuenf.
+        draw(screen, f["tiny"], "PRICES IN €", 960, 690, GREY)
         for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
             mine = VALUES[k] in self.mine
             x = 204 + i * 168
             stamp(screen, SPRITE[k], 5, x, 768 + (hop(self.t, i, 10) if mine else 0))
-            draw(screen, f["small"], VALUES[k], x, 850, ACCENT if mine else WHITE)
+            draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, 850,
+                 ACCENT if mine else WHITE)
         footer(screen, f, "◀ BACK", "▶ NEXT")
 
 
@@ -527,9 +664,9 @@ class LeaderboardScene(SceneBase):
 
     LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-    def __init__(self, ctx, score):
+    def __init__(self, ctx, res):
         super().__init__(ctx)
-        self.score = score
+        self.res = res
         self.idle = 0.0
         self.cursor = 0
         self.slots = [0, 0, 0]
@@ -557,7 +694,12 @@ class LeaderboardScene(SceneBase):
                 self.cursor -= 1
         elif action == "right":
             if self.cursor == 3:
-                self.ctx.db.add(self.name(), self.score)
+                # Alles, was die Runde physisch war -- die Punktzahl rechnet
+                # die Datenbank selbst aus, damit eine spaetere Formel auch
+                # fuer alte Runden gilt.
+                self.ctx.db.add(self.name(), self.res.off, goal=self.res.target,
+                                total=self.res.total, dist=self.res.dist,
+                                secs=self.res.left)
                 self.switch_to(IdleScene(self.ctx))
                 return "finish"
             else:
@@ -594,12 +736,12 @@ class LeaderboardScene(SceneBase):
                 ACCENT if self.cursor == i + 1 else WHITE)
         screen.fill(ACCENT, (self.COLS[self.cursor] - 68, self.CURSOR_Y,
                              135, self.CURSOR_H))
-        draw(screen, f["tiny"], "LOWER MEANS BETTER", 960, 556, GREY)
+        draw(screen, f["tiny"], "TODAY'S BEST", 960, 556, GREY)
         # Die fuenfte Zeile war der Klippfehler vom 28. August: sie lag unter
         # SAFE_BOTTOM und ueberdeckte die Abbruch-Rueckfrage, sichtbar erst ab
         # fuenf Eintraegen in der DB. Auf 1080 endet die Liste bei 912.
-        for i, (name, score) in enumerate(self.top):
-            draw(screen, f["small"], f"{i+1}. {name}  {score}", 960, 632 + i * 64, WHITE)
+        for i, (name, pts) in enumerate(self.top):
+            draw(screen, f["small"], f"{i+1}. {name}  {pts}", 960, 632 + i * 64, WHITE)
         # Der Hinweis sagt, was ▶ *jetzt* tut. Dass im letzten Feld gespeichert
         # wird, stand vorher nirgends -- man musste es finden.
         footer(screen, f,
@@ -671,17 +813,35 @@ if __name__ == "__main__":
     check("game",         g, panes + bar)
     check("game confirm", g, panes + bar, confirm=2.0)
     check("game perfect", g, panes + bar, confirm=0.0, hit=1.0)
-    # Beide Richtungen der Handlungsanweisung: REMOVE POINTS ist das laengste
-    # Wort auf dem Schirm, und es steht in der Mitte, wo es am ehesten anstoesst.
+    # Beide Richtungen der Handlungsanweisung. Die Zahl darunter ist jetzt ein
+    # Preis und damit breiter als frueher -- sie steht in der Mitte, wo sie am
+    # ehesten anstoesst.
     check("game remove",  g, panes + bar, hit=0.0, total=g.target + 40)
-    # Randlagen des Balkens: leeres Tablett und Ziel am oberen Anschlag.
+    # Randlagen des Balkens: leeres Tablett (der Normalfall am Automaten) und
+    # Ziel am oberen Anschlag. Die breiteste Zahl, die je in der Kopfzeile
+    # stehen kann, ist die Summe ALLER Preise -- der Balken klemmt dort zwar,
+    # die Zahl daneben nicht, und sie ist es, die anstossen koennte.
     check("game empty",   g, panes + bar, total=0, target=GameScene.SCALE)
-    check("score", DisplayScoreScene(ctx, 180, {0: 1, 3: 1, 7: 1, 9: 1}))
+    check("game full",    g, panes + bar, total=sum(VALUES.values()), target=0)
+
+    # Der Score-Screen in beiden Zustaenden: waehrend die Zahl hochlaeuft
+    # steht die Aufschluesselung noch nicht da, danach schon. Geprueft werden
+    # muss der zweite -- dort stehen drei Spalten, wo vorher zwei standen.
+    res = Result(target=67, total=64, dist=50, left=0.0,
+                 marks={0: 1, 3: 1, 7: 1, 9: 1})
+    check("score counting", DisplayScoreScene(ctx, res))
+    check("score done",     DisplayScoreScene(ctx, res),
+          shown=res.score, done=True, t=2.5)
+    # Und eine perfekte Runde: vierstellige Punktzahl, "+100" statt "+0".
+    best = Result(target=67, total=67, dist=50,
+                  left=ROUND_SECONDS - PERFECT_HOLD, marks=dict.fromkeys(VALUES, 1))
+    check("score perfect", DisplayScoreScene(ctx, best),
+          shown=best.score, done=True, t=2.5)
     for cur in range(4):
         for conf in (0.0, 2.0):
             L = LeaderboardScene
             bar = [("cursor", L.COLS[cur] - 68, L.CURSOR_Y,
                               L.COLS[cur] + 67, L.CURSOR_Y + L.CURSOR_H)]
             check(f"board cursor={cur} confirm={conf}",
-                  L(ctx, 15), bar, cursor=cur, confirm=conf)
+                  L(ctx, res), bar, cursor=cur, confirm=conf)
     print("ok")

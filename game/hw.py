@@ -21,19 +21,41 @@ def _quad(cx, cy, r=0.06):
 
 
 class FakeDetector:
-    # ponytail: wuerfelt periodisch neu, damit man sieht dass die Anzeige lebt.
-    # Ersetzt durch ArucoDetector(Camera()), eine Zeile in main.py.
+    """Attrappe: ein leeres Tablett, das sich nach und nach fuellt.
+
+    ponytail: legt alle `period` Sekunden ein Stueck dazu und raeumt ab, wenn
+    eine Weile niemand gefragt hat. Ersetzt durch ArucoDetector(Camera()),
+    eine Zeile in main.py.
+
+    Warum nicht mehr fuenf gewuerfelte Marker auf einmal: das war das Spiel
+    von vor der Wertungssitzung, in dem das Tablett vorbeladen war und
+    umgeraeumt wurde. Heute wird es nach jeder Runde geleert und aufgebaut --
+    eine Attrappe, die damit nicht anfaengt, laesst jede lokale Runde bei einer
+    anderen Aufgabe beginnen als am Automaten, und genau das soll sie nicht.
+
+    Abgeraeumt wird ueber die Luecke zwischen zwei Abfragen: nur die Runde
+    fragt den Detector, der Idle-Screen nicht. Eine lange Pause heisst also
+    "es lief keine Runde", und in der Zeit leert am Automaten jemand das
+    Tablett. Die Attrappe braucht dafuer kein Wissen ueber Szenen.
+    """
+
     def __init__(self, period=3.0):
         self.period = period
-        self.t = 0.0
+        self.t = self.seen = 0.0
         self.marks = {}
+        self.rest = []
 
     def fresh(self):
         now = time.monotonic()
-        if now - self.t > self.period:
+        if now - self.seen > self.period * 3:      # Pause = jemand hat geraeumt
+            self.marks, self.rest = {}, random.sample(sorted(VALUES), len(VALUES))
             self.t = now
-            self.marks = {i: _quad(0.3 + n % 3 * 0.2, 0.35 + n // 3 * 0.25)
-                          for n, i in enumerate(random.sample(sorted(VALUES), 5))}
+        self.seen = now
+        if self.rest and now - self.t > self.period:
+            self.t = now
+            n = len(self.marks)
+            self.marks[self.rest.pop()] = _quad(0.25 + n % 4 * 0.17,
+                                                0.35 + n // 4 * 0.25)
         return self.marks
 
 

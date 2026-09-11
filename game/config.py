@@ -64,11 +64,11 @@ FOOTER_Y    = 1000
 SAFE_BOTTOM = 920
 
 # ── Zeiten (Sekunden) ─────────────────────────────────────────────────────
-ROUND_SECONDS = 60
 WARN_SECONDS  = 5     # ab hier faerbt sich der Bildschirm
 IDLE_TIMEOUT  = 20    # Nicht-Idle-Szenen fallen von allein zurueck
 CONFIRM_SECONDS = 3   # Fenster fuer die Abbruch-Doppelbestaetigung
-PERFECT_HOLD  = 5.0   # so lange muss OFF BY 0 stehen, dann ist die Runde vorbei
+# ROUND_SECONDS und PERFECT_HOLD haengen an der Schwierigkeit und stehen
+# deshalb im Spielmodus weiter unten, nicht hier.
 
 # ponytail: >-Taps in der Runde, die sie sofort beenden. 0 = aus (Automat)
 CHEAT_TAPS = 5
@@ -142,31 +142,95 @@ DUCK         = 0.55   # Musikpegel waehrend eines Effekts (~-5 dB)
 DUCK_RELEASE = 0.35   # Sekunden zurueck auf voll
 
 # ── Spielwerte ────────────────────────────────────────────────────────────
-# marker_id -> Punktwert. Aenderbar ohne Codeaenderung, das ist der ganze
-# Grund fuer ArUco statt eines trainierten Modells.
+# marker_id -> Preis in 10-CENT-EINHEITEN. Aenderbar ohne Codeaenderung, das
+# ist der ganze Grund fuer ArUco statt eines trainierten Modells.
 #
-# Genau ein Marker pro physischem Puck. ArucoDetector.marks ist ein Dict mit
-# der ID als Schluessel -- zwei Pucks mit demselben Marker zaehlen einmal, und
-# das waere ein stiller Wertungsfehler, der wie ein Erkennungsproblem aussieht.
+# Warum nicht in Cent: die Preise muessen teilerfremd sein (ggT 1). Glatte
+# Preise in Cent gerechnet haetten ggT 10, und damit waere das Spiel binaer --
+# eine Distanz ist entweder durch den Teiler teilbar und dann mit einem
+# einzigen Griff zu haben, oder sie ist ueberhaupt nicht erreichbar. Es gaebe
+# kein "knapp daneben", und ohne das keine Bestenliste mit Aufloesung, sondern
+# eine Liste aus Nullen und Unmoeglichkeiten.
 #
-# Werte ohne gemeinsamen Teiler (ggT 1). Waren sie wie frueher alle durch 5
-# teilbar, war das Spiel binaer: Distanz durch 5 teilbar -> ein Puck genuegt,
-# sonst gar nicht erreichbar. Gemessen ueber die Distanzen 30..120 waren von
-# 76 Distanzen, die kein einzelner Zug schafft, nur 4 in zwei Zuegen loesbar.
-# Mit diesem Satz sind es 71 von 74 -- erst damit gibt es "knapp daneben".
-VALUES = {0: 4, 1: 7, 2: 12, 3: 18, 4: 23,
-          5: 29, 6: 36, 7: 44, 8: 53, 9: 67}
+# In 10-Cent-Einheiten sind 1,40 / 1,70 / 2,10 ... teilerfremd und sehen
+# trotzdem aus wie Preise. Gerechnet wird ueberall in Einheiten, geteilt wird
+# erst bei der Anzeige -- genau einmal, in euro() in scenes.py.
+#
+# Genau ein Marker pro physischem Cupcake. ArucoDetector.marks ist ein Dict mit
+# der ID als Schluessel -- zwei Cupcakes mit demselben Marker zaehlen einmal,
+# und das waere ein stiller Wertungsfehler, der am Messetag wie ein
+# Erkennungsproblem aussieht.
+VALUES = {0: 14, 1: 17, 2: 21, 3: 24, 4: 28,
+          5: 32, 6: 36, 7: 41, 8: 46, 9: 52}
+CENTS  = 10        # ein VALUES-Schritt in Cent. Liest nur euro().
 
-# Der Zielwert wird nicht mehr frei gewuerfelt, sondern als Distanz zur
-# tatsaechlichen Tablettsumme gewaehlt (siehe balance.py). Sonst entscheidet
-# der Zufall, ob jemand 3 oder 200 Punkte zu ueberbruecken hat, und die
-# Bestenliste vergleicht Runden, die nichts miteinander zu tun haben.
-GAP_MIN, GAP_MAX = 25, 130
-GAP_MOVES    = 3   # so viele Zuege darf die perfekte Loesung kosten
-GAP_ONE_MISS = 2   # so weit muss ein einzelner Zug mindestens danebenliegen
-GAP_ONE_MAX  = 15  # ... und so weit hoechstens. Beidseitig, sonst laesst eine
-                   # Runde nach dem besten Einzelzug 2 offen und die naechste
-                   # 67 -- dieselbe Unfairness, nur eine Ebene tiefer
+# ── Spielmodus ────────────────────────────────────────────────────────────
+# Alles, was eine Runde leichter oder schwerer macht, steht hier als Zahl --
+# und nur hier. Ein Hard Mode ist damit ein weiterer Eintrag in MODES, keine
+# Codeaenderung, und die Rundenlaenge laesst sich durchprobieren, ohne die
+# Datei anzufassen:
+#
+#   PNP_MODE=hard uv run game/main.py          ganzer Satz
+#   PNP_ROUND_SECONDS=20 uv run game/main.py   einzelner Wert, schlaegt den Satz
+#
+# Wer hier einen Mode dazuschreibt, aendert Zahlen und kein Verhalten. Ein
+# Mode, der mehr braucht (FPV, Gegenspieler), bekommt seine Naht dort, wo er
+# sie braucht -- ein Interface auf Verdacht raet die falsche Stelle.
+#
+# ROUND_SECONDS  Rundenlaenge. 30 statt 60 seit der Wertungssitzung: doppelter
+#                Durchsatz am Stand, und perfekt wird selten genug, dass die
+#                1000 etwas bedeutet.
+# PERFECT_HOLD   so lange muss die Summe stimmen, dann endet die Runde
+#                vorzeitig. Die alten 5 s waeren bei 30 s ein Sechstel der
+#                Runde. Gegen Flackern reicht ohnehin MARKER_HOLD.
+# GAP_MOVES      so viele Zuege darf die perfekte Loesung kosten. Ein
+#                teleoperierter Pick dauert 10-20 s -- bei 30 s Rundenzeit
+#                waeren drei Zuege ein Versprechen, das der Arm nicht haelt.
+# GAP_MIN/MAX    Band, in dem die Distanz zum Ziel liegen darf. Nicht der
+#                bindende Regler, siehe GAP_ONE_MAX.
+# GAP_ONE_MISS   so weit muss der beste EINZELNE Zug mindestens danebenliegen.
+#                Ohne die Untergrenze gewinnt ein Gluecksgriff, und das ist
+#                eine Ziehung, keine Aufgabe.
+# GAP_ONE_MAX    ... und so weit hoechstens. Der bindende Regler fuer die
+#                Vielfalt: am leeren Tablett laesst 15 (1,50 EUR) genau 14
+#                moegliche Ziele fuer den ganzen Messetag uebrig, 25 laesst 21.
+#                Gemessen mit diesem Preissatz, der Selbsttest in balance.py
+#                gibt die Zahl bei jedem Lauf aus.
+MODES = {
+    "normal": dict(ROUND_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
+                   GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
+}
+MODE = os.environ.get("PNP_MODE", "normal")
+
+
+def _mode(key):
+    """Wert aus dem aktiven Modus, per PNP_<KEY> ueberschreibbar.
+
+    Der Typ kommt aus dem Eintrag, nicht aus der Umgebung: PNP_PERFECT_HOLD=2.5
+    bleibt damit float und PNP_GAP_MOVES=3 wird int, ohne dass hier eine
+    Tabelle von Typen gepflegt werden muss.
+    """
+    default = MODES[MODE][key]
+    return type(default)(os.environ.get("PNP_" + key, default))
+
+
+ROUND_SECONDS = _mode("ROUND_SECONDS")
+PERFECT_HOLD  = _mode("PERFECT_HOLD")
+GAP_MOVES     = _mode("GAP_MOVES")
+GAP_MIN       = _mode("GAP_MIN")
+GAP_MAX       = _mode("GAP_MAX")
+GAP_ONE_MISS  = _mode("GAP_ONE_MISS")
+GAP_ONE_MAX   = _mode("GAP_ONE_MAX")
+
+# ── Wertung ───────────────────────────────────────────────────────────────
+# Die Punktzahl geht bis 1000 wie bei einer Boxmaschine: zwei Teile, und der
+# zweite ist nur fuer die zu holen, die perfekt waren. Formel und Begruendung
+# stehen in balance.py bei points().
+SCORE_MAX  = 900   # fuer Genauigkeit allein
+SCORE_TIME = 100   # Zeitbonus obendrauf, zusammen also 1000
+SCORE_CURVE = 2    # Exponent. 1 = linear, 2 spreizt den Bereich, in dem die
+                   # Leute tatsaechlich landen. Ein Zeichen, falls es am
+                   # Automaten zu hart aussieht.
 
 # ── Zwischenszene ─────────────────────────────────────────────────────────
 # Der Idle-Screen ist stumm, die Musik faengt hier an. Sechs Stunden Chiptune
@@ -227,9 +291,13 @@ DETECT_HZ     = 15     # Erkennungsrate, entkoppelt von den 60 FPS
 # was hier drin liegt. Das Rechteck wird ins Bild gezeichnet, also stellt man
 # es in der Halle beim Ausrichten der Kamera ein und sieht sofort das Ergebnis.
 TRAY_ROI      = (0.20, 0.15, 0.60, 0.70)
-MARK_FONT     = "tiny"    # Schriftgroesse der eingeblendeten Werte.
-                          # Mit dem Pane von 800 auf 544 mitgegangen,
-                          # sonst deckt die Zahl den Puck zu.
+MARK_FONT     = "tiny"    # Schriftgroesse der eingeblendeten Preise. Wird
+                          # zur Zeit von nichts gelesen: die Einblendung ist
+                          # seit dem 11.9.2026 auskommentiert, weil die Preise
+                          # waehrend der Runde verdeckt bleiben sollen. Steht
+                          # hier, damit das Einkommentieren in GameScene.overlay
+                          # eine Handbewegung bleibt -- beim Ausrichten der
+                          # Kamera will man sehen, WELCHEN Marker sie erkennt.
 MARK_WIDTH    = 5         # Strichstaerke des Detektionsfensters
 # ── Knoepfe ───────────────────────────────────────────────────────────────
 # BCM-Nummern, nicht Header-Pins. 17 · 27 · 22 · 23 sind Header 11 · 13 · 15 · 16,

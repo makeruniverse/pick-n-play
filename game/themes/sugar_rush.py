@@ -32,9 +32,12 @@ CANDY = ((255, 101, 189),   # ACCENT
          (194, 225, 137),   # Apple Green  #C2E189
          (232, 175, 207))   # Sakura Pink  #E8AFCF
 
+# {secs} fuellt die Szene aus dem Spielmodus -- die Rundenlaenge wird
+# durchprobiert und darf nicht in einem Thema eingefroren sein.
+# Das Tablett startet leer: es wird aufgebaut, nicht umgeraeumt.
 HOWTO = ("EVERY TREAT HAS A HIDDEN PRICE",
-         "MOVE THEM UNTIL TOTAL MEETS GOAL",
-         "60 SECONDS. CLOSEST WINS.")
+         "FILL THE TRAY TO MATCH THE GOAL",
+         "{secs} SECONDS. CLOSEST WINS.")
 
 # ── LED-Streifen ──────────────────────────────────────────────────────────
 # Die beiden Streifenfarben der Zuckerstange (idle/score) und die Balkenfarbe
