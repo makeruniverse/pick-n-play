@@ -162,6 +162,87 @@ diesem Fehler ist deshalb immer `ls -l /dev/serial/by-id/`, nicht der Motor-Scan
 Die Seriennummern sind fest und rutschen nie. Der saubere Umbau ist, sie in
 `run_teleop.sh` einzutragen statt der `ttyACM*`-Nummern. Steht noch aus.
 
+## Knöpfe am Panel
+
+Vier Taster, sonst nichts. Jeder geht mit einem Bein an seinen GPIO, mit dem
+anderen an Masse. Der Pull-up sitzt im Chip, es kommt kein Widerstand und kein
+Kondensator ins Kabel — entprellt wird in Software (`bounce_time` in
+`hw.Buttons`).
+
+| Funktion | GPIO (BCM) | Header-Pin | Masse daneben |
+|---|---|---|---|
+| hoch   | 17 | 11 | 9  |
+| runter | 27 | 13 | 14 |
+| links  | 22 | 15 | 14 |
+| rechts | 23 | 16 | 20 |
+
+Vier benachbarte Löcher, drei Masse-Pins dazwischen. Ein Pfostenstecker, keine
+Springerei über das Board.
+
+**Warum ausgerechnet diese vier:** der Header ist zur Hälfte vergeben, und die
+Kollision merkt man erst, wenn das Kabel dran ist. Belegt sind 0/1 (HAT-EEPROM),
+2/3 (I²C mit festen Pull-ups auf dem Board), 4 (1-Wire), 7–11 (SPI0), 12/13
+(Hardware-PWM), 14/15 (serielle Konsole), 18–21 (PCM/I²S). **GPIO 7–11 bleiben
+frei**, weil der LED-Streifen dort landet, falls er nicht an einen ESP32 geht —
+GPIO 10 (Header 19) ist dann der Datenpin.
+
+**Der Not-Aus hängt nicht an GPIO.** Er sitzt in der 12-V-Versorgung der Servos
+und trennt sie. Ein Not-Aus, der erst durch Python muss, ist keiner.
+
+Software dafür auf dem Pi installieren:
+
+```sh
+uv sync --extra pi
+```
+
+`gpiozero` und `lgpio` stehen als Extra `pi` in `pyproject.toml`, nicht bei den
+normalen Abhängigkeiten: `lgpio` baut gegen Linux-Header und lässt sich am
+Entwicklungsrechner nicht installieren. Am Mac steht `PNP_BUTTONS` deshalb
+von selbst auf 0 (`config.MAC`), und der Import wird dort nie ausgeführt.
+
+## LED-Streifen
+
+Daten an **GPIO 10 (Header 19)** über einen Pegelwandler 3,3 → 5 V, Masse des
+Streifennetzteils mit Pi-Masse verbinden, Strom nie über den Pi. `hw.Leds`
+schreibt direkt auf `/dev/spidev0.0`; fehlt das Gerät, läuft das Spiel mit
+stummen LEDs weiter und sagt beim Start `LEDs aus: …`.
+
+Einmalig auf dem Pi:
+
+```sh
+# SPI einschalten
+echo "dtparam=spi=on" | sudo tee -a /boot/firmware/config.txt
+# spidev nimmt sonst nur 4096 Byte pro Schreibvorgang. Ein Bild mit 480 LEDs
+# hat 11 820, wird gestückelt, und in der Lücke latcht ein älterer WS2812B
+# mitten im Bild. Ans Ende der EINEN Zeile in cmdline.txt, keine neue Zeile:
+sudo sed -i 's/$/ spidev.bufsiz=65536/' /boot/firmware/cmdline.txt
+sudo usermod -aG spi $USER
+sudo reboot
+```
+
+Prüfen: `ls /dev/spidev0.0` und `cat /sys/module/spidev/parameters/bufsiz`
+→ 65536. Stückelt das Spiel trotzdem, steht das beim Start im Log.
+
+Farben falsch (Rot und Grün vertauscht)? `LED_ORDER` in `config.py` — WS2812B
+ist `GRB`, WS2811-Streifen sind oft `RGB`. Nur ein Teil leuchtet? `LED_COUNT`.
+
+
+Prüfen, ob ein Taster ankommt, ohne das Spiel zu starten:
+
+```sh
+.venv/bin/python -c "
+from gpiozero import Button
+import time
+b = {p: Button(p) for p in (17, 27, 22, 23)}
+for _ in range(200):
+    print({p: v.is_pressed for p, v in b.items()}, end='\r')
+    time.sleep(0.05)"
+```
+
+Alles `False` im Ruhezustand, genau eines `True` beim Drücken. Bleibt eines
+dauerhaft `True`, liegt der Taster an Masse fest oder der Pin ist verdrahtet
+wie ein Schließer gegen 3,3 V — dann ist der Pull-up der falsche.
+
 ## Wartung
 
 Einmal im Monat oder wenn etwas komisch ist:
@@ -231,6 +312,29 @@ Minuten stehen und meldet das, statt zu heizen.
 | Einzelne Motoren fehlen sprunghaft, mal 2 und 4, mal 4 und 6 | **Spannung am Netzteil messen** | Unterspannung. Siehe unten |
 | Über 80 °C | `systemctl show teleop.service -p NRestarts` | Crash-Loop heizt den Pi |
 | Platte über 85 % | `journalctl --disk-usage` | siehe „Wartung" |
+| `git` sagt „loose object is corrupt" | `git fsck` | Pi wurde hart ausgeschaltet. Siehe unten |
+
+### Kaputte Git-Objekte nach hartem Ausschalten
+
+Am 10.9.2026 waren sechs Objekte kaputt, fünf davon **null Byte lang**. Das ist
+die Signatur eines Stromschnitts: die Datei wurde angelegt, der Inhalt hat es
+nie auf die Karte geschafft. Steht in `dmesg` keine EXT4- oder mmc-Meldung, ist
+die Karte gesund und es war das Ausschalten.
+
+Der Arbeitsbaum ist davon nicht betroffen, nur die Objektdatenbank. Reparatur,
+solange alles auf origin liegt:
+
+```sh
+git fsck --no-progress            # nennt die kaputten Objekte
+mkdir -p /tmp/git-kaputt
+mv .git/objects/XX/YYYY… /tmp/git-kaputt/    # je kaputtes Objekt, nicht loeschen
+git fetch origin && git reset --hard origin/main
+git fsck --no-progress            # muss jetzt schweigen
+```
+
+Beiseitelegen statt löschen: geht der Fetch schief, hat man sie noch. Vorbeugend
+gehört der Pi heruntergefahren, nicht ausgeschaltet — am Messetag steckt darauf
+der ganze Automat.
 
 ## Das Spiel starten
 
@@ -264,35 +368,43 @@ dafür nicht anfassen, was wichtig ist, weil das nächste `git pull` lokale
 | `PNP_FPSLOG=1` | Bildrate und Szene, einmal pro Sekunde auf stdout |
 | `PNP_CRT=0` | CRT-Overlay komplett aus |
 | `PNP_BARREL=0` | nur die Wölbung aus, Scanlines bleiben |
-| `PNP_IDLE_FPS=60` | Idle-Screen auf Spielszenen-Last, für Messungen ohne Tastatur |
+| `PNP_IDLE_FPS=30` | Idle-Screen auf Spielszenen-Last, für Messungen ohne Tastatur |
+| `PNP_VSYNC=0` | ohne Bildsynchronisation, kostet Tearing |
+| `PNP_CV_THREADS=n` | OpenCV-Threads im Renderpfad, Default 3 (der vierte Kern gehört der Teleop) |
+| `PNP_THEME=name` | Thema aus `game/themes/name.py`, Default `sugar_rush` |
+
+Um die Decke zu finden statt der Zielrate, `PNP_IDLE_FPS=999 PNP_VSYNC=0`
+setzen — sonst misst man den Taktgeber und nicht den Renderpfad.
 
 ## Stand der Abnahme
 
 Installiert und geprüft: `uv`, Python 3.13, OpenCV 5.0, pygame-ce 2.5.8, alle
-vier Selbsttests grün, beide Kameras liefern Bild, KMSDRM startet, Ton über
-HDMI vorhanden.
+vier Selbsttests grün, beide Kameras liefern Bild, KMSDRM startet nativ in
+1920 × 1080, Ton über HDMI vorhanden.
 
-Nicht abgenommen: **die Bildrate.** Ziel sind 60 fps, gemessen wurden 19,6 mit
-vollem CRT und 40 im entkernten Zustand. Mit Spiel und Teleop gleichzeitig geht
-der Pi in unter einer Minute auf 83 °C und drosselt. Die Zahlen und die drei
-Stellschrauben stehen im Overview unter „Messung auf dem Pi".
+**Die Bildrate ist seit dem 10.9.2026 abgenommen.** Ziel sind 30 fps, gemessen
+wurden 45 Sekunden am Stück 29,4 bis 30,3 — mit vollem CRT, beiden Kameras
+**und laufender Teleop**, dabei von 61,5 auf 75,7 °C. Die Begründung für 30
+statt 60 und die Zahlen dahinter stehen im Overview unter „Messung auf dem Pi".
 
-**Bis das entschieden ist, nicht beides gleichzeitig dauerhaft laufen lassen.**
+Weiter offen ist die **Kühlung**: ohne Lüfter geht der Pi unter Last auf über
+80 °C und drosselt, und die Drosselung kostet bis zu 35 % Rechenleistung. Der
+Dauerbetrieb über sechs Messestunden ist so nicht abgenommen, auch wenn die
+Bildrate es ist.
 
 ## Offen
 
-1. Entscheidung zur Bildrate: Wölbung streichen, auf 1920 × 1080 nativ umziehen,
-   oder Zielbildrate auf 30 senken. Entwurfsfrage, keine Konfigurationsfrage.
-2. Aktive Kühlung. Ohne Lüfter drosselt der Pi unter Doppellast.
-3. Layout auf 1080, falls Punkt 1 so ausgeht. `FOOTER_Y = 1120` liegt sonst
-   außerhalb des Bildes.
-4. Ton am Automatenlautsprecher abhören. Es gibt nur HDMI-Audio, keine USB-Karte.
+1. **Aktive Kühlung.** Ohne Lüfter drosselt der Pi unter Doppellast. Erste
+   Ordnung — sie blockiert den Dauerbetrieb und verfälscht jede weitere Messung.
+2. Ton am Automatenlautsprecher abhören. Es gibt nur HDMI-Audio, keine USB-Karte.
    Beim Testlauf traten ALSA-Underruns auf.
-5. ArUco-Erkennungsrate gegen die gedruckten Marker. Beim Testlauf lagen keine
+3. ArUco-Erkennungsrate gegen die gedruckten Marker. Beim Testlauf lagen keine
    auf dem Tablett.
-6. `picknplay.service` schreiben, mit `After=teleop.service`, aber ohne
-   `Requires` — das Spiel soll auch ohne Arme starten.
-7. Die Arm-Kamera hängt um 90° verdreht. Der Passthrough steht damit quer.
+4. `picknplay.service` schreiben, mit `After=teleop.service`, aber ohne
+   `Requires` — das Spiel soll auch ohne Arme starten. Dazu `CPUAffinity=0-2`
+   für das Spiel und `CPUAffinity=3` plus `Nice=-10` für die Teleop; die Drei
+   in `PNP_CV_THREADS` setzt das schon voraus.
+5. Die Arm-Kamera hängt um 90° verdreht. Der Passthrough steht damit quer.
 
 Dazu die zwei Stabilitätsumbauten: Seriennummern statt `ttyACM*` in
 `run_teleop.sh`, und Kameras über `/dev/v4l/by-path/` statt über Indizes. Beide

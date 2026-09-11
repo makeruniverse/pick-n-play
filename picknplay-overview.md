@@ -6,6 +6,80 @@
 
 ---
 
+## Stand: 11. September 2026
+
+**Das Spiel läuft am Mac**, ohne Branch: `config.MAC` setzt dort Fenster,
+Pfeiltasten und die eingebaute Webcam in beiden Panes als Default. Der
+Automat ist Linux, für ihn ändert sich nichts.
+
+**Die Objekte sind Cupcakes, ihr Wert ist ihr Preis**, schwerer greifbar heißt
+teurer. Marker als SVG (`tools/marker_svg.py`), Kegel-Topping mit von oben
+hineinextrudiertem Marker, Schokokuchen invertiert (`detectInvertedMarker`).
+Farbtest gegen die Bambu-PLA-Matte-Tabelle steht in `docs/todo.md`.
+
+**Neuer Look „Sugar Rush"**: Schokoladengrund, Pink statt Gelb, Pixel-Sprites
+in `game/sprites.py`, Laufbänder im Idle, Zuckerstangen-Balken, Streusel. Die
+Layout-Koordinaten sind unverändert. **Auf dem Pi ungemessen** — das Zeichnen
+war dort 1,5 ms pro Bild, die Sprites sind vorgerenderte Blits, aber es wurde
+nicht nachgemessen.
+
+**Das Thema ist austauschbar.** Farben, Texte, Sprites, LED-Farben und die
+Zuordnung Marker → Sprite stehen in einer Datei, `game/themes/sugar_rush.py`.
+`config.py` lädt sie über `PNP_THEME` und nennt in `THEME_KEYS`, was jedes
+Thema liefern muss. Szenen nennen keinen Sprite-Namen, sie lesen `LADDER`
+(die Objekte nach Preis). Ein zweites Thema (PCB-Bauteile) ist eine Kopie der
+Datei. Bewusst nicht im Thema: HPI-Rot/-Orange, Knopffarben, `VALUES`, Titel,
+Musik.
+
+**LED-Modul geschrieben** (`hw.Leds`, SPI direkt), am Streifen ungeprüft.
+
+---
+
+## Stand: 10. September 2026
+
+**Der Automat läuft mit stabilen 30 fps, mit Spiel und Teleop gleichzeitig.**
+Das war seit dem 9.9. der offene Punkt, an dem die Abnahme hing. Gemessen am
+Automaten, 45 Sekunden am Stück: 29,4 bis 30,3 fps, kein Abfall, dabei von
+61,5 auf 75,7 °C.
+
+Vier Änderungen, in der Reihenfolge ihres Ertrags:
+
+1. **`pygame.SCALED` ist raus, gerendert wird nativ in 1920 × 1080.** Das war
+   mit Abstand der größte Posten und der am schlechtesten geschätzte: die
+   Vermutung lautete 8,5 ms, tatsächlich waren es rund 20. Die Szene selbst
+   zeichnet in 1,4 bis 2,0 ms — die 25 ms, die vorher als „Szene + flip"
+   verbucht waren, waren fast vollständig die Skalierung 1200 → 1080.
+2. **Die Wölbung wölbt nicht mehr das Bild, sondern die Scanlines.** Sie steckt
+   jetzt in der Verdunklungskarte, die beim Start einmal gebaut wird, und
+   kostet zur Laufzeit nichts. Siehe „Messung auf dem Pi".
+3. **Zielbildrate 30 statt 60**, Idle 15 statt 20. Begründung in `config.py`
+   und unten.
+4. **`cv2.setNumThreads(3)`** — OpenCV nimmt sich sonst alle vier Kerne und
+   verdrängt genau den Teleop-Loop, der als einziger terminkritisch ist.
+
+Das Layout ist dafür auf das 1080-Raster **neu gesetzt, nicht skaliert**: ein
+reines ×0,9 hätte die Zeilenabstände relativ zur unveränderten Glyphenhöhe
+zusammengezogen, und genau dort saß der Klippfehler vom 28. August. Der
+Cursorbalken in `LeaderboardScene` ist dabei von einer Magic Number zu
+`CURSOR_Y`/`CURSOR_H` geworden — er war ein `fill()` und damit für den
+Layout-Selbsttest unsichtbar, also für die Fehlerklasse blind, gegen die der
+Test gebaut wurde.
+
+**Zwei Befunde nebenbei:**
+
+Das Git-Repo auf dem Pi war kaputt — sechs Objekte, fünf davon null Byte lang.
+Das ist die Signatur eines harten Ausschaltens, nicht einer sterbenden Karte:
+`dmesg` zeigt keine einzige I/O- oder EXT4-Meldung. Repariert, indem die
+kaputten Objekte beiseitegelegt und von origin neu geholt wurden.
+
+Der Pi drosselt beim Messen auch mit *gestoppter* Teleop: von 63,7 auf 80,7 °C
+in 25 Sekunden. Dasselbe `remap` kostete kalt 8,7 ms und warm 12,5 — 35 %
+Unterschied allein aus der Temperatur. **Jede Messung ohne Lüfter misst auch
+die Drosselung mit.** Aktive Kühlung ist damit keine Vorsichtsmaßnahme mehr,
+sondern eine Voraussetzung für belastbare Zahlen.
+
+---
+
 ## Stand: 28. August 2026
 
 **UX-Pass über alle fünf Szenen.** Anlass war ein Klippfehler auf dem
@@ -110,8 +184,9 @@ sehen. Schritt 1–3 sind heute machbar, 4–5 brauchen Hardware.
    lauter. Die Melodien stehen als Zeichenketten in `PIECES` — nachbessern ist
    eine Zeile ändern, kein Umbau.
 3. ~~CRT-Overlay in `run_game`~~ — erledigt, inklusive Wölbung und Pixelfont.
-   Die Messung auf dem Pi liegt seit dem 9.9.2026 vor und ist negativ, siehe
-   „Messung auf dem Pi". Offen bleibt die Einstellung in der Halle.
+   Die Bildrate ist seit dem 10.9.2026 abgenommen: 30 fps stabil mit laufender
+   Teleop, siehe „Messung auf dem Pi". Offen bleibt die Einstellung in der
+   Halle (`SCANLINE_ALPHA`, `VIGNETTE_ALPHA`).
 4. ~~`Camera` + `ArucoDetector`~~ — erledigt, inkl. Passthrough-Inset. Offen
    bleibt die Erkennungsrate gegen die *gedruckten* Marker unter Hallenlicht.
 5. Teleop-Prozess: Torque-Zustandsmaschine, Heartbeat-Empfänger, Weckrampe.
@@ -171,7 +246,7 @@ Der Skill liegt im Rückschluss („was war das Ding wert?"), nicht in der Feinm
   - *Top-Down*, fest montiert, Autofokus und Belichtung fixiert — liefert die Marker-Erkennung
   - *Arm-Kamera*, reiner Passthrough auf dem Display, keine Auswertung — das
     gilt weiterhin, das Overlay liegt nur auf der Top-Down-Kamera
-- **Display: Asus MB169CK, 15,6", 1920 × 1080 (16:9).** Am 9.9.2026 per EDID am Pi ausgelesen. **Korrektur:** hier stand vorher „1920 × 1200 (16:10)", das war falsch — die MB169-Reihe ist FHD. Die Entwurfsauflösung in `config.py` steht weiterhin auf 1200, `pygame.SCALED` rechnet also mit Faktor 0,9 herunter. Das kostet Schärfe an der Pixelfont und Rechenzeit, siehe „Messung auf dem Pi". Zweites Display optional für Zuschauer
+- **Display: Asus MB169CK, 15,6", 1920 × 1080 (16:9).** Am 9.9.2026 per EDID am Pi ausgelesen. **Korrektur:** hier stand vorher „1920 × 1200 (16:10)", das war falsch — die MB169-Reihe ist FHD. Seit dem 10.9.2026 ist die Entwurfsauflösung dieselbe Zahl und `pygame.SCALED` ist raus — die Skalierung mit Faktor 0,9 kostete rund 20 ms pro Bild und die Schärfe der Pixelfont, siehe „Auflösung und Vollbild". Zweites Display optional für Zuschauer
 - **Vier Arcade-Buttons** (hoch/runter/links/rechts) an GPIO, plus Not-Aus. **Panel 3 mm** — Snap-in (Sanwa OBSF-30, spezifiziert für 2–4 mm) liegt im Bereich, aber bei Sperrholz sind Schraubtaster (Seimitsu PS-14-KN, OBSN-30) mit Mutter die haltbarere Wahl. Lochmaß 30 mm, Flachstecker 2,8 mm.
 - WS2812B-Streifen. Auf Pi 5 funktioniert `rpi_ws281x` nicht (RP1); Optionen: PIOLib, SPI-Weg (`rpi5-ws2812`, `Pi5Neo`) oder Auslagerung auf einen ESP32 mit WLED via UDP/DDP. Letzteres nimmt Timing, Netzteil und Pegelwandlung aus dem Pi.
 - 3D-gedruckte Pucks: flacher Boden, tiefer Schwerpunkt, einheitliche Greifrippe, ArUco-Marker plan oben
@@ -409,12 +484,14 @@ entscheidet sich, ob zwei Kameras an einem Controller laufen.
 leise auf `FakeDetector` zurückzufallen. Erfundene Zahlen auf dem Automaten
 wären am Messestand nicht als Fehler zu erkennen; ein Startabbruch ist es.
 
-**Passthrough nur in der `GameScene`**, beide Bilder 880 × 495 nebeneinander.
+**Passthrough nur in der `GameScene`**, beide Bilder 800 × 450 nebeneinander.
 Im Idle bleibt die USB-Bandbreite frei und der Pi kalt — dieselbe Regel wie bei
 den Servos. Gemessen 1,5 ms pro Frame fuer die ganze Szene inklusive beider
 Panes; `CameraView` konvertiert nur, wenn die Kamera wirklich ein neues Bild
-geliefert hat (Sequenzzaehler in `Camera`), sonst wuerde jedes Kamerabild bei
-30 fps Quelle und 60 fps Rendern zweimal umgerechnet.
+geliefert hat (Sequenzzaehler in `Camera`). Seit die Zielbildrate auf 30 steht,
+laufen Quelle und Rendern gleich schnell und der Zaehler spart selten etwas —
+er bleibt trotzdem: er kostet einen Vergleich und deckt den Fall ab, dass eine
+Kamera einbricht oder haengt.
 
 **`CAM_INDEXES` ist ein Paar**, `(Arm, Top-Down)`. Stehen zweimal dieselbe 0
 darin, oeffnet `main.py` das Geraet trotzdem nur einmal (`set()`) und speist
@@ -512,43 +589,56 @@ ist.
 
 ### Auflösung und Vollbild
 
-**Entwurfsauflösung = Panelauflösung: 1920 × 1200 (16:10), Asus 15".**
-Entschieden am 27. August 2026. Jede Koordinate in `scenes.py` ist eine absolute
-Zahl für dieses Raster; auf dem Zielmonitor ist die Abbildung damit 1:1, es wird
-nichts skaliert und nichts weichgezeichnet. Was man hinschreibt, steht da.
+**Entwurfsauflösung = Panelauflösung: 1920 × 1080, Asus MB169CK.**
+Am 10. September 2026 dorthin umgezogen. Jede Koordinate in `scenes.py` ist eine
+absolute Zahl für dieses Raster; auf dem Zielmonitor ist die Abbildung 1:1, es
+wird nichts skaliert und nichts weichgezeichnet. Was man hinschreibt, steht da.
 
-Die vorher erwogene Variante — bei 1280 × 720 bleiben und hochskalieren — ist
-verworfen. Sie hätte auf 16:10 oben und unten je 60 px schwarze Balken erzeugt
-und jeden Pixel um Faktor 1,5 gestreckt, also *nicht* ganzzahlig: bei
-Pixelschrift ohne Antialiasing werden daraus ungleich dicke Buchstabenstriche.
-Nativ zu zeichnen kostet einmalig 22 geänderte Zahlen und ist danach für immer
-erledigt.
-
-**`pygame.SCALED` bleibt trotzdem gesetzt** — als Versicherung, nicht als
-Werkzeug:
+**`pygame.SCALED` ist raus.** Bis zum 9.9. stand die Entwurfsauflösung auf
+1920 × 1200, also auf einem Panel, das es nicht gibt — die 16:10-Angabe war
+falsch —, und `SCALED` rechnete jedes Bild auf 1080 herunter. Das kostete
+gemessen rund 20 ms pro Bild, mehr als CRT und Wölbung zusammen, und es legte
+die 8 × 8-Pixelschrift auf ein Raster mit Faktor 0,9: ungleich große
+Glyphenpixel, also genau der Fehler, gegen den die Schriftgrößen alle durch 8
+teilbar sind.
 
 ```python
-flags = pygame.SCALED | (pygame.FULLSCREEN if FULLSCREEN else 0)
-screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=1)
+flags = pygame.FULLSCREEN if FULLSCREEN else 0
+try:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=VSYNC)
+except pygame.error:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
 pygame.mouse.set_visible(False)
 ```
 
-Auf dem Asus ist das Flag ein Durchreicher und tut nichts. Hängt am Messetag ein
-anderes Panel dran — und der Monitor steht unter „Offene Punkte" —, skaliert SDL
-seitenverhältnistreu in Hardware, statt dass das Layout in der Ecke klebt. Ein
-Flag als Rückfallebene ist billiger als die Annahme, dass sich nie etwas ändert.
+Das `try` ist kein Zierrat: `vsync` ohne `SCALED` ist backendabhängig, und ein
+Automat, der am Messetag mit einer Exception statt mit einem Bild startet, ist
+schlechter als einer mit Tearing. `PNP_VSYNC=0` schaltet es zum Nachmessen ab.
 
-`vsync=1` verhindert Tearing beim Farbverlauf des Timers, der einzigen Stelle,
-an der sich pro Frame eine große Fläche ändert. `set_visible(False)` nimmt den
+`vsync` verhindert Tearing beim Farbverlauf des Timers, der einzigen Stelle, an
+der sich pro Frame eine große Fläche ändert. Es kostete bei 60 Hz gemessen 12
+bis 19 %; bei 30 fps ist das Budget da. `set_visible(False)` nimmt den
 Mauszeiger weg, der im Vollbild sonst mitten im Bild stehen bleibt.
 
 **`FULLSCREEN` ist ein Schalter in `config.py`**, kein fester Wert: beim
 Entwickeln aus (Fenster, `q` beendet), am Automaten an. Ein Flag, zwei
 Betriebsarten, keine zweite Codebasis.
 
-**Konsequenz für später:** Das Layout ist damit an 16:10 gebunden. Ein Wechsel
-auf ein 16:9-Panel wäre kein Absturz — `SCALED` fängt ihn ab —, aber es gäbe
-dann seitliche Balken. Der Monitor gilt ab hier als gesetzte Hardware.
+**Konsequenz:** ein anderes Panel heißt jetzt Layout anfassen, nicht mehr Flag
+setzen. Das ist der bewusst gezahlte Preis — die Rückfallebene kostete das
+Vierfache dessen, wogegen sie versicherte, und der Monitor ist gesetzte
+Hardware.
+
+**Zielbildrate 30, nicht 60.** Zwei Gründe, beide unabhängig von der
+Rechenleistung. Erstens teilt 30 die 60 Hz des Panels glatt: jedes Bild steht
+exakt zwei Refreshes lang. Bei 40 fps wäre 60/40 = 1,5, also abwechselnd ein
+und zwei Refreshes — sichtbares Ruckeln bei *höherer* Bildrate. Unterhalb von
+60 ist 30 die einzige gerade Zahl. Zweitens liefern die Kameras 30 Bilder/s;
+alles darüber zeigt in der Runde dasselbe Kamerabild zweimal. Es gibt in diesem
+Spiel keine 60-Hz-Bewegung: Sekundenzähler, Summe, blinkender Text, Kamerabild.
+Der Arcade-Look kommt aus Scanlines, Wölbung und harten Pixelkanten, nicht aus
+der Bildrate. `IDLE_FPS` steht auf 15, der Hälfte davon, damit die Kadenz auch
+im Idle gerade bleibt.
 
 ### Schriftgrößen
 
@@ -557,11 +647,17 @@ im eigenen Abschnitt weiter unten.
 
 ### Koordinaten
 
-Alle Koordinaten für **1920 × 1200**, Bildmitte x = 960. Zeichnen ist Handarbeit in Zahlen — das ist der bewusst gezahlte Preis für pygame statt CSS. Damit es nicht in Magic Numbers ausartet, gelten drei Regeln:
+Alle Koordinaten für **1920 × 1080**, Bildmitte x = 960. Zeichnen ist Handarbeit in Zahlen — das ist der bewusst gezahlte Preis für pygame statt CSS. Damit es nicht in Magic Numbers ausartet, gelten drei Regeln:
 
 - **Ein Helfer, kein Layoutsystem.** `draw(screen, font, text, x, y, color)` zeichnet einen Text zentriert auf `(x, y)`. Zentriert, nicht linksbündig, weil Zahlen ihre Breite ändern (`9` → `10`) und ein linksbündiger Wert dann sichtbar springt.
 - **`font.render(text, False, color)`** — der zweite Parameter ist Antialiasing, und der muss `False` sein. Ein Pixelfont mit Kantenglättung sieht aus 8 m matschig aus statt scharf.
 - **Farbe trägt Bedeutung, nicht Dekoration.** Sechs Farben, eine Leiter von leise nach laut, jede mit genau einem Job. Solange das gilt, ist „welche Farbe nehme ich hier" keine Entscheidung mehr, sondern eine Nachschlagung.
+
+> **Seit 11.9.2026 („Sugar Rush"):** `BLACK` heißt `BG` und ist `#28101E`
+> (dunkle Schokolade), `YELLOW` heißt `ACCENT` und ist `#FF65BD` (Pink),
+> `WHITE` ist `#FFECF6` (Sahne), `GREY` ist `#B0809E`. Die Jobs sind dieselben.
+> Neu ist `CANDY` — Bonbonfarben für Titel und Streusel, nie für Spielwerte.
+> Die Tabellen in diesem Abschnitt nennen noch die alten Namen.
 
 | Farbe | Hex | Job |
 |---|---|---|
@@ -609,8 +705,8 @@ Die Pfeilzeichen `▶ ◀ ▲ ▼` existieren in der Font (nachgesehen, nicht ve
 Zwei Konstanten in `config.py` und ein siebenzeiliger Helfer in `scenes.py`:
 
 ```python
-FOOTER_Y    = 1120   # die eine Zeile, die sagt was die Knoepfe tun
-SAFE_BOTTOM = 1040   # kein Szeneninhalt darunter. Nie.
+FOOTER_Y    = 1000   # die eine Zeile, die sagt was die Knoepfe tun
+SAFE_BOTTOM =  920   # kein Szeneninhalt darunter. Nie.
 ```
 
 **Der Anlass war ein echter Klippfehler.** Die fünfte Bestenlisten-Zeile lag
@@ -625,6 +721,11 @@ kann nichts mehr kollidieren — nicht weil die Zahlen jetzt passen, sondern
 weil es kein zweites Element gibt. Und es ist die bessere Rückmeldung: die
 Antwort auf einen Knopfdruck erscheint dort, wo ohnehin steht, was der Knopf
 tut. Vorher standen Cursor `◀` (510, 470) und seine Antwort 660 px auseinander.
+
+Beide Zahlen sind **Abstände von der Unterkante**, nicht Anteile der Höhe: das
+Band ist eine feste Zeile am Bildrand und skaliert nicht mit. Beim Umzug auf
+1080 blieben sie deshalb bei 80 und 160 px vom Rand — verschoben hat sich nur
+der Szeneninhalt darüber.
 
 ```python
 footer(screen, f, left=None, right=None, note=None)
@@ -654,7 +755,11 @@ Doppelbestätigung ab, nicht die Unsichtbarkeit.
 Dieselbe Konvention wie `db.py`, `music.py`, `balance.py`. Der Test fängt
 jeden `draw()`-Aufruf der *echten* `render()`-Methoden ab und prüft die
 Rechtecke: Bildgrenzen, `SAFE_BOTTOM`, und paarweise Überdeckung — inklusive
-der beiden Kamerapanes, die kein `draw()` sind. Durchgespielt werden alle
+der beiden Kamerapanes und des Cursorbalkens, die kein `draw()` sind. Der
+Balken kam erst am 10.9. dazu: er war ein `fill()` mit einer Magic Number und
+damit für den Test unsichtbar, also blind für genau die Fehlerklasse, gegen die
+der Test gebaut wurde. Jetzt steht er als `CURSOR_Y`/`CURSOR_H` in der Klasse
+und der Test liest ihn von dort. Durchgespielt werden alle
 Szenen, `GameScene` in drei Zuständen und `LeaderboardScene` in acht
 (vier Cursorpositionen × Rückfrage an/aus).
 
@@ -1008,9 +1113,75 @@ gleichzeitig läuft der Pi in unter einer Minute auf 83 °C und drosselt
 (`throttled=0xe0008`), die Bildrate fällt dabei weiter. Ohne aktive Kühlung ist
 der Dauerbetrieb am Messetag so nicht zu halten.
 
-Die Entscheidung, welche der drei Stellschrauben gezogen wird — Wölbung streichen,
-auf 1080 umziehen, Zielbildrate auf 30 senken — steht noch aus. Sie ist eine
-Entwurfsentscheidung, keine Konfigurationsfrage.
+#### Entschieden am 10. September 2026: alle drei, plus eine vierte
+
+Gemessen wurde am selben Automaten, nativ in 1920 × 1080, beide Kameras aktiv.
+
+| Ziel unbegrenzt | 9.9. (1200, `SCALED`) | 10.9. (1080 nativ) |
+|---|---|---|
+| alles an | 19,6 | **28,5 kalt → 26 warm** |
+| ohne Wölbung | 26,5 | **42** |
+| ohne CRT | 36,6 | **61** |
+
+Stufen des Renderpfads einzeln, am kalten Pi: Szene zeichnen 1,4–2,0 ms,
+`remap` 8,7 ms, Scanlines 7,0 ms. Zum Vergleich die Untergrenze — eine reine
+Kopie derselben Datenmenge kostet 1,83 ms. `remap` liegt also beim Fünffachen
+davon: der Gather ist rechengebunden, nicht bandbreitengebunden, und mit
+OpenCV ist dort nichts mehr zu holen. Vier Varianten wurden gegeneinander
+gemessen (4 × uint8, 1 × int32, `BORDER_REPLICATE`), alle innerhalb von 2 %.
+
+**Zwei Hypothesen von vorher haben sich nicht bestätigt.** Erstens: die 25 ms
+für „Szene + flip" waren fast vollständig die `SCALED`-Skalierung, nicht das
+Zeichnen — die Szene selbst kostet 1,5 ms. Zweitens: das Overlay von pygames
+Alpha-Blit auf `cv2.multiply` umzustellen sollte 6 ms bringen und brachte
+nichts. Auf dem Pi kostet die Multiplikation 7,2 ms und der Blit 6,4; im
+ganzen Renderpfad 21,4 gegen 21,5 ms, also Gleichstand. Die Multiplikation ist
+trotzdem geblieben — halb so viel Code, exakte statt genäherter Vignette, und
+der ganze Nachbearbeitungspfad hängt damit an einer Thread-Einstellung statt
+an zweien. Als Beschleunigung war sie ein Fehlschluss.
+
+**Die vierte Stellschraube stand nicht auf der Liste und schlägt alle drei
+anderen: die Wölbung wandert vom Bild in die Verdunklungskarte.** Statt jedes
+Bild durch ein `cv2.remap` zu schicken, bekommt die statische Scanline- und
+Vignettenkarte die Wölbung eingebaut — die Zeilen krümmen sich wie auf einer
+Röhre und rücken zum Bildrand hin zusammen, das Bild selbst bleibt geometrisch
+flach. Die Karte wird beim Start gebaut, zur Laufzeit kostet die Krümmung
+nichts.
+
+| Variante | ms/Bild | Decke |
+|---|---|---|
+| Wölbung im Bild (bis 9.9.) | 24,95 | 40 fps |
+| **gewölbte Scanlines, Bild flach** | **11,12** | **90 fps** |
+| ohne Wölbung | 11,65 | 86 fps |
+
+Die gewölbten Scanlines kosten also genau so viel wie *gar keine* Wölbung.
+
+**Der zweite Grund wiegt schwerer als die Millisekunden: die Wölbung zerlegte
+die Pixelschrift.** `remap` tastet mit `INTER_NEAREST` ab, und ein
+8 × 8-Glyphenraster auf nicht-ganzzahlige Positionen abgetastet franst aus —
+Buchstabenkanten werden stufig, Glyphenpixel ungleich groß. Das ist derselbe
+Fehler, gegen den alle Schriftgrößen durch 8 teilbar sind, nur von der anderen
+Seite. Aus 3–8 m liest sich eine Röhre ohnehin an den Zeilen, nicht an der
+Geometrie — dasselbe Argument, mit dem die Chromatic Aberration draußen
+geblieben ist.
+
+Die Scanlinephase kommt aus der gewölbten Quellzeile und wird als
+**Deckungsgrad gerechnet, nicht abgetastet**. Ein punktweise gewarptes
+3-px-Muster gäbe sonst Moirestreifen am Bildrand — das war der Grund, warum
+die naheliegendere Variante (Scanlines vor die Wölbung legen) verworfen wurde,
+bevor sie Code war. Bei `BARREL_K = 0` fällt die Karte auf ein Bit genau auf
+das alte flache Muster zurück.
+
+**Ergebnis: 30 fps, 45 Sekunden am Stück, mit laufender Teleop.** 29,4 bis
+30,3, kein Abfall, dabei von 61,5 auf 75,7 °C.
+
+**Offen bleibt der GPU-Shader.** Wölbung *des Bildes* mit scharfer Schrift ginge
+als GLES-Fragmentshader auf dem VideoCore, mit korrekter Filterung und ohne
+Bildratenkosten. Bewusst nicht gebaut: neue Abhängigkeit, GLES-Kontext unter
+KMSDRM, Texturupload pro Bild, und der Layout-Selbsttest liefe nicht mehr
+headless. Der Code für die Bildwölbung (`barrel_maps`, `cv2.remap` im Loop)
+steht in der Historie bis einschließlich `6ed2b4a`, falls die Option gezogen
+wird.
 
 **Der Zielkonflikt gehört benannt:** Scanlines nehmen Helligkeit weg, und
 Lesbarkeit aus 8 m in einer hellen Halle ist das oberste Prinzip dieses
@@ -1312,7 +1483,8 @@ Reihenfolge nach dem Prinzip: nach jedem Schritt läuft etwas. Die Software wird
 5b. ● Musik — `music.py`, deklarative Notation, Square-Wave-Synthese, Ducking
 5d. ● Balancing — `balance.py`, Zielwert aus dem Tablett, Werte ohne
     gemeinsamen Teiler; `GAP_MOVES` bleibt geraten bis jemand misst
-5c. ○ Vollbild — `pygame.SCALED`, `FULLSCREEN`-Schalter in `config.py`
+5c. ● Vollbild — nativ 1920 × 1080 ohne `SCALED`, `FULLSCREEN`-Schalter in
+    `config.py`, 30 fps am Automaten abgenommen (10.9.)
 
 Legende: ● fertig · ◐ angefangen · ○ offen
 
@@ -1354,11 +1526,14 @@ Jetson, Browser-Frontend, WebSocket, Flask, Kubernetes, ConfigSync, GCS, Vertex-
   `LeaderboardScene.handle`, falls es umgedreht werden soll
 - `TRAY_ROI` am aufgebauten Automaten einstellen — hängt an Kamerahöhe und Tablettgröße
 - CRT-Scanline-Stärke unter Hallenlicht: ab wann kostet der Effekt mehr Lesbarkeit als er Optik bringt (`SCANLINE_ALPHA`, `VIGNETTE_ALPHA`)
-- Ob der Pi die 3,3 ms für die Wölbung übrig hat. Falls nicht: `BARREL_K = 0`
+- ~~Ob der Pi die 3,3 ms für die Wölbung übrig hat~~ — erledigt am 10.9.2026. Die Wölbung sitzt jetzt in der statischen Verdunklungskarte und kostet zur Laufzeit nichts
+- **Aktive Kühlung.** Ohne Lüfter drosselt der Pi unter Doppellast und verfälscht jede Messung um bis zu 35 %. Erste Ordnung, blockiert den Dauerbetrieb am Messetag
+- Ob der GPU-Shader gebaut wird (Wölbung des Bildes mit scharfer Schrift). Optional, nicht blockierend
 - ~~Ob `cv2` neben `pygame` auf dem Pi sauber lädt~~ — erledigt am 9.9.2026. Auf Ubuntu 24.04 laden OpenCV 5.0.0 und pygame-ce 2.5.8 unter Python 3.13 ohne Symbolkonflikt
 - Audioausgabe am Pi (Klinke, HDMI oder USB) und ob am Stand überhaupt etwas hörbar ist
-- Ob die 60-px-Balken oben/unten hinter der Kabinettblende verschwinden — sonst 1280 × 800 als Entwurfsauflösung erwägen
-- Ob bei 1920 × 1080 nativ gerendert wird statt bei 1200 herunterskaliert. Das Panel kann kein 16:10, die Frage ist also nicht mehr *ob* 16:10 sich lohnt, sondern ob das Layout in `scenes.py` auf 1080 umgezogen wird (`FOOTER_Y = 1120` liegt sonst außerhalb des Bildes)
+- ~~Ob die 60-px-Balken oben/unten hinter der Kabinettblende verschwinden~~ — hinfällig, das Panel ist 16:9 und es wird nativ gerendert
+- ~~Ob bei 1920 × 1080 nativ gerendert wird statt bei 1200 herunterskaliert~~ — erledigt am 10.9.2026, Layout ist umgezogen
+- Stromversorgung des Pi beim Ausschalten: ein harter Schnitt hat am 9.9. das Git-Repo zerlegt (fünf Objekte null Byte). Am Messetag ist das die SD-Karte des Automaten
 - Snap-in vs. Schraubtaster bei 3 mm Sperrholz — Ausrissverhalten testen
 - Zwei Kameras gleichzeitig: Bandbreite am realen Pi verifizieren (Index der Arm-Kamera steht noch nicht fest, `CAM_INDEX` ist einer)
 - FPV-Latenz, falls Hard Mode kommt
