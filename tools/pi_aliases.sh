@@ -11,7 +11,7 @@ PNP_PY=$PNP/.venv/bin/python
 # to $PNP_LOG. Env switches pass through: PNP_CAMERA=0 pnp-start 120
 pnp-start() {
     pnp-running && { echo "already running, pnp-stop first"; return 1; }
-    (cd $PNP && setsid timeout -s KILL "${1:-900}" $PNP_PY game/main.py > $PNP_LOG 2>&1 < /dev/null &)
+    (cd $PNP && PYTHONUNBUFFERED=1 setsid timeout -s KILL "${1:-900}" $PNP_PY game/main.py > $PNP_LOG 2>&1 < /dev/null &)
     sleep 1; echo "started for ${1:-900} s, log: pnp-log"
 }
 
@@ -54,7 +54,7 @@ pnp-leds-off() {
     timeout -s KILL 10 $PNP_PY -c "
 import sys; sys.path.insert(0, '$PNP/game')
 from hw import Leds
-Leds().close()" 2>&1 | grep -v pygame
+Leds().close()" 2>&1 | grep -v pygame || true
 }
 
 # Buttons: live state for 15 s, True while pressed
