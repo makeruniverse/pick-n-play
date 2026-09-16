@@ -401,10 +401,10 @@ class GameScene(SceneBase):
 
     # The bar, absolute coordinates like everything else in this file.
     # Below the cameras and exactly as wide as both panes together.
-    BAR   = pygame.Rect(96, 760, 1728, 70)
+    BAR   = pygame.Rect(108, 770, 1704, 70)
     # Countdown pie in the gap between the panes, see pie().
     PIE   = pygame.Rect(0, 0, 168, 168)
-    PIE.center = (960, 486)
+    PIE.center = (960, 510)
     # Scale of the bar: the largest possible target, not the sum of all ten
     # cupcakes. As long as the tray was pre-loaded and rearranged, "everything
     # there is at all" was the right length -- the total could wander there.
@@ -419,7 +419,7 @@ class GameScene(SceneBase):
     # is exactly the right statement. The exact number stands below it anyway.
     SCALE = GAP_MAX
     GOAL_W, GOAL_OVER = 9, 18   # width and overhang of the goal line
-    LEGEND_Y = 890
+    LEGEND_Y = 892
 
     def __init__(self, ctx):
         super().__init__(ctx)
@@ -475,7 +475,7 @@ class GameScene(SceneBase):
         # is needed.
         self.hit = self.hit + dt if self.total == self.target else 0.0
         if self.hit > 0:
-            self.fx = self.fx or Sprinkles(960, 178)    # pops from PERFECT
+            self.fx = self.fx or Sprinkles(960, 196)    # pops from PERFECT
             self.fx.update(dt)
         else:
             self.fx = None
@@ -613,8 +613,8 @@ class GameScene(SceneBase):
             # because that's the only quantity the visitor is looking at
             # during the round.
             label, big = ("ADD" if diff > 0 else "REMOVE"), euro(abs(diff))
-        draw(screen, f["small"], label, 960, 70, GREY)
-        draw(screen, f["big"], big, 960, 178, self.acc())
+        draw(screen, f["small"], label, 960, 64, GREY)
+        draw(screen, f["big"], big, 960, 196, self.acc())
         frac = min(1.0, max(0.0, self.left / ROUND_SECONDS))
         screen.blit(pie(math.ceil(frac * PIE_STEPS), str(max(0, int(self.left) + 1)),
                         f["small"], self.acc()), self.PIE)

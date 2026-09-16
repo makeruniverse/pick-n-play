@@ -279,12 +279,13 @@ CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
 # NOT (0, 1): video1 and video3 are metadata nodes and deliver no image.
 CAM_INDEXES   = (0, 0) if MAC else (0, 2)
 CAM_SIZE      = (1280, 720)
-# 768 x 432 is exactly 16:9 (768 * 9/16 = 432) — a different ratio distorts.
-# Twice the area of the earlier 544 x 306: the player steers the arm by these
-# images, so they get priority. The instruction sits above, the bar below,
-# the timer pie in the 192 px gap between the two.
-CAM_VIEW      = (768, 432)
-CAM_POS       = ((480, 486), (1440, 486))   # centers, left is the arm
+# 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
+# 1.8 times the area of the earlier 544 x 306: the player steers the arm by
+# these images, so they get priority. The instruction sits above, the bar
+# below, the timer pie in the 224 px gap between the two. 768 x 432 left the
+# pie 8 px from the frames and the instruction no room to its label.
+CAM_VIEW      = (736, 414)
+CAM_POS       = ((480, 510), (1440, 510))   # centers, left is the arm
 MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # Detection window of the top-down camera, as fractions (x, y, width, height).

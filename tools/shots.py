@@ -104,7 +104,7 @@ def shots(out):
         ("5-game-warning", game, dict(left=WARN_SECONDS * 0.4)),
         ("6-game-perfect", game, dict(left=ROUND_SECONDS * 0.7,
                                       total=game.target, hit=1.0,
-                                      fx=burst(960, 178, 0.25))),
+                                      fx=burst(960, 196, 0.25))),
         # done=True: the screenshot shows the final state, not the first
         # tenth of a second of the count-up.
         ("7-score",        scenes.DisplayScoreScene(ctx, done),
