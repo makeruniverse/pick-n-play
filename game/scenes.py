@@ -7,16 +7,16 @@ from app import SceneBase
 
 @lru_cache(maxsize=256)
 def render(font, text, color):
-    """Gerenderte Textflaeche, gemerkt statt jedes Bild neu gebaut.
+    """Reduced text patches, noted instead of any image newly built.
 
-    Press Start 2P in 168 px war der teuerste Posten im Renderpfad: der
-    Schirm zeigt hoechstens ein paar Dutzend verschiedene Zeichenketten, und
-    die allermeisten stehen sekundenlang unveraendert da. Gemessen auf dem
-    Pi 5 am 9.9.2026, Idle-Screen auf 60 Hz getrieben.
+Press Start 2P in 168 px was the most expensive item in the render path:
+Screen shows a few dozen different strings, and
+the most are standing there for seconds unaltered.
+Pi 5 at 9.9.2026, Idle screen driven to 60 Hz.
 
-    256 Eintraege reichen mit Abstand: Ziffern, Restzeit und Initialen sind
-    die einzigen, die sich oft aendern, und LRU wirft den Rest von allein raus.
-    """
+256 Intercepts range with distance: numbers, residual time and initials are
+the only ones who often change, and LRU throws the rest out of itself.
+"""
     return font.render(text, False, color)
 
 
@@ -26,21 +26,21 @@ def draw(screen, font, text, x, y, color):
 
 
 def footer(screen, f, left=None, right=None, note=None):
-    """Die untere Zeile: was die vier Knoepfe gerade tun.
+    """The lower line: what the four buttons are doing right now.
 
-    Vier unbeschriftete Arcade-Knoepfe sind nur bedienbar, wenn der Schirm
-    sagt, welcher was tut -- und zwar immer an derselben Stelle, sonst sucht
-    das Auge jedes Mal neu.
+Four unlabeled arcade bones are only operable when the screen
+says what does -- always at the same place, otherwise seek
+the eye every time new.
 
-    `note` (die Doppelbestaetigung) *ersetzt* die Hinweise, statt daneben zu
-    stehen. Das ist der Grund, warum hier nichts mehr klippen kann: es gibt
-    kein zweites Element, das mit der Zeile kollidieren koennte. Und es ist
-    die bessere Rueckmeldung -- die Antwort auf einen Knopfdruck erscheint
-    dort, wo schon steht, was der Knopf tut.
+'note' (double confirmation) *replaces the notes instead of
+stand. That's the reason why there's nothing left here: there are
+no second element that could collide with the line. And it is
+the better check-out -- the answer to a push of a button appears
+where it says what the button does.
 
-    Position statt Wortstellung traegt die Richtung: Pfeil immer zuerst, das
-    linke Hinweisfeld links, das rechte rechts.
-    """
+Position instead of word position dares the direction: arrow always first, the
+left indicator box left, right.
+"""
     if note:
         draw(screen, f["tiny"], note, 960, FOOTER_Y, YELLOW)
         return
@@ -52,15 +52,15 @@ def footer(screen, f, left=None, right=None, note=None):
 
 class IdleScene(SceneBase):
 
-    TICK  = IDLE_FPS   # niemand schaut hin, und der Pi steht im Kabinett
-    MUSIC = None       # bleibt stumm, siehe __init__
+    TICK  = IDLE_FPS   # no one looks, and the Pi is in the cabinet
+    MUSIC = None       # remains mute, see   init    
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        # Sechs Stunden Chiptune am Stueck sind anstrengend -- und sie
-        # markieren nichts. Erst mit stillem Idle wird der Musikeinsatz in der
-        # naechsten Szene zum Signal "es geht los". stop() raeumt auch die
-        # aufgeschobene Idle-Musik weg, die DisplayScoreScene eingeplant hat.
+        # Six hours of chip tune at the neck are exhausting -- and they
+        # do not mark anything. Only with a silent iddle will the musical effort in
+        # next scene to the signal "going". stop() also the
+        # postponed idle music that DisplayScoreScene has planned.
         ctx.music.stop()
         self.t = 0.0
         self.top = ctx.db.top(5)
@@ -68,7 +68,7 @@ class IdleScene(SceneBase):
     def handle(self, action):
         if action == "right":
             self.switch_to(HowToScene(self.ctx))
-            return "ok"     # die Fanfare gehoert an den Rundenstart, nicht hier
+            return "ok"     # the fanfare honed at the round start, not here
 
     def update(self, dt):
         self.t += dt
@@ -79,28 +79,28 @@ class IdleScene(SceneBase):
         draw(screen, f["big"], "PICK'N'PLAY", 960, 260, YELLOW)
         if int(self.t * 2) % 2:
             draw(screen, f["mid"], "PRESS ▶", 960, 560, WHITE)
-        # "LOWEST WINS" ist Pflicht, nicht Deko: jede Bestenliste, die ein Kind
-        # kennt, sortiert die groesste Zahl nach oben. Hier gewinnt die
-        # kleinste, und ohne diese Zeile liest man die Liste falsch herum.
+        # "LOWEST WINS" is mandatory, not decoration: any best list that a child
+        # the largest number is sorted upwards. Here wins
+        # smallest, and without this line you read the list wrongly.
         draw(screen, f["tiny"], "THE LOWER THE BETTER", 960, 690, GREY)
         for i, (name, score) in enumerate(self.top):
             draw(screen, f["small"], f"{i+1}. {name}  {score}", 960, 750 + i * 66, WHITE)
 
 
 class HowToScene(SceneBase):
-    """Erklaerung und Demo-Clip. Hier faengt die Musik an.
+    """Enlightenment and demo clip. This is where the music starts.
 
-    Der Clip laeuft hier und nicht im Idle: im Attract Mode waeren das sechs
-    Stunden Dekodierung im geschlossenen Alu-Kabinett fuer ein Bild, das
-    niemand ansieht. Hier sind es ein paar Sekunden pro Besucher, direkt vor
-    einer Runde, in der der Pi ohnehin zwei Kameras und das CRT-Overlay stemmt.
+The clip laughs here and not in the iddle: in the Attract Mode the six
+hours of decoding in a closed aluminium cabinett for an image that
+No one looks. Here are a few seconds per visitor, right before
+a round in which the Pi anyway manages two cameras and the CRT overlay.
 
-    Ohne Clip (DEMO_VIDEO = None) laeuft die Szene als reine Textseite -- den
-    Film gibt es erst, wenn es einen Aufbau zum Filmen gibt, und bis dahin darf
-    das Feature nicht blockiert sein.
-    """
+Without a clip (DEMO VIDEO = None), the scene as a pure text page -- the
+There is film only when there is a structure for filming, and until then may
+the feature is not blocked.
+"""
 
-    MUSIC_IN = (0.0, 800)   # blendet ein, statt aus der Stille zu knallen
+    MUSIC_IN = (0.0, 800)   # dazzles, instead of banging out of silence
 
     def __init__(self, ctx):
         super().__init__(ctx)
@@ -118,7 +118,7 @@ class HowToScene(SceneBase):
 
     def update(self, dt):
         self.idle += dt
-        self.dt = dt        # der Clip braucht die Zeit erst beim Zeichnen
+        self.dt = dt        # the clip only takes time when drawing
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
@@ -131,9 +131,9 @@ class HowToScene(SceneBase):
             r = clip.get_rect(center=(960, 500))
             screen.fill(GREY, r.inflate(8, 8))
             screen.blit(clip, r)
-        # Ohne Clip rueckt der Text in die Mitte statt unter ein schwarzes
-        # Loch. DEMO_VIDEO = None ist der Auslieferungszustand, nicht der
-        # Ausnahmefall -- die Seite muss auch so fertig aussehen.
+        # Without clip, the text stretches into the middle instead of under a black
+        # Hole. DEMO VIDEO = None is the extradition state, not the
+        # Exception -- the page must also look so finished.
         for i, line in enumerate(HOWTO):
             draw(screen, f["tiny"], line, 960, (900 if clip else 500) + i * 60, WHITE)
         footer(screen, f, "◀ BACK", "▶ START")
@@ -141,14 +141,14 @@ class HowToScene(SceneBase):
 
 class GameScene(SceneBase):
 
-    MUSIC = None   # die Intensitaetsstufe haengt an der Restzeit, siehe update()
+    MUSIC = None   # the level of intensities depends on the residual time, see update()
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        self.marks = ctx.detector.fresh()   # id -> Viereck, eine Momentaufnahme
+        self.marks = ctx.detector.fresh()   # id -> Square, a snapshot
         self.total = sum(VALUES[i] for i in self.marks)
-        # Das Ziel folgt dem, was tatsaechlich liegt. Frei gewuerfelt entschied
-        # der Zufall, ob jemand 3 oder 200 Punkte zu ueberbruecken hat.
+        # The target follows the real tray state. A fully random target would
+        # let luck decide whether a player must bridge 3 or 200 points.
         self.target = self.total + gap(self.marks)
         self.left = float(ROUND_SECONDS)
         self.confirm = 0.0
@@ -164,8 +164,8 @@ class GameScene(SceneBase):
             else:
                 self.confirm = CONFIRM_SECONDS
             return "ok"
-        # ponytail: Entwickler-Abkuerzung. Nicht in die Runde springen, sondern
-        # in ihr Ende -- update() macht Sound, Musik und Szenenwechsel wie immer.
+        # ponytail: Developer-Abkuerzung. Don't jump into the round, but
+        # in her end -- update() makes sound, music and scene change as always.
         if action == "right" and CHEAT_TAPS:
             self.taps += 1
             if self.taps >= CHEAT_TAPS:
@@ -176,45 +176,45 @@ class GameScene(SceneBase):
     def update(self, dt):
         self.left -= dt
         self.confirm = max(0.0, self.confirm - dt)
-        # Ein Blick auf den Detector pro Frame: Summe, Overlay und Ton kommen
-        # aus derselben Momentaufnahme und koennen sich nicht widersprechen.
+        # A look at the Detector per Frame: Sum, Overlay and Tone Coming
+        # from the same snapshot and cannot contradict each other.
         marks = self.ctx.detector.fresh()
         self.total = sum(VALUES[i] for i in marks)
         if marks.keys() - self.marks.keys():
-            # Nur bei NEU erkannt, sonst feuert es DETECT_HZ-mal pro Sekunde.
-            # Fuenf Pucks gleichzeitig geben einen Ton, nicht fuenf: der
-            # Mengenvergleich fasst sie von selbst zusammen.
+            # Only recognized at NEW, otherwise it fires DETECT HZ times per second.
+            # Five pucks at once should trigger one tone, not five: the
+            # It summarizes it by itself.
             self.ctx.music.sfx("blip")
         self.marks = marks
-        # Treffer muss stehen, nicht aufblitzen: die Hysterese in fresh() faengt
-        # das Flackern ab, PERFECT_HOLD faengt die Absicht. Bleiben weniger als
-        # PERFECT_HOLD Sekunden, laeuft der Zaehler nicht voll und die Runde
-        # endet ueber left -- kein Sonderfall fuer "kurz vor Schluss" noetig.
+        # Hit must stand, not flash: the hysteresis in fresh() fades
+        # the flickering off, PERFECT HOLD makes the intention. Stay less than
+        # PERFECT HOLD seconds, the Zaehler does not release the round
+        # ends above `left` -- no special case for "short before end" needed.
         self.hit = self.hit + dt if self.total == self.target else 0.0
         self.ctx.music.stage(self.left)
         if self.left <= 0 or self.hit >= PERFECT_HOLD:
             self.ctx.music.sfx("finish")
-            # marks statt total: die Summe steckt drin, und der Score-Screen
+            # marks instead of total: the sum is in, and the score screen
             # braucht ausserdem, *welche* Werte lagen (Preiszeile).
             self.switch_to(DisplayScoreScene(self.ctx, self.target, self.marks))
 
     def overlay(self, screen, r):
-        """Detektionsfenster und erkannte Werte, gezeichnet ins Pane-Rechteck.
+        """Detection window and detected values, drawn into the Pane rectangular.
 
-        Der Detector liefert Anteile von 0..1, hier wird einmal mit r
-        multipliziert — deshalb stimmt das Overlay auch dann, wenn die Kamera
-        eine andere Aufloesung liefert als angefordert.
-        """
+The detector delivers shares of 0..1, here once with r
+multiplies — so the overlay is also true when the camera
+provides a different solution than requested.
+"""
         f = self.ctx.fonts[MARK_FONT]
         rx, ry, rw, rh = TRAY_ROI
-        # GREY, nicht YELLOW: das Fenster ist Chrome, kein Spielwert. Es steht
-        # im Bild, damit man beim Ausrichten der Kamera sieht, wo Erkennung
+        # GREY, not YELLOW: the window is Chrome, no play value. It stands
+        # in the picture to see when aligning the camera, where detection
         # aufhoert — sonst stellt man es blind ein.
         pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
                                         rw * r.w, rh * r.h), MARK_WIDTH)
-        # Nur die Zahl, kein Viereck und keine Unterlage. Der Marker markiert
-        # sich selbst -- ein gelber Rahmen drumherum sagt nichts, was das Bild
-        # nicht schon zeigt, und verdeckt den Puck.
+        # Only the number, no square and no base. The marker marked
+        # itself -- a yellow frame around it says nothing what the picture
+        # not already showing, and hiding the puck.
         for i, quad in self.marks.items():
             v = render(f, str(VALUES[i]), YELLOW)
             screen.blit(v, v.get_rect(center=(
@@ -226,9 +226,9 @@ class GameScene(SceneBase):
         return tuple(round(b + (r - b) * k) for b, r in zip(BLACK, RED))
 
     def render(self, screen):
-        # Kopfzeile in drei Spalten, darunter die beiden Kamerabilder. Die
-        # Spaltenmitten 490 / 960 / 1430 gelten fuer beides, damit Zahl und
-        # zugehoeriges Bild uebereinander stehen.
+        # Header in three columns, including the two camera images. The
+        # Column Issues 490 / 960 / 1430 apply both, so that number and
+        # tormented image above each other.
         f = self.ctx.fonts
         screen.fill(self.bg())
         draw(screen, f["small"], "GOAL",  490, 70, GREY)
@@ -237,24 +237,24 @@ class GameScene(SceneBase):
         draw(screen, f["mid"], int(self.left) + 1, 960, 145, WHITE)
         draw(screen, f["small"], "TOTAL", 1430, 70, GREY)
         draw(screen, f["mid"], self.total, 1430, 145, YELLOW)
-        # Die Differenz ist die eigentliche Spielzahl. Vorher standen GOAL und
-        # TOTAL 940 px auseinander und der Besucher musste sie im Kopf
-        # subtrahieren -- unter Zeitdruck, aus 8 m, in einer lauten Halle. Die
-        # Denkaufgabe ist Pucks schieben, nicht Kopfrechnen.
+        # The difference is the actual number of games. Previously GOAL and
+        # TOTAL 940 px apart and the visitor had to head it
+        # subtract -- under time pressure, from 8 m, in a loud hall. The
+        # Purchasing is pucks, not head Calculation.
         #
-        # Dasselbe Wort wie auf dem Score-Screen: einmal gelernt, zweimal
-        # benutzt. Und PERFECT erbt genau diesen Platz -- deshalb gibt es
-        # keine zweite Stelle mehr, an der Countdown und Abbruchwarnung sich
-        # um dieselbe Zeile streiten (vorher per elif zugedeckt).
+        # The same word as on the score screen: once learned, twice
+        # used. And PERFECT inherits exactly this place -- so there is
+        # no longer a second position, at the countdown and demolition warning
+        # to deny the same line (previously covered by elif).
         perfect = self.hit > 0
         draw(screen, f["small"], "PERFECT" if perfect else "OFF BY", 960, 265, GREY)
         draw(screen, f["big"],
              int(PERFECT_HOLD - self.hit) + 1 if perfect
              else abs(self.target - self.total),
              960, 380, YELLOW)
-        # Passthrough nur hier: im Idle bleibt die Bandbreite frei und der
-        # Pi kalt. Rahmen statt Beschriftung — aus 8 m liest niemand ein Label,
-        # und welches Bild der Arm ist, sieht man ohne Wort.
+        # Passthrough only here: the bandwidth remains free and the
+        # Pi cold. frame instead of marking — from 8 m no one reads a label,
+        # and which image is the arm, you can see without word.
         for view, pos in zip(self.ctx.views, CAM_POS):
             cam = view.surface()
             if cam:
@@ -263,25 +263,25 @@ class GameScene(SceneBase):
                 screen.blit(cam, r)
                 if view.det:
                     self.overlay(screen, r)
-        # ◀ steht permanent da, nicht erst nach dem ersten Druck: ein
-        # verstecktes Bedienelement ist keins. Das Versehen faengt die
-        # Doppelbestaetigung ab, nicht die Unsichtbarkeit.
+        # ̧ is permanently there, not only after the first pressure:
+        # hidden operating element is not one. The mistake fades the
+        # Double determination, not invisibility.
         footer(screen, f, "◀ QUIT",
                note="◀ AGAIN TO QUIT" if self.confirm > 0 else None)
 
 
 class DisplayScoreScene(SceneBase):
 
-    # Der Fertigsound braucht Luft. Erst ausklingen lassen, dann blendet die
-    # Idle-Musik ein -- die Stille dazwischen ist der Effekt.
+    # The finished sound needs air. First let the sound out, then the
+    # Idle music -- the silence in between is the effect.
     MUSIC_IN = (2.2, 1500)
 
     def __init__(self, ctx, target, marks):
         super().__init__(ctx)
         self.target = target
-        # Ein Marker pro Puck und lauter verschiedene Werte, also ist die
-        # Menge verlustfrei -- sie sagt "lag auf dem Tablett", mehr braucht
-        # die Preiszeile nicht.
+        # A marker per puck and louder different values, so the
+        # Quantity loss-free -- she says "lag on the tray", more needs
+        # the price line not.
         self.mine = {VALUES[i] for i in marks}
         self.total = sum(VALUES[i] for i in marks)
         self.score = abs(target - self.total)
@@ -307,21 +307,21 @@ class DisplayScoreScene(SceneBase):
         screen.fill(BLACK)
         draw(screen, f["small"], "OFF BY", 960, 150, GREY)
         draw(screen, f["big"], self.score, 960, 380, YELLOW)
-        # Zwei Spalten mit Label darueber -- dieselbe Anordnung wie in der
-        # Kopfzeile der Runde, die der Besucher gerade 60 s lang gelesen hat.
+        # Two columns with labels above -- the same arrangement as in the
+        # Headline of the round that the visitor just read 60 s long.
         draw(screen, f["small"], "GOAL",   660, 600, GREY)
         draw(screen, f["mid"], self.target, 660, 690, WHITE)
         draw(screen, f["small"], "TOTAL", 1260, 600, GREY)
         draw(screen, f["mid"], self.total, 1260, 690, WHITE)
-        # Der Reveal. Vorher stand hier "0 = 4, 1 = 7, ..." -- die linke Spalte
-        # war die ArUco-ID, und die steht auf keinem Puck als Ziffer. Der halbe
-        # Tabelleninhalt verlangte eine Zuordnung, deren Schluessel niemand hat.
+        # The Reveal. Previously there was "0 = 4, 1 = 7, ..." -- the left column
+        # was the ArUco ID, and it is not a puck as a number. Half
+        # Table content required an assignment whose key no one has.
         #
-        # Jetzt: nur die Werte, aufsteigend, und gelb die, die am Rundenende
-        # tatsaechlich lagen. Damit ist es keine Nachschlagetabelle mehr,
-        # sondern ein Bild der Runde -- der Preiskatalog und was man davon
-        # hatte. Der Font ist monospace, also sitzen zehn Zellen im festen
-        # 192er-Raster ohne eine einzige Breitenrechnung.
+        # Now: only the values, ascendant, and yellow the ones at the round end
+        # in fact. It is no longer a reference table,
+        # but a picture of the round -- the price catalogue and what to do
+        # had. The font is monospace, so ten cells are fixed
+        # 192 wheel without a single width calculation.
         draw(screen, f["tiny"], "PRICES", 960, 860, GREY)
         for i, value in enumerate(sorted(VALUES.values())):
             draw(screen, f["small"], value, 204 + i * 168, 940,
@@ -381,10 +381,10 @@ class LeaderboardScene(SceneBase):
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BLACK)
-        # Nicht "TOP 10!": db.qualifies() ist kein Gate, hier landet jeder --
-        # auch mit OFF BY 200. Die Ueberschrift versprach etwas, das der Code
-        # nicht prueft, und zeigte fuenf Zeilen statt zehn. Der Screen ist
-        # eine Eingabe, also heisst er wie eine.
+        # Not "TOP 10!": db.qualifies() is not a gate, here everyone ends --
+        # also with OFF BY 200. The title promised something that the code
+        # and showed five lines instead of ten. The screen is
+        # an input, so he's like one.
         draw(screen, f["mid"], "ENTER YOUR NAME", 960, 130, YELLOW)
         draw(screen, f["big"], "◀", self.COLS[0], 470,
             YELLOW if self.cursor == 0 else WHITE)
@@ -393,14 +393,14 @@ class LeaderboardScene(SceneBase):
                 YELLOW if self.cursor == i + 1 else WHITE)
         screen.fill(YELLOW, (self.COLS[self.cursor] - 68, 580, 135, 9))
         draw(screen, f["tiny"], "LOWER MEANS BETTER", 960, 660, GREY)
-        # 750/66 statt 860/65: die fuenfte Zeile lag vorher auf y 1096..1144
-        # und die Rueckfrage auf 1114..1146 -- 528 x 30 px Ueberdeckung,
-        # sichtbar sobald die DB fuenf Eintraege hatte. Jetzt endet die Liste
-        # bei 1004, unter SAFE_BOTTOM.
+        # 750/66 instead of 860/65: the fifth line was previously y 1096..1144
+        # and the back-confirmation prompt on 1114..1146 -- 528 x 30 px overlap,
+        # visible as soon as the DB had five entries. Now the list ends
+        # at 1004, under SAFE BOTTOM.
         for i, (name, score) in enumerate(self.top):
             draw(screen, f["small"], f"{i+1}. {name}  {score}", 960, 720 + i * 64, WHITE)
-        # Der Hinweis sagt, was ▶ *jetzt* tut. Dass im letzten Feld gespeichert
-        # wird, stand vorher nirgends -- man musste es finden.
+        # The note says what ▶*now* does. That stored in the last field
+        # -- you had to find it.
         footer(screen, f,
                left  = "▲▼ LETTER" if self.cursor else "◀ DISCARD",
                right = "▶ SAVE" if self.cursor == 3 else "▶ NEXT",
@@ -408,11 +408,11 @@ class LeaderboardScene(SceneBase):
 
 
 if __name__ == "__main__":
-    # Layout-Selbsttest. Genau der Fehler, der hier zweimal drin war: ein
-    # Element wandert unter SAFE_BOTTOM oder ueberdeckt ein anderes, und
-    # sichtbar wird es erst, wenn die DB genug Zeilen hat. Der Test faengt
-    # jeden draw()-Aufruf ab und prueft die Rechtecke -- kein Screenshot,
-    # kein Framework, kein Vergleichsbild das gepflegt werden muesste.
+    # Layout self test. Just the mistake that was in here twice: one
+    # element moves under SAFE BOTTOM or covers another, and
+    # it becomes visible only when the DB has enough lines. The test fades
+    # each draw() call off and breaks the rectangles -- no screenshot,
+    # no framework, no comparison image that needs to be maintained.
     import os
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     pygame.init()
@@ -424,7 +424,7 @@ if __name__ == "__main__":
         boxes.append((str(text), x - w//2, y - h//2, x + w//2, y + h//2))
 
     class _Stub:
-        """Deckt Music, DB und Detector ab -- sie tun im Test alle nichts."""
+        """Covers Music, DB and Detector -- they do nothing in the test."""
         def __getattr__(self, _): return lambda *a, **k: None
         def top(self, n=5):  return [(f"WW{i}", 999) for i in range(n)]
         def fresh(self):     return {i: [(.3, .3)] * 4 for i in (0, 3, 7, 9)}
@@ -432,7 +432,7 @@ if __name__ == "__main__":
     ctx = type("C", (), dict(detector=_s, db=_s, fonts=_fonts, music=_s,
                              views=(), demo=None))()
 
-    # Panes sind kein draw(), zaehlen aber beim Ueberdecken mit.
+    # Panes are not a draw(), but are included in the cover.
     panes = [("pane", x - CAM_VIEW[0]//2 - 4, y - CAM_VIEW[1]//2 - 4,
                       x + CAM_VIEW[0]//2 + 4, y + CAM_VIEW[1]//2 + 4)
              for x, y in CAM_POS]
@@ -445,13 +445,13 @@ if __name__ == "__main__":
         for t, l, tp, r, b in bs:
             assert 0 <= l and r <= WIDTH,  f"{label}: {t!r} x {l}..{r}"
             assert 0 <= tp and b <= HEIGHT, f"{label}: {t!r} y {tp}..{b}"
-            assert b <= SAFE_BOTTOM or tp >= FOOTER_Y - 40, \
+            assert b <= SAFE_BOTTOM or tp >= FOOTER_Y - 40,\
                 f"{label}: {t!r} ragt unter SAFE_BOTTOM (y {tp}..{b})"
         for i in range(len(bs)):
             for j in range(i + 1, len(bs)):
                 a, c = bs[i], bs[j]
                 assert not (a[1] < c[3] and c[1] < a[3]
-                            and a[2] < c[4] and c[2] < a[4]), \
+                            and a[2] < c[4] and c[2] < a[4]),\
                     f"{label}: {a[0]!r} ueberdeckt {c[0]!r}"
 
     check("idle",  IdleScene(ctx))

@@ -1,27 +1,27 @@
-# Betrieb
+# Operations
 
-Wie man den Automaten startet, prüft und am Laufen hält. Stand: 9. September 2026.
+How to start, check and keep running. Stand: 9 September 2026.
 
-## Was auf dem Pi läuft
+## What's on the Pi
 
-Zwei Prozesse, die nichts voneinander wissen. **Teleop** liest den Leader-Arm und
-schreibt die Gelenkwinkel auf den Follower, 60 Hz, als systemd-Dienst im Dauerlauf.
-**Das Spiel** liest die Top-Down-Kamera, erkennt ArUco-Marker und rendert. Es fragt
-den Armzustand nie ab.
+Two processes that do not know each other. **Teleop** reads the Leader arm and
+writes the joint angle on the follower, 60 Hz, as a systemd service in continuous running.
+**The game** reads the top down camera, recognizes ArUco marker and renders. It asks
+never cut off the arm state.
 
-Die beiden benutzen getrennte Python-Umgebungen und fassen sich nicht an:
+The two use separate Python environments and do not accept:
 
-| | Umgebung | Version |
+| | Environment | Version |
 |---|---|---|
 | Teleop | conda, `~/miniforge3/envs/lerobot` | Python 3.10, LeRobot 0.4.2 |
-| Spiel | uv, Projekt-`.venv` | Python 3.13, pygame-ce, OpenCV |
+| Game | uv, project `.venv` | Python 3.13, pygame-ce, OpenCV |
 
-Hardware: Raspberry Pi 5 (8 GB) mit Ubuntu 24.04, zwei SO-101-Arme über CH343-Adapter,
-zwei USB-Kameras, Display an HDMI-A-1.
+Hardware: Raspberry Pi 5 (8 GB) with Ubuntu 24.04, two SO-101 arms via CH343 adapter,
+two USB cameras, display on HDMI-A-1.
 
-> Das Spiel ist seit dem 9.9.2026 auf dem Pi installiert und startet. Es ist
-> aber **nicht abgenommen**: es erreicht die Zielbildrate nicht und treibt den
-> Pi zusammen mit der Teleop ins Drosseln. Siehe „Stand der Abnahme".
+> The game has been installed on the Pi since the 9.9.2026 and starts. It is
+> but ** not removed**: it does not reach the target image rate and drives the
+> Pi together with the Teleop in the throttle. See 'As of acceptance'.
 
 ## Reinkommen
 
@@ -29,12 +29,12 @@ zwei USB-Kameras, Display an HDMI-A-1.
 ssh picknplay
 ```
 
-Der Eintrag steht in `~/.ssh/config` und zeigt auf `ubuntu@172.22.1.2`. Der Pi hängt
-per WLAN am Makerspace-Netz, `eth0` ist tot. Die IP kommt per DHCP, kann sich also
-ändern. Wenn nichts geht: pingen. Antwortet er auf Ping, aber Port 22 ist zu, läuft
-`sshd` nicht, und du musst an die Tastatur am Gerät.
+The entry is in`~/.ssh/config`and shows`ubuntu@172.22.1.2`. The Pi hangs
+per WLAN am Makerspace-Netz, `eth0`is dead. The IP comes via DHCP, so it can
+change. If nothing goes: pin. He responds to Ping, but Port 22 is closed, running
+`sshd`not, and you have to go to the keyboard on the device.
 
-## Teleop starten und stoppen
+## Start Teleop and Stop
 
 ```sh
 sudo systemctl start teleop.service
@@ -42,9 +42,9 @@ sudo systemctl stop  teleop.service
 sudo systemctl restart teleop.service
 ```
 
-Der Dienst ist `enabled`, startet also beim Booten von allein.
+The service is`enabled`, startet also beim Booten von allein.
 
-## Läuft es?
+## Is it?
 
 ```sh
 systemctl is-active teleop.service
@@ -53,15 +53,15 @@ vcgencmd measure_temp
 vcgencmd get_throttled
 ```
 
-Gesund sieht so aus: `active`, `SubState=running`, **`NRestarts=0`**, um die 55 bis 65 °C,
+Healthy looks like this: `active`, `SubState=running`, **`NRestarts=0`**, around 55 to 65 °C,
 `throttled=0x0`.
 
-`NRestarts` ist die wichtigste Zahl. Steigt sie, crasht der Dienst und startet neu, und
-das ist immer ein Hardwareproblem: ein Arm ohne Strom, ein Kabel ab, ein Adapter nicht
-erkannt. Softwarefehler sehen anders aus.
+`NRestarts`is the most important number. rises, crashes the service and restarts, and
+this is always a hardware problem: an arm without power, a cable off, an adapter not
+recognized. Software failures look different.
 
-Im Normalbetrieb schreibt Teleop **nichts** ins Journal. Das ist Absicht (siehe „Warum
-das Journal still ist"). Stille heißt: es läuft. Fehler landen weiterhin im Log:
+In normal operation, Teleop **nots** writes to the journal. This is intentional (see “Why
+the journal is still"). Stille means it's running. Errors continue to land in the log:
 
 ```sh
 journalctl -u teleop.service -b --no-pager | tail -30
@@ -69,22 +69,22 @@ journalctl -u teleop.service -b --no-pager | tail -30
 
 ### `get_throttled` lesen
 
-Die Zahl ist eine Bitmaske. Wichtig sind vier Bits:
+The number is a bit mask. Four bits are important:
 
-| Wert | Bedeutung |
+|Value| Bedeutung |
 |---|---|
 | `0x0` | alles in Ordnung |
-| `0x1` | Unterspannung **jetzt**, also Netzteil oder Kabel |
-| `0x8` | Temperaturlimit **jetzt**, er drosselt gerade |
-| `0x80000` | Temperaturlimit ist seit dem Boot mal aufgetreten |
+| `0x1` |Undervoltage **now**, so power supply or cable|
+| `0x8` | Temperature limit **now**, he just shoots |
+| `0x80000` |Temperature limit has occurred since the boat|
 
-`0x80008` heißt entsprechend: drosselt gerade und hat es schon vorher getan. Ab etwa
-80 °C fängt das an.
+`0x80008`says accordingly: just shoots and has done it before. About
+80 °C starts this.
 
-## Motoren prüfen
+test engines
 
-Wenn Teleop crasht, ist die erste Frage: antworten überhaupt Servos? Das beantwortet
-`tools/scan_motors.py`. Teleop muss dafür stehen, sonst sind die Ports belegt.
+If Teleop crashes, is the first question: answer servos at all? The answer
+`tools/scan_motors.py`. Teleop has to stand for it, otherwise the ports are occupied.
 
 ```sh
 sudo systemctl stop teleop.service
@@ -92,8 +92,8 @@ sudo systemctl stop teleop.service
 sudo systemctl start teleop.service
 ```
 
-Das Skript liegt im Repo unter `tools/scan_motors.py` und als Kopie direkt in `~` auf dem
-Pi, damit es auch ohne ausgechecktes Repo zur Hand ist.
+The script is under the repo`tools/scan_motors.py`and as a copy directly into`~`on
+Pi, so it's handy even without checked-out repo.
 
 Gesund:
 
@@ -102,44 +102,44 @@ Gesund:
 /dev/ttyACM1 -> 1(m777), 2(m777), 3(m777), 4(m777), 5(m777), 6(m777)
 ```
 
-Sechs Motoren pro Arm, IDs 1 bis 6, Modell 777 (STS3215). Alles andere ist ein Befund:
+Six engines per arm, IDs 1 to 6, model 777 (STS3215). Everything else is a finding:
 
-Ein Port meldet **keine Motoren**, obwohl er im Scan auftaucht. Dann fehlt die
-Servo-Stromversorgung oder das dreiadrige Buskabel steckt nicht. Der USB-Adapter zieht
-seinen Strom aus dem Pi und meldet sich auch ohne Servo-Netzteil, der Bus bleibt aber
-still. Leader läuft auf 7,4 V, Follower auf 12 V.
+A port reports **no engines**, although it appears in the scan. Then missing
+Servo power supply or the three-wire bus cable is not in place. The USB adapter pulls
+its current from the Pi and also reports without a power supply, but the bus remains
+Quiet. Leader runs to 7.4 V, followers to 12 V.
 
-Es fehlen **einzelne** Motoren mitten in der Kette, etwa 2 und 4, während 3, 5 und 6
-antworten. Dann sind es nicht die Verbindungskabel, sondern die Servos selbst: Stecker
-lose oder ID verstellt.
+There are ** single engines in the middle of the chain, about 2 and 4, while 3, 5 and 6
+answer. Then it is not the connecting cables, but the servos themselves: plugs
+set loose or ID.
 
-Ein Port **taucht gar nicht auf**. Dann ist ein USB-Adapter ab, und das ist der
-gefährliche Fall, siehe nächster Abschnitt.
+A port ** doesn't appear at all**. Then a USB adapter is off, and this is the
+dangerous case, see next section.
 
-### Der Fall, der wie ein Servodefekt aussieht und keiner ist
+### The case that looks like a servo defect and nobody is
 
-Am 9.9.2026 fielen über Stunden Motoren aus, und zwar wechselnd: erst 2 und 4,
-dann alle sechs, dann 4 und 6. Der Scan fand jedes Mal alle sechs, LeRobot
-scheiterte trotzdem. Die Ursache war das **Netzteil, das auf 5 V stand**.
+On 9.9.2026, engines fell out over hours, alternatingly: only 2 and 4,
+then all six, then 4 and 6. The scan found every time every six, LeRobot
+still failed. The cause was the **network that stood at 5 V**.
 
-Der Grund, warum das so schwer zu sehen ist: ein Ping zieht fast keinen Strom,
-deshalb antworten bei Unterspannung alle Motoren brav im Scan. Sobald LeRobot
-aber Torque aktiviert, brechen die zwei ein, die am meisten ziehen — bei einem
-SO-101 sind das 4 (Wrist-Flex) und 6 (Greifer), weil die gegen die Schwerkraft
-arbeiten. Sie fallen vom Bus, und die Fehlermeldung sagt „Missing motor IDs".
+The reason why this is so difficult to see: a ping almost does not draw electricity,
+therefore all the motors brav in the scan respond to undervoltage. As soon as LeRobot
+but Torque enabled, break the two that pull the most — in one
+SO-101 are the 4 (Wrist-Flex) and 6 (Greifer) because the
+work. They fall off the bus and the error message says "Missing motor IDs".
 
-**Merkregel: wechselnde Motor-IDs bedeuten Spannung, feste bedeuten Hardware.**
-Fällt immer derselbe Motor aus, ist es der Motor oder sein Stecker. Wechselt es,
-miss zuerst die Spannung. Follower 12 V, Leader 7,4 V.
+**Merk rule: changing engine IDs mean voltage, fixed mean hardware. **
+If the same motor always fails, it is the motor or its plug. Change it,
+first measure the voltage. Followers 12 V, Leader 7,4 V.
 
-### Der erste Startversuch scheitert manchmal
+### The first start attempt sometimes fails
 
-Auch bei korrekter Spannung schlägt der erste Verbindungsversuch gelegentlich
-fehl und der zweite läuft. Deshalb steht `Restart=on-failure` im Override, und
-deshalb ist `NRestarts=1` nach einem Start kein Grund zur Sorge. Erst eine
-steigende Zahl ist einer.
+Even with correct voltage, the first connection attempt occasionally strikes
+and the second runs. That is why`Restart=on-failure`in the override, and
+therefore,`NRestarts=1`no need to worry after a start. First of all
+increasing number is one.
 
-## Welcher Adapter ist welcher Arm
+## Which adapter is which arm
 
 ```sh
 ls -l /dev/serial/by-id/
@@ -150,30 +150,30 @@ usb-1a86_USB_Single_Serial_5970072402-if00 -> ttyACM0    Leader
 usb-1a86_USB_Single_Serial_5970073917-if00 -> ttyACM1    Follower
 ```
 
-`run_teleop.sh` übergibt `ttyACM0` als Leader und `ttyACM1` als Follower. Diese Nummern
-vergibt der Kernel in der Reihenfolge, in der die Geräte auftauchen. Steckt ein Adapter
-nicht, rutschen alle dahinter eine Nummer hoch: aus `ttyACM1` wird `ttyACM0`, und Teleop
-redet mit dem Follower, als wäre er der Leader.
+`run teleop.sh`transferring`ttyACM0`as Leader and`ttyACM1` as followers. These numbers
+assigns the kernel in the order in which the devices appear. Plugs an adapter
+not, all of them slip up a number: out`ttyACM1`the`ttyACM0`and Teleop
+talks to the follower as if he were the leader.
 
-Genau das ist am 9. September passiert. Der Fehler meldet sich als „Missing motor IDs"
-und sieht nach kaputten Servos aus, obwohl nur ein Kabel fehlte. Erste Handlung bei
-diesem Fehler ist deshalb immer `ls -l /dev/serial/by-id/`, nicht der Motor-Scan.
+That's exactly what happened on September 9th. The error is reported as “Missing motor IDs”
+and looks like broken servos, although only one cable was missing. First action
+this error is always`ls -l /dev/serial/by-id/`Not the motor scan.
 
-Die Seriennummern sind fest und rutschen nie. Der saubere Umbau ist, sie in
-`run_teleop.sh` einzutragen statt der `ttyACM*`-Nummern. Steht noch aus.
+The serial numbers are fixed and never slip. The clean reconstruction is, it is in
+`run_teleop.sh`to be entered instead of`ttyACM*`- Numbers. Stand still.
 
-## Wartung
+= Maintenance
 
-Einmal im Monat oder wenn etwas komisch ist:
+Once a month or if something is weird:
 
 ```sh
-df -h /                    # unter 85 % halten
-journalctl --disk-usage    # gedeckelt auf 200 MB
+df -h / # keep below 85%
+journalctl --disk-usage # capped to 200 MB
 vcgencmd measure_temp
 systemctl show teleop.service -p NRestarts
 ```
 
-Wenn die Platte doch volläuft, in dieser Reihenfolge:
+If the plate is running, in this order:
 
 ```sh
 sudo journalctl --rotate && sudo journalctl --vacuum-size=200M
@@ -182,25 +182,25 @@ rm -rf ~/.cache/pip ~/.cache/huggingface/hub ~/.cache/huggingface/xet
 rm -rf ~/.vscode-server
 ```
 
-**Nicht** `~/.cache` komplett löschen. Da drin liegt die Armkalibrierung:
+**Not* *`~/.cache`completely delete. The arm calibration is in there:
 
 ```
 ~/.cache/huggingface/lerobot/calibration/robots/so101_follower/my_follower_arm.json
 ~/.cache/huggingface/lerobot/calibration/teleoperators/so101_leader/my_leader_arm.json
 ```
 
-Zwei Dateien, zusammen keine 2 KB, vom 31. März. Sind sie weg, muss neu kalibriert
-werden. Ein Backup davon auf dem MacBook wäre klug.
+Two files, together not 2 KB, from March 31. If they are gone, have to be recalibrated
+,. A backup of it on the MacBook would be smart.
 
-### Warum das Journal still ist
+### Why the journal is still
 
-Teleop druckte pro Loop-Durchlauf eine Zeile Loop-Zeit, bei 60 Hz also 60 Zeilen pro
-Sekunde. Das waren 99,7 % des gesamten Journals und rund 1 GB pro Tag, weil journald und
-rsyslog denselben Strom doppelt wegschrieben. Journalds eingebautes Ratelimit greift bei
-60 Zeilen pro Sekunde nicht, das liegt unter der Schwelle.
+Teleop printed one line of loop time per loop, i.e. 60 lines per 60 Hz
+Just a second. These were 99,7 % of the entire journal and around 1 GB per day, because journald and
+rsyslog the same current twice. Journald's built-in rate limit applies
+Not 60 lines per second, that's below the threshold.
 
-Zwei Änderungen halten das jetzt in Schach. `SystemMaxUse=200M` in
-`/etc/systemd/journald.conf` deckelt das Journal. Und in
+Two changes are now in check.`SystemMaxUse=200M` in
+`/etc/systemd/journald.conf`covers the journal. And
 `/etc/systemd/system/teleop.service.d/override.conf`:
 
 ```ini
@@ -213,88 +213,88 @@ Restart=on-failure
 StandardOutput=null
 ```
 
-`StandardOutput=null` schluckt den Debug-Print. Die beiden `StartLimit`-Zeilen sind der
-Hitzeschutz: bei einem Hardwarefehler hielt der Dienst vorher mit `Restart=always` nie an
-und startete sich in 30 Minuten 153-mal neu, jedes Mal mit dem vollen Laden von torch.
-Der Pi kam auf 82 °C und drosselte. Jetzt bleibt er nach fünf Fehlversuchen in zwei
-Minuten stehen und meldet das, statt zu heizen.
+`StandardOutput=null`swallows the Debug print. The two`StartLimit`-Crows are the
+Heat protection: in the case of a hardware error, the service hero with`Restart=always` never an
+and restarted in 30 minutes 153 times, each time with full loading of torch.
+The Pi came to 82°C and throttled. Now he remains in two after five failures
+Minutes stand and reports that instead of heating.
 
-## Wenn etwas nicht geht
+# If something doesn't go
 
-| Symptom | Erste Prüfung | Meist die Ursache |
+| Symptom |First examination|Mostly the cause|
 |---|---|---|
-| `ssh` sagt Connection refused, Ping geht | an die Tastatur am Gerät, `df -h /` | Platte voll, `sshd` startet nicht |
-| `ssh` sagt Timeout | `arp -n 172.22.1.2` | Pi aus, oder neue IP per DHCP |
-| `NRestarts` steigt | `journalctl -u teleop.service -b \| tail -30` | Hardware, nie Software |
-| „Missing motor IDs" | `ls -l /dev/serial/by-id/` | Adapter ab, Nummern verrutscht |
-| Ein Bus schweigt komplett | Servo-Netzteil und Buskabel | Strom fehlt, nicht die Servos |
-| Einzelne Motoren fehlen sprunghaft, mal 2 und 4, mal 4 und 6 | **Spannung am Netzteil messen** | Unterspannung. Siehe unten |
-| Über 80 °C | `systemctl show teleop.service -p NRestarts` | Crash-Loop heizt den Pi |
-| Platte über 85 % | `journalctl --disk-usage` | siehe „Wartung" |
+| `ssh` sagt Connection refused, Ping geht |to the keyboard on the device,`df -h /` | Platte voll, `sshd`does not start|
+| `ssh` sagt Timeout | `arp -n 172.22.1.2` |Pi off, or new IP via DHCP|
+| `NRestarts` rises | `journalctl -u teleop.service -b \| tail -30` | Hardware, never software |
+|"Missing motor IDs"| `ls -l /dev/serial/by-id/` ` Adapter off, numbers slipped |
+| One bus is completely silent |Servo power supply and bus cable|lack of power, not the servos|
+|Individual motors are missing abruptly, sometimes 2 and 4, times 4 and 6| ** Measuring voltage at the power supply** | See below
+|Over 80 °C| `systemctl show teleop.service -p NRestarts` | Crash-Loop heizt den Pi |
+|Plate over 85%| `journalctl --disk-usage` |see "Maintenance"|
 
-## Das Spiel starten
+## Start the game
 
 ```sh
 cd ~/picknplay
 .venv/bin/python game/main.py
 ```
 
-Läuft über KMSDRM im Vollbild, ohne Desktop. **Achtung:** über SSH gibt es dabei
-keine Tastatureingabe, SDL liest bei KMSDRM aus `/dev/input`. Zum Bedienen
-gehört eine USB-Tastatur an den Pi, zum Beenden `q`.
+Runs over KMSDRM in full screen, without desktop. **Attention
+no keyboard input, SDL reads from KMSDRM`/dev/input`. To operate
+belongs a USB keyboard to the Pi, to the end`q`.
 
-Startest du es aus einer SSH-Sitzung, hänge immer ein `timeout` davor. Sonst
-läuft es weiter, wenn die Sitzung abbricht, und ein ausgelasteter Pi lässt keine
-neue Anmeldung mehr zu:
+Start it from an SSH session, always hang a`timeout` davor. Sonst
+it continues when the session breaks, and a loaded Pi leaves no
+new registration more for:
 
 ```sh
 timeout -s KILL 30 .venv/bin/python game/main.py
 ```
 
-### Schalter zum Messen und Entwickeln
+### Switch for measuring and developing
 
-Alle per Umgebungsvariable, Default ist immer der Automat. Die Datei muss man
-dafür nicht anfassen, was wichtig ist, weil das nächste `git pull` lokale
-Änderungen einkassiert.
+All by environment variable, Default is always the machine. The file must be
+do not touch what is important because the next`git pull` lokale
+Changes taken in.
 
 | Variable | Wirkung |
 |---|---|
 | `PNP_FULLSCREEN=0` | Fenster statt Vollbild |
-| `PNP_CAMERA=0` | `FakeDetector`, kein Kamerazugriff |
-| `PNP_FPSLOG=1` | Bildrate und Szene, einmal pro Sekunde auf stdout |
-| `PNP_CRT=0` | CRT-Overlay komplett aus |
-| `PNP_BARREL=0` | nur die Wölbung aus, Scanlines bleiben |
-| `PNP_IDLE_FPS=60` | Idle-Screen auf Spielszenen-Last, für Messungen ohne Tastatur |
+| `PNP_CAMERA=0` | `FakeDetector`, no camera access|
+| `PNP_FPSLOG=1` |Image rate and scene, once per second on stdout|
+| `PNP_CRT=0` | Disable the CRT overlay completely |
+| `PNP_BARREL=0` |only the curvature, scanlines stay|
+| `PNP_IDLE_FPS=60` |Idle screen on game scene load, for measurements without keyboard|
 
-## Stand der Abnahme
+## Stand of acceptance
 
-Installiert und geprüft: `uv`, Python 3.13, OpenCV 5.0, pygame-ce 2.5.8, alle
-vier Selbsttests grün, beide Kameras liefern Bild, KMSDRM startet, Ton über
+Installed and tested:`uv`, Python 3.13, OpenCV 5.0, pygame-ce 2.5.8, all
+four self-tests green, both cameras supply picture, KMSDRM starts sound over
 HDMI vorhanden.
 
-Nicht abgenommen: **die Bildrate.** Ziel sind 60 fps, gemessen wurden 19,6 mit
-vollem CRT und 40 im entkernten Zustand. Mit Spiel und Teleop gleichzeitig geht
-der Pi in unter einer Minute auf 83 °C und drosselt. Die Zahlen und die drei
-Stellschrauben stehen im Overview unter „Messung auf dem Pi".
+Not taken: **the image rate.** Objective are 60 fps, measured 19.6 with
+full CRT and 40 in the sterilized state. Play and Teleop at the same time
+the Pi in under one minute to 83°C and drosselts. The figures and the three
+Set screws are shown in the Overview under "Measurement on the Pi".
 
-**Bis das entschieden ist, nicht beides gleichzeitig dauerhaft laufen lassen.**
+**Until this is decided not to let both run permanently at the same time. **
 
-## Offen
+Open
 
-1. Entscheidung zur Bildrate: Wölbung streichen, auf 1920 × 1080 nativ umziehen,
-   oder Zielbildrate auf 30 senken. Entwurfsfrage, keine Konfigurationsfrage.
-2. Aktive Kühlung. Ohne Lüfter drosselt der Pi unter Doppellast.
-3. Layout auf 1080, falls Punkt 1 so ausgeht. `FOOTER_Y = 1120` liegt sonst
-   außerhalb des Bildes.
-4. Ton am Automatenlautsprecher abhören. Es gibt nur HDMI-Audio, keine USB-Karte.
-   Beim Testlauf traten ALSA-Underruns auf.
-5. ArUco-Erkennungsrate gegen die gedruckten Marker. Beim Testlauf lagen keine
-   auf dem Tablett.
-6. `picknplay.service` schreiben, mit `After=teleop.service`, aber ohne
-   `Requires` — das Spiel soll auch ohne Arme starten.
-7. Die Arm-Kamera hängt um 90° verdreht. Der Passthrough steht damit quer.
+1. Image rate decision: Remove curvature, move to 1920 × 1080 natively,
+or lower target image rate to 30. Design question, no configuration question.
+Two. Active cooling. Without a fan, the Pi is under double load.
+3. Layout to 1080, if point 1 starts.`FOOTER_Y = 1120` otherwise lies
+outside the picture.
+4. Listen to the automatic loudspeaker. There is only HDMI audio, no USB card.
+ALSA-Underruns occurred during the test run.
+Five. ArUco detection rate against the printed markers. No tests were carried out
+on the tray.
+6. write `picknplay.service` with `After=teleop.service`, but without
+   `Requires`— the game should start without arms.
+7. The arm camera is rotated by 90°. The passthrough is crossed.
 
-Dazu die zwei Stabilitätsumbauten: Seriennummern statt `ttyACM*` in
-`run_teleop.sh`, und Kameras über `/dev/v4l/by-path/` statt über Indizes. Beide
-Kameras melden denselben USB-Serial, `by-id` unterscheidet sie also nicht, nur
-der physische Port tut das.
+To this end, the two stability modifications: serial numbers instead`ttyACM*` in
+`run_teleop.sh`and cameras`/dev/v4l/by-path/`instead of indices. Both
+Kameras melden denselben USB-Serial, `by-id`so it does not differ, only
+the physical port does.

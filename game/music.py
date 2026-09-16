@@ -1,20 +1,20 @@
-"""8-Bit-Musik und Soundeffekte, deklarativ notiert.
+"""8-bit music and sound effects, clearly noted.
 
-Eine Zeichenkette pro Spur. Ein Token ist ein Sechzehntel:
+A string per track. A token is a sixteenth:
 
-  f4          Note (Name + optional # oder b + Oktave)
-  .           haelt die Note
-  -           Pause
-  f4/a4/c5    Akkord, als 45-Hz-Arpeggio ausgegeben (der NES-Trick: ein Kanal
-              springt so schnell zwischen den Akkordtoenen, dass das Ohr einen
-              Akkord hoert)
-  a#2^f2      Glide von der ersten zur zweiten Note
-  k s h       Kick, Snare, Hi-Hat -- feste kurze Laenge, egal wie lang das Token
+f4 Note (name + optional # or b + octave)
+.
+- Break
+f4/a4/c5 chord, issued as 45-Hz-Arpeggio (the NES trick: a channel
+jumps so fast between the chordtoes that the ear
+Accord hoert)
+a#2^f2 Glide from the first to the second note
+k s h Kick, Snare, Hi-Hat -- fixed short lange no matter how long the token
 
-Ausdruck steht pro Spur in PIECES: Huellkurve, Vibrato, Duty. Gerendert wird
-einmal beim Start, danach laeuft alles im Mixer.
+Print is per track in PIECES: Huell bend, Vibrato, Duty. It is rendered
+once at the start, after that everything is in the mixer.
 
-  uv run game/music.py    -> Selbsttest + WAV-Vorhoeren nach /tmp
+uv run game/music.py -> Self-test + WAV-Vorhoer nach /tmp
 """
 import array
 import math
@@ -24,20 +24,20 @@ import pygame
 
 from config import ROUND_SECONDS, WARN_SECONDS, DUCK, DUCK_RELEASE
 
-SR   = 44100    # 22050 rundet F5 um 23 Cent zu tief -- die Intervalle klingen schief
-BUF  = 512      # ~12 ms Latenz, kurz genug fuer Knopf-Blips
-DIV  = 4        # Tokens pro Viertel -> Sechzehntel
-EDGE = 128      # ~3 ms Rampe an jeder Notenkante, sonst knackt jede Flanke
+SR   = 44100    # 22050 rounds F5 by 23 cents too deep -- the intervals sound sloping
+BUF  = 512      # ~12 ms latency, short enough for button clips
+DIV  = 4        # tokens per quarter note -> sixteenth notes
+EDGE = 128      # ~3 ms ramp at each edge of the note, otherwise each flank cracks
 
-ARP_HZ  = 45.0  # Akkord-Umschaltrate. Der NES tat das einmal pro Bildwiederholung
+ARP_HZ  = 45.0  # Accord switching rate. The NES did this once per image recovery
 VIB_HZ  = 5.6
-VIB_LAG = 0.13  # Vibrato setzt spaeter ein, kurze Noten bleiben gerade
+VIB_LAG = 0.13  # Vibrato starts later, short notes just stay
 
 _PC = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
 
 # Huellkurven, Argumente in Sekunden: (seit Notenbeginn, Notenlaenge).
-# Ohne die klingt jede Note wie ein Testton -- das ist der ganze Unterschied
-# zwischen "computergeneriert" und "gespielt".
+# Without that, every note sounds like a test tone -- that's the whole difference
+# between "computer-generated" and "played".
 ENV = {
     "flat":  lambda s, d: 1.0,
     "pluck": lambda s, d: 0.22 + 0.78 * math.exp(-5.5 * s),   # Melodie: Anschlag, dann stehen
@@ -69,9 +69,9 @@ def _edge(buf):
 
 
 def _tone(n, freqs, vol, duty, env, vib=0.0, glide=False):
-    """Eine Note. Die Schleife laeuft pro Schwingung, nicht pro Sample --
-    100x billiger, und fuer ein Rechteck klanglich dasselbe. Huellkurve,
-    Vibrato, Glide und Arpeggio fallen alle aus dieser einen Schleife."""
+    """A note. The loop releases per vibration, not per sample --
+100x cheaper, and a rectangle sounded the same. Huell curve,
+Vibrato, Glide and Arpeggio all fall out of this one loop."""
     out = array.array("h")
     d, pos = n / SR, 0.0
     while int(pos) < n:
@@ -83,9 +83,9 @@ def _tone(n, freqs, vol, duty, env, vib=0.0, glide=False):
             f = freqs[int(s * ARP_HZ) % len(freqs)]
         if vib:
             f *= 1 + vib * math.sin(2 * math.pi * VIB_HZ * s) * min(1.0, max(0.0, (s - VIB_LAG) * 6))
-        # pos ist gebrochen: die Periode wird nicht gerundet, nur ihr Ende. Damit
-        # stimmt die mittlere Frequenz exakt -- gerundete Perioden ziehen hohe
-        # Noten bis zu 23 Cent daneben, und schief klingen die Intervalle.
+        # pos is broken: the period is not rounded, only its end. The
+        # corrects the average frequency exactly -- rounded periods draw high
+        # Notes up to 23 cents, and the intervals sound oblique.
         pos += SR / f
         p = max(2, int(pos) - i)
         a = int(vol * env(s, d) * min(1.0, (d - s) * 60))   # Release, sonst schneidet es ab
@@ -100,8 +100,8 @@ def _noise(n, vol, env):
 
 
 def _drum(tok, n, vol):
-    """Kick ist ein Glide von 160 auf 45 Hz -- daher der Wumms. Snare und
-    Hi-Hat sind Rauschen, nur unterschiedlich lang."""
+    """Kick is a glide from 160 to 45 Hz -- therefore the anger. Snare and
+Hi-Hat are noise, only different lengths."""
     hit = int(min(n, DRUMS[tok] * SR))
     if tok == "k":
         buf = _tone(hit, [160.0, 45.0], vol, 0.5, ENV["hit"], glide=True)
@@ -132,7 +132,7 @@ def _render(pat, bpm, vol=3000, duty=0.5, env="flat", vib=0.0):
 
 
 def _build(bpm, specs):
-    """Spuren eines Stuecks, alle auf dieselbe Laenge gebracht."""
+    """Traces of a mare, all taken on the same lange."""
     tracks = [_render(bpm=bpm, **t) for t in specs]
     n = max(len(t) for t in tracks)
     for t in tracks:
@@ -141,9 +141,9 @@ def _build(bpm, specs):
 
 
 # ── Noten ─────────────────────────────────────────────────────────────────
-# Alles in F-Dur: F - Dm - Bb - C im Idle, F - C in der Runde. Dur, nicht Moll --
-# die Spannung zum Schluss kommt aus Tempo und Schlagzeug, nicht aus Traurigkeit.
-# Nur Stufe 3, die letzten fuenf Sekunden, geht mit einer kleinen Sexte raus.
+# All in F major: F - Dm - Bb - C im Idle, F - C in the round. Dur, not Moll --
+# the tension finally comes from speed and percussion, not from sadness.
+# Only level 3, the last five seconds, goes out with a little sexte.
 
 IDLE_LEAD = ("-  -  c5 .  f5 .  a5 .  c6 .  .  .  a5 .  g5 . "
              "f5 .  .  .  a5 .  f5 .  d5 .  .  .  .  .  -  - "
@@ -174,8 +174,8 @@ DRUM_MID   = "k - h - s - h - k - h - s - h - " * 2
 DRUM_BUSY  = "k - h h s - h h k h h h s - h h " * 2
 DRUM_DRIVE = "k - h h s - h h k h h h s h k h " * 2
 
-# Letzte fuenf Sekunden: die Uhr tickt auf jeder Viertel mit. Das ist der
-# Signifier -- Panik entsteht aus dem Ticken, nicht aus mehr Bassdrum.
+# Last five seconds: the clock ticks on every quarter. This is
+# Signifier -- Panik emerges from the tick, not from more bass drum.
 TICK = "c6 - - - c6 - - - c6 - - - c6 - - - " * 2
 
 #  name -> (bpm, Kanallautstaerke, Spuren)
@@ -204,7 +204,7 @@ PIECES = {
         dict(pat=DRUM_DRIVE, vol=3000, env="hit")]),
 }
 
-#  name -> (bpm, Spuren) -- gleiche Form, nur ohne Schleife
+#  name -> (bpm, tracks) -- same form, only without loop
 SFX = {
     "start":  (150, [
         dict(pat="f4 a4 c5 f5 a5 c6 f6 . .", vol=3800, duty=0.25, env="hit"),
@@ -212,9 +212,9 @@ SFX = {
         dict(pat="k - - - - - k . .", vol=3400, env="hit")]),
     "ok":     (240, [
         dict(pat="a5^c6 .", vol=2600, duty=0.25, env="hit")]),
-    # Marker neu erkannt. Kurz, duenn (duty 0.125) und halb so laut wie "ok":
-    # es soll bestaetigen, nicht unterbrechen — waehrend einer Runde faellt es
-    # zehnmal, ein Knopfton an der Stelle wuerde die Musik zersaegen.
+    # Marker newly recognized. In short, duenn (duty 0.125) and half as loud as "ok":
+    # it should be best, not interrupt — during a round it fades
+    # 10 times, a button at the place would disintegrate the music.
     "blip":   (300, [
         dict(pat="e6 .", vol=1200, duty=0.125, env="hit")]),
     "nope":   (200, [
@@ -229,7 +229,7 @@ SFX = {
              vol=3200, env="hit")]),
 }
 
-# Ab wieviel Restsekunden welche Stufe laeuft. Absteigend gelesen.
+# From how much residual seconds that level is running. Read descending.
 STAGES = [(ROUND_SECONDS * 2 / 3, "round0"),
           (ROUND_SECONDS / 3,     "round1"),
           (WARN_SECONDS,          "round2"),
@@ -239,9 +239,9 @@ STAGES = [(ROUND_SECONDS * 2 / 3, "round0"),
 # ── Anbindung ─────────────────────────────────────────────────────────────
 
 class Music:
-    """Stumm, wenn kein Audiogeraet da ist -- Szenen merken nichts davon."""
+    """Stumm, if there's no audio germ -- scenes don't notice."""
 
-    REPEAT_MS = 90   # dieselbe SFX schneller hintereinander wird verschluckt
+    REPEAT_MS = 90   # the same SFX is swallowed faster
 
     def __init__(self):
         self.on = pygame.mixer.get_init() == (SR, -16, 1)
@@ -253,20 +253,20 @@ class Music:
             return
         self.reserved = max(len(p[2]) for p in PIECES.values())
         pygame.mixer.set_num_channels(self.reserved + 8)
-        pygame.mixer.set_reserved(self.reserved)   # Kanaele 0..n-1 gehoeren der Musik
+        pygame.mixer.set_reserved(self.reserved)   # Kanaele 0..n-1 listened to music
         self.pieces = {k: (vol, [pygame.mixer.Sound(buffer=t) for t in _build(bpm, tr)])
                        for k, (bpm, vol, tr) in PIECES.items()}
         self.sfx_ = {k: [pygame.mixer.Sound(buffer=t) for t in _build(bpm, tr)]
                      for k, (bpm, tr) in SFX.items()}
 
     def _volumes(self):
-        """Aktuellen Pegel auf die Musikkanaele schreiben.
+        """Write current levels on the musical canals.
 
-        Alle Spuren eines Stuecks teilen sich eine Lautstaerke (vol aus PIECES),
-        deshalb reicht ein Faktor statt einer Pegeltabelle. set_reserved() haelt
-        die Kanaele 0..n-1 von den Effekten frei -- die Schleife kann also nie
-        versehentlich eine SFX leiser drehen.
-        """
+All traces of a stuck are divided by a loudspeaker (vol from PIECES),
+a factor instead of a level table is sufficient. set reserved() haelt
+the canals 0..n-1 free from the effects -- the loop can never
+accidentally turn a SFX quieter.
+"""
         v = self.pieces[self.now][0] * self.duck if self.now else 0.0
         for i in range(self.reserved):
             pygame.mixer.Channel(i).set_volume(v)
@@ -294,13 +294,13 @@ class Music:
                 ch.play(tracks[i], loops=-1, fade_ms=fade)   # Duck bleibt leise
 
     def update(self):
-        """Startet aufgeschobene Musik und faehrt das Ducking zurueck.
+        """Starts pushed music and sweeps the ducking back.
 
-        Kein Timer-Thread, run_game ruft das ohnehin jeden Frame -- eine Zeile
-        statt einer zweiten Zeitquelle. Die Rampe rechnet aus _last[1], dem
-        Zeitstempel, den sfx() fuer die Wiederholsperre schon fuehrt: kein
-        zweiter Zustand fuer dieselbe Uhr.
-        """
+No timer thread, run game calls that any frame -- one line
+instead of a second time source. The ramp calculates  last[1], the
+timestamp, the sfx() for the repetition lock already leads: no
+second state for the same watch.
+"""
         if not self.on:
             return
         t = pygame.time.get_ticks()
@@ -314,7 +314,7 @@ class Music:
             self._volumes()
 
     def stage(self, left):
-        """Waehlt die Intensitaetsstufe zur Restzeit. Wechselt nur bei Bedarf."""
+        """Selects the stage of intensification at the remaining time. Changes only if necessary."""
         for limit, name in STAGES:
             if left > limit:
                 return self.play(name)
@@ -327,8 +327,8 @@ class Music:
         if self._last[0] == name and t - self._last[1] < self.REPEAT_MS:
             return
         self._last = (name, t)
-        # Sofort runter, dann ueber DUCK_RELEASE zurueck: schneller Einsatz,
-        # langsames Loslassen. Andersherum hoert man das Ducking selbst.
+        # down immediately, then over DUCK RELEASE: fast use,
+        # slow release. In other respects, the ducking itself is honed.
         self.duck = DUCK
         self._volumes()
         for s in self.sfx_[name]:
@@ -351,8 +351,8 @@ if __name__ == "__main__":
             assert len(t["pat"].split()) % (4 * DIV) == 0, (name, len(t["pat"].split()))
         assert len(set(len(t) for t in _build(bpm, specs))) == 1, ("Spuren ungleich lang", name)
     assert round(_freq("a4")) == 440 and round(_freq("a#2")) == 117 and round(_freq("f2")) == 87
-    # Stimmung: eine Sekunde Ton muss f Nulldurchgaenge nach oben haben, ueber
-    # den ganzen Tonumfang. Mit gerundeter Periode scheitert das ab MIDI 78.
+    # Mood: one second tone must have f zero crossing up, above
+    # all the tone. The MIDI 78 fails with a rounded period.
     for m in range(29, 97):
         f = 440 * 2 ** ((m - 69) / 12)
         buf = _tone(SR, [f], 9000, 0.5, ENV["flat"])
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     for name, (bpm, specs) in SFX.items():
         wav(f"{out}/sfx-{name}.wav", flat(_build(bpm, specs)))
 
-    # Eine Datei, die die ganze Runde erzaehlt: Idle, Start, 60 s Steigerung, Fertig.
+    # A file that counts the whole round: idle, start, 60 s increase, finished.
     session = flat(_build(PIECES["idle"][0], PIECES["idle"][2]), n=SR * 12)
     session += flat(_build(SFX["start"][0], SFX["start"][1]))
     left = float(ROUND_SECONDS)
@@ -391,7 +391,7 @@ if __name__ == "__main__":
         session += flat(_build(bpm, specs), n=int(SR * (left - limit)))
         left = limit
     session += flat(_build(SFX["finish"][0], SFX["finish"][1]))
-    # Pause und Einblendung wie im Spiel: MUSIC_IN von DisplayScoreScene.
+    # Break and stop as in the game: MUSIC IN from DisplayScoreScene.
     pause, fade = 2.2, 1500
     session += array.array("h", bytes(2 * int(SR * pause)))
     tail = flat(_build(PIECES["idle"][0], PIECES["idle"][2]), n=SR * 10)

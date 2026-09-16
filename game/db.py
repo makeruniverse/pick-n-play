@@ -26,9 +26,9 @@ if __name__ == "__main__":
     for n, s in [("AAA", 30), ("BBB", 5), ("CCC", 12)]:
         db.add(n, s)
     assert [r[0] for r in db.top(3)] == ["BBB", "CCC", "AAA"], db.top(3)
-    assert db.qualifies(999)                      # Liste noch nicht voll
+    assert db.qualifies(999)                      # List not full
     for i in range(TOP_N):
         db.add("XXX", i)
-    assert not db.qualifies(999)                  # jetzt voll, 999 faellt raus
+    assert not db.qualifies(999)                  # now full, 999 faells out
     assert db.qualifies(0)
     print("ok")
