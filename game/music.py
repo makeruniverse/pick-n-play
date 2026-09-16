@@ -22,7 +22,7 @@ import random
 
 import pygame
 
-from config import ROUND_SECONDS, WARN_SECONDS, DUCK, DUCK_RELEASE
+from config import ROUND_SECONDS, WARN_SECONDS, DUCK, DUCK_RELEASE, VOLUME
 
 SR   = 44100    # 22050 rounds F5 23 cents too flat -- the intervals sound off
 BUF  = 512      # ~12 ms latency, short enough for button blips
@@ -112,6 +112,7 @@ def _drum(tok, n, vol):
 
 
 def _render(pat, bpm, vol=3000, duty=0.5, env="flat", vib=0.0):
+    vol = int(vol * VOLUME)
     step = int(SR * 60 / bpm / DIV)
     toks, out, i = pat.split(), array.array("h"), 0
     while i < len(toks):

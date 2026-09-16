@@ -140,6 +140,10 @@ BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
 # The music briefly ducks under every effect. On real arcade hardware that
 # happened by itself: NES and C64 had four to five voices, and an effect
 # took one of them. Here it's a channel volume, softer.
+# Overall level, music and effects alike. The Pi's ALSA PCM is already at
+# 100 %, so louder only goes through the samples. 2.0 = +6 dB; the loudest
+# piece peaks at 20942 of 32767 then (measured), SDL clips anything above.
+VOLUME       = float(os.environ.get("PNP_VOLUME", "2.0"))
 DUCK         = 0.55   # music level during an effect (~-5 dB)
 DUCK_RELEASE = 0.35   # seconds back to full
 
@@ -273,11 +277,17 @@ CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
 # that's the layout mock.
 # The detector always attaches to the second, the top-down, camera.
 #
-# On the cabinet (checked against the image on 2026-09-09, not guessed):
-# video0 sits on the side and rotated 90 degrees on the arm, video2 looks
-# straight down onto the tray.
-# NOT (0, 1): video1 and video3 are metadata nodes and deliver no image.
-CAM_INDEXES   = (0, 0) if MAC else (0, 2)
+# On the cabinet the cameras are picked by USB socket, not by videoN: both
+# report the same name and no serial number, so videoN swaps depending on
+# which one the kernel finds first at boot (happened 2026-09-16). Unplugging
+# a camera into another socket swaps the panes. index0 is the image node,
+# index1 is metadata and delivers no image. OpenCV 5 can't open V4L2 by
+# path, hence the symlink resolved to the index.
+CAM_PORTS     = ("platform-xhci-hcd.0-usb-0:2:1.0",   # arm
+                 "platform-xhci-hcd.1-usb-0:1:1.0")   # top-down
+CAM_INDEXES   = (0, 0) if MAC else tuple(
+    int(os.path.realpath(f"/dev/v4l/by-path/{p}-video-index0").removeprefix("/dev/video"))
+    for p in CAM_PORTS)
 CAM_SIZE      = (1280, 720)
 # 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
 # 1.8 times the area of the earlier 544 x 306: the player steers the arm by
