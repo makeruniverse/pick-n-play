@@ -19,7 +19,7 @@ def detect_aruco(image):
 def detection_loop():
 	cap = cv2.VideoCapture(0)
 	time.sleep(2)
-		
+  
 	while True:
 		ret, frame = cap.read()
 		frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

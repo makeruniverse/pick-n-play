@@ -1,12 +1,13 @@
-"""Pingt beide Servo-Busse durch und sagt, welche Motoren antworten.
+"""Pings both servo buses and reports which motors respond.
 
-Laeuft auf dem Pi im conda-Env der Teleop, nicht unter uv:
-    ~/miniforge3/envs/lerobot/bin/python tools/scan_motors.py
+Run this on the Pi in Teleop's conda environment, not via uv:
+~/miniforge3/envs/lerobot/bin/python tools/scan_motors.py
 
-Teleop muss dafuer gestoppt sein, sonst sind die Ports belegt.
-Ein gesunder SO-101 meldet sechs Motoren, IDs 1-6, Modell 777 (STS3215).
-Schweigt ein Bus komplett, obwohl der Adapter da ist, fehlt fast immer die
-Servo-Stromversorgung -- der USB-Adapter haengt am Pi, die Motoren nicht.
+Teleop must be stopped first, otherwise the ports are occupied.
+A healthy SO-101 reports six motors, IDs 1-6, model 777 (STS3215).
+If a bus is completely silent while the adapter exists, the servo power
+supply is usually missing: the USB adapter is powered by the Pi, but the
+motors are not.
 """
 
 from scservo_sdk import PacketHandler, PortHandler

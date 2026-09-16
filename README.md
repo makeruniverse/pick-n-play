@@ -1,51 +1,43 @@
 # PICK'N'PLAY
 
-Arcade-Automat mit echtem Roboterarm. Besucher steuern per Teleoperation einen
-SO-101-Follower und schätzen gegen die Uhr den Wert eines Tabletts voller Pucks.
-Auftragsarbeit für eine MINT-Messe.
+Arcade cabinet with a real robot arm. Visitors control an SO-101 follower arm via teleoperation and play a timed estimation game with a tray of pucks.
+Built as commissioned work for a STEM fair.
 
-Die vollständige Dokumentation (Konzept, Spielablauf, Layout, Hardware,
-Entwurfsentscheidungen) steht in **[`picknplay-overview.md`](picknplay-overview.md)**.
-Wie man den Automaten startet, prüft und wartet, steht in
-**[`docs/betrieb.md`](docs/betrieb.md)**.
+Complete documentation (concept, game flow, layout, hardware, design decisions): **[`picknplay-overview.md`](picknplay-overview.md)**.
+Startup, checks, and maintenance: **[`docs/betrieb.md`](docs/betrieb.md)**.
 
-## Aufbau
+## Architecture
 
-Zwei Prozesse, die sich nichts teilen (siehe „Prozess-Architektur" im Overview):
+Two fully separate processes (see “Process Architecture” in the overview):
 
-| Prozess | Aufgabe | Stack |
+| Process | Responsibility | Stack |
 |---|---|---|
-| Teleop | Leader lesen → Follower schreiben, 60 Hz | LeRobot 0.4.x, Python 3.10 |
-| Spiel  | Kamera → ArUco → Zustand → Rendern | OpenCV, pygame-ce, SQLite, Python 3.13 |
+| Teleop | Read leader → write follower, 60 Hz | LeRobot 0.4.x, Python 3.10 |
+| Game | Camera → ArUco → state → rendering | OpenCV, pygame-ce, SQLite, Python 3.13 |
 
-Dieses Repository enthält den **Spiel**-Prozess. `game/` ist kein Paket — die
-Module finden sich flach über `sys.path[0]`.
+This repository contains the **game** process. `game/` is not a package; modules are imported flat via `sys.path[0]`.
 
-## Starten
+## Start
 
 ```sh
 uv run game/main.py
 ```
 
-Zum Entwickeln ohne Hardware: `CAMERA = False` in `game/config.py` schaltet auf
-den `FakeDetector`, `FULLSCREEN = False` auf Fenster.
+For development without hardware: set `CAMERA = False` in `game/config.py` to use `FakeDetector`, and set `FULLSCREEN = False` for windowed mode.
 
-## Selbsttests
+## Self-tests
 
-Jedes Modul mit nicht-trivialer Logik prüft sich selbst und druckt `ok`:
+Each module with non-trivial logic contains a self-test and prints `ok`:
 
 ```sh
-uv run game/db.py        # Bestenliste: Sortierung, Grenzfälle
-uv run game/balance.py   # Zielwert-Findung aus dem Tablett
-uv run game/music.py     # Notation und Synthese
-uv run game/scenes.py    # Layout: Bildgrenzen, SAFE_BOTTOM, Überdeckung
+uv run game/db.py        # Leaderboard: sorting and edge cases
+uv run game/balance.py   # Target-value generation from tray contents
+uv run game/music.py     # Notation and synthesis
+uv run game/scenes.py    # Layout: bounds, SAFE_BOTTOM, overlap checks
 ```
 
-Der Layout-Selbsttest fängt jeden `draw()`-Aufruf ab und prüft alle Szenen in
-allen Zuständen — er ist die Absicherung gegen die Klasse von Klippfehlern, die
-das Leaderboard-Overlay hatte.
+The layout self-test intercepts every `draw()` call and verifies all scenes in all states. It protects against clipping/overlap bugs like the previous leaderboard overlay issue.
 
-## Lizenzen
+## Licenses
 
-Schrift: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P),
-SIL Open Font License — siehe [`game/assets/OFL.txt`](game/assets/OFL.txt).
+Font: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P), SIL Open Font License — see [`game/assets/OFL.txt`](game/assets/OFL.txt).
