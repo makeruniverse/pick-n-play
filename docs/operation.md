@@ -229,9 +229,13 @@ cd /boot/firmware
 sudo cp config.txt config.txt.pnp-bak && sudo cp cmdline.txt cmdline.txt.pnp-bak
 sudo sed -i 's/^dtparam=spi=on/#dtparam=spi=on/' config.txt   # SPI0 off, GPIO 7/8 free
 echo "dtparam=uart0=off"         | sudo tee -a config.txt      # GPIO 14/15 free
+# enable_uart=1 turns UART0 back on regardless -- then the serial driver
+# grabs GPIO 14 first and spidev5.0 never appears (dmesg: "pin gpio14
+# already requested by ...serial")
+sudo sed -i 's/^enable_uart=1/enable_uart=0/' config.txt
 echo "dtoverlay=spi5-1cs-pi5"    | sudo tee -a config.txt      # SPI5 MOSI on GPIO 14
 sudo sed -i 's/console=serial0,115200 //' cmdline.txt
-# spidev otherwise only takes 4096 bytes per write; 480 LEDs are 11,820.
+# spidev otherwise only takes 4096 bytes per write; 800 LEDs are 19,500.
 # Append to the end of the ONE line in cmdline.txt, no new line:
 sudo sed -i 's/$/ spidev.bufsiz=65536/' cmdline.txt
 sudo systemctl mask serial-getty@ttyAMA0.service
@@ -388,6 +392,21 @@ accept a new login anymore:
 ```sh
 timeout -s KILL 30 .venv/bin/python game/main.py
 ```
+
+### Shortcuts
+
+`tools/pi_aliases.sh` wraps the commands in this document, each game start
+with a timeout. Set up once on the Pi:
+
+```sh
+echo 'source ~/picknplay/tools/pi_aliases.sh' >> ~/.bash_aliases
+```
+
+`pnp-help` lists them: `pnp-start [s]`, `pnp-stop`, `pnp-log`,
+`pnp-status`, `pnp-fps`, `pnp-fake`, `pnp-leds [brightness]`,
+`pnp-leds-off`, `pnp-buttons`, `pnp-update`. The game runs detached
+(`setsid`) and logs to `/tmp/pnp.log`; the switches below pass through,
+e.g. `PNP_CRT=0 pnp-start 120`.
 
 ### Switches for measuring and developing
 

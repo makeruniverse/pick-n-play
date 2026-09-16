@@ -332,10 +332,11 @@ BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
 LED_DEV     = "/dev/spidev5.0"
 # Count and brightness via environment, so the first test on the strip needs
 # no file change on the Pi: PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1
-LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 480))   # ponytail: guessed, 3 m x 160/m
+LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 800))   # 5 m x 160/m
 LED_ORDER   = "GRB"   # WS2812B. WS2811 strips (12/24 V) are often RGB -- check on the strip
-LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 0.3))
-                      # power budget: 3 m FCOB at full white ~8.5 A at 5 V.
+LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 1.0))
+                      # power budget: 5 m FCOB at full white ~14 A at 5 V, 18 A PSU.
+                      # The patterns are never full white; tested at 1.0 on 2026-09-16.
                       # That's a PSU and heat question in one number, not taste.
 LED_FPS     = 30
 LED_STRIPES = 24      # candy-cane stripes across the full length, density-independent
