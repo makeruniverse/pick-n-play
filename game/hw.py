@@ -68,7 +68,7 @@ class Camera:
     detection visibly lags behind.
     """
 
-    def __init__(self, index, size=CAM_SIZE, warmup=3.0):
+    def __init__(self, index, size=CAM_SIZE, warmup=3.0, zoom=None):
         self.cap = cv2.VideoCapture(index)
         if not self.cap.isOpened():
             # Fail loudly, don't silently fall back to a stand-in: made-up
@@ -80,6 +80,8 @@ class Camera:
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  size[0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, size[1])
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if zoom is not None:
+            self.cap.set(cv2.CAP_PROP_ZOOM, zoom)
         self.lock = threading.Lock()
         self.frame = None
         self.seq = 0          # counts new frames so CameraView can cache
@@ -144,6 +146,11 @@ class ArucoDetector:
         # marker inverted. It still finds normal markers, it tries both.
         params = cv2.aruco.DetectorParameters()
         params.detectInvertedMarker = True
+        # Larger threshold windows: the pink macaron carries a purple marker,
+        # little contrast in gray. Measured 2026-09-16 at zoom 40: 84 instead
+        # of 68 of 90 frames, 9 instead of 4 ms -- plenty at DETECT_HZ.
+        params.adaptiveThreshWinSizeMax = 53
+        params.adaptiveThreshWinSizeStep = 6
         self.det = cv2.aruco.ArucoDetector(
             cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), params)
         threading.Thread(target=self._loop, daemon=True).start()

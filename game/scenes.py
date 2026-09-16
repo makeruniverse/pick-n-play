@@ -265,16 +265,16 @@ def footer(screen, f, left=None, right=None, note=None):
     Position instead of word order carries the direction: arrow always
     first, the left hint field on the left, the right one on the right.
     """
+    # WHITE and "small" since 2026-09-16: GREY "tiny" was too dark and hard
+    # to read at the cabinet's poor viewing angles. The urgency of the
+    # follow-up question is carried by the red arrow, not the word.
     if note:
-        # Brighter than the normal hints: the follow-up question isn't a
-        # label, it's a question that needs an answer. The urgency is still
-        # carried by the red arrow, not the word.
-        draw_hint(screen, f["tiny"], note, 960, FOOTER_Y, WHITE)
+        draw_hint(screen, f["small"], note, 960, FOOTER_Y, WHITE)
         return
     if left:
-        draw_hint(screen, f["tiny"], left, 600, FOOTER_Y)
+        draw_hint(screen, f["small"], left, 600, FOOTER_Y, WHITE)
     if right:
-        draw_hint(screen, f["tiny"], right, 1320, FOOTER_Y)
+        draw_hint(screen, f["small"], right, 1320, FOOTER_Y, WHITE)
 
 
 class IdleScene(SceneBase):

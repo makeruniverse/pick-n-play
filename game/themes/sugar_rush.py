@@ -16,9 +16,10 @@ button colors (physical buttons), VALUES (scoring), the title PICK'N'PLAY.
 # ── Screen ────────────────────────────────────────────────────────────────
 # Chocolate background instead of black, pink instead of yellow, cream instead
 # of white. The background is dark enough that contrast stays the same as on
-# black (label text 5.4 : 1). The jobs apply to every theme -- a new one swaps
+# black (label text 5.0 : 1). The jobs apply to every theme -- a new one swaps
 # the colors, not the roles:
-BG     = (40, 16, 32)       # background, always
+BG     = (52, 22, 42)       # background, always. Was (40, 16, 32) until
+                            # 2026-09-16, too dark on the cabinet panel
 GREY   = (176, 128, 158)    # labels
 WHITE  = (255, 236, 246)    # neutral values
 ACCENT = (255, 101, 189)    # what the visitor is currently affecting

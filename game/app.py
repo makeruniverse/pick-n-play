@@ -43,7 +43,7 @@ def action_of(e):
 
 
 def crt_gain(w, h, k):
-    """Scanlines + vignette as a per-pixel brightness factor. Built once.
+    """Scanlines as a per-pixel brightness factor. Built once.
 
     Blending black with alpha a is algebraically nothing but
     dst * (1 - a/255) -- a multiplication, and the map for that is ready at
@@ -76,17 +76,15 @@ def crt_gain(w, h, k):
     y, x = np.indices((h, w), dtype=np.float32)
     nx = x / (w - 1) * 2 - 1
     ny = y / (h - 1) * 2 - 1
-    # Vignette from the *unwarped* radius, unchanged from before: curving a
-    # soft radial gradient by 10% is invisible to anyone, and this way the
-    # darkening stays exactly what gets set at the venue.
-    a = VIGNETTE_ALPHA * (nx * nx + ny * ny)          # corner = 2 x ALPHA
+    # No vignette since 2026-09-16: the panel's poor viewing angles already
+    # darken the edges, the dark corners made that worse.
     f  = 1 + k * (nx * nx + ny * ny)   # reach further out the further out = distortion
     sy = (ny * f + 1) / 2 * (h - 1)    # warped source row, fractional
     ph = np.mod(sy, SCANLINE_STEP)
     # Triangular coverage around the dark row. At k = 0 this falls back, to
     # within a bit, to "every third row fully dark", i.e. to the previous
     # behavior (verified by calculation, largest deviation 1 of 255).
-    a += SCANLINE_ALPHA * (np.clip(1 - ph, 0, 1)
+    a = SCANLINE_ALPHA * (np.clip(1 - ph, 0, 1)
                            + np.clip(1 - (SCANLINE_STEP - ph), 0, 1))
     return cv2.cvtColor(np.clip(255 - a, 0, 255).astype(np.uint8),
                         cv2.COLOR_GRAY2BGRA)

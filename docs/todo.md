@@ -5,6 +5,19 @@ Legend: ● done · ◐ started · ○ open · ✱ waiting on a decision
 
 ---
 
+## 0 · From the first cabinet test (2026-09-16)
+
+The game is harder than expected. The scoring scales stay as they are.
+
+- ○ **Geofencing the arms**: not today, see section 1
+- ● **Remove the vignette**: the panel has poor viewing angles, so dark corners look even darker
+- ● **Slightly brighter background**: the whole screen looks a bit dark
+- ● **Smaller detection window**: right now everything on the surface falls inside it
+- ● **Footer prompts (◀ BACK / ▶ START …)**: too dark and outside the field of view
+- ● **Round length 90 s instead of 30 s**
+
+---
+
 ## 1 · Hardware integration
 
 ### ○ Geofencing the arms

@@ -1,7 +1,7 @@
 import cv2
 import pygame
 from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA,
-                    CAM_INDEXES, DEMO_VIDEO, CV_THREADS, BUTTONS)
+                    CAM_INDEXES, CAM_ZOOM, DEMO_VIDEO, CV_THREADS, BUTTONS)
 from app import Ctx, run_game
 from db import DB
 from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
@@ -20,8 +20,9 @@ def main():
     # One Camera object per physical index: if CAM_INDEXES has the same 0
     # twice, the device is not opened twice (that fails), instead one
     # grabber feeds both panes.
-    cams = {i: Camera(i) for i in set(CAM_INDEXES)} if CAMERA else {}
     arm, top = CAM_INDEXES
+    cams = {i: Camera(i, zoom=CAM_ZOOM if i == top else None)
+            for i in set(CAM_INDEXES)} if CAMERA else {}
     det = ArucoDetector(cams[top]) if cams else FakeDetector()
     # Left is plain passthrough, right is the same image plus overlay. Only
     # the top-down pane gets the detector.

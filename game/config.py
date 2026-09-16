@@ -127,7 +127,6 @@ FONT_SIZES = {"big": 168, "title": 144, "mid": 88, "small": 48, "tiny": 32}
 CRT            = os.environ.get("PNP_CRT", "1") != "0"
 SCANLINE_STEP  = 3     # darken every third row
 SCANLINE_ALPHA = 60    # tune at the venue, lower it if in doubt
-VIGNETTE_ALPHA = 90    # darkening in the corners
 BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
                        # distortion of the scanlines and nothing more: they
                        # curve as if on a tube and draw together toward the
@@ -181,15 +180,15 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 # (FPV, an opponent) gets its seam where it needs it -- a speculative
 # interface would guess the wrong place.
 #
-# ROUND_SECONDS  round length. 30 instead of 60 since the scoring meeting:
-#                double throughput at the booth, and perfect becomes rare
-#                enough that the 1000 means something.
+# ROUND_SECONDS  round length. 90 since the first cabinet test (2026-09-16):
+#                the 30 from the scoring meeting were far too short, the
+#                game is harder than expected. The scoring scale stays; the
+#                time bonus and the music stages scale with this value.
 # PERFECT_HOLD   how long the total has to be right before the round ends
-#                early. The old 5 s would be a sixth of the round at 30 s.
-#                MARKER_HOLD is enough against flicker anyway.
+#                early. MARKER_HOLD is enough against flicker anyway.
 # GAP_MOVES      how many moves the perfect solution may cost. A
-#                teleoperated pick takes 10-20 s -- at 30 s round time, three
-#                moves would be a promise the arm can't keep.
+#                teleoperated pick takes 10-20 s, measured before the cabinet
+#                test. Kept at 2 with the 90 s round: easier stays the point.
 # GAP_MIN/MAX    band the distance to the target may fall in. Not the
 #                binding dial, see GAP_ONE_MAX.
 # GAP_ONE_MISS   how far off the best SINGLE move must be at minimum.
@@ -201,7 +200,7 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 #                this price set, the self-test in balance.py prints the
 #                number on every run.
 MODES = {
-    "normal": dict(ROUND_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
+    "normal": dict(ROUND_SECONDS=90, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
 }
 MODE = os.environ.get("PNP_MODE", "normal")
@@ -289,6 +288,12 @@ CAM_INDEXES   = (0, 0) if MAC else tuple(
     int(os.path.realpath(f"/dev/v4l/by-path/{p}-video-index0").removeprefix("/dev/video"))
     for p in CAM_PORTS)
 CAM_SIZE      = (1280, 720)
+# Hardware zoom of the top-down camera (V4L2 zoom_absolute, 0..60). The
+# camera crops its 5 MP sensor, so the zoomed image has real detail, not
+# upscaled pixels: at 40 the tray fills the frame and a marker gets about
+# twice the pixels it had at 0. Set on every start, because the camera keeps
+# whatever value the last program left behind.
+CAM_ZOOM      = 40
 # 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
 # 1.8 times the area of the earlier 544 x 306: the player steers the arm by
 # these images, so they get priority. The instruction sits above, the bar
@@ -298,11 +303,14 @@ CAM_VIEW      = (736, 414)
 CAM_POS       = ((480, 510), (1440, 510))   # centers, left is the arm
 MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
-# Detection window of the top-down camera, as fractions (x, y, width, height).
-# The wide-angle lens otherwise sees half the booth; only what's inside this
-# window is detected. The rectangle is drawn into the image, so it's set in
-# the hall while aligning the camera and the result is visible immediately.
-TRAY_ROI      = (0.20, 0.15, 0.60, 0.70)
+# Detection window of the top-down camera, as fractions (x, y, width, height)
+# of the ZOOMED image. Only what's inside this window is detected. Since
+# 2026-09-16 a field right in front of the arm, picked on a camera frame
+# (docs/shots/roi-*): the earlier window covered nearly the whole board,
+# so everything lying anywhere on it counted. The rectangle is
+# drawn into the image, so it's set in the hall while aligning the camera and
+# the result is visible immediately.
+TRAY_ROI      = (0.37, 0.50, 0.30, 0.35)
 MARK_FONT     = "tiny"    # font size of the overlaid prices. Currently read
                           # by nothing: the overlay has been commented out
                           # since 2026-09-11, because the prices are meant to
