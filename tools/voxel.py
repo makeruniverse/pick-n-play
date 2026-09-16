@@ -1,17 +1,17 @@
-"""Voxel-Treats im Stil der Sprites aus themes/sugar_rush.py.
+"""Voxel treats in the style of the sprites from themes/sugar_rush.py.
 
-    uv run tools/voxel.py [ordner] [treat ...]      # Vorgabe build/voxel, alle
+    uv run tools/voxel.py [dir] [treat ...]      # default build/voxel, all
 
-Schreibt pro Treat eine 3MF (ein Objekt, ein Teil pro Filament, Farben und
-Extruder schon zugeordnet), dazu preview.png.
+Writes one 3MF per treat (one object, one part per filament, colors and
+extruders already assigned), plus preview.png.
 
-Jeder Treat ist ein Stapel Schichten, eine Schicht = eine Voxelhoehe:
-Maske von oben gesehen plus Farbe. Grob und glatt wie ein 16x16-Sprite,
-ohne Streusel, ohne Glanzpunkte.
+Each treat is a stack of layers, one layer = one voxel height: a top-down
+mask plus a color. Chunky and smooth like a 16x16 sprite, no sprinkles, no
+highlights.
 
-Der ArUco-Marker (DICT_4X4_50) wird von oben auf die Form projiziert, in 1-mm-
-Zellen unabhaengig vom Voxelraster: so gross wie moeglich, aber nur so gross,
-dass OpenCV ihn in Kameraaufloesung von oben noch liest.
+The ArUco marker (DICT_4X4_50) is projected onto the shape from above, in
+1 mm cells independent of the voxel grid: as large as possible, but only as
+large as OpenCV can still read it at camera resolution from above.
 """
 
 import json
@@ -29,15 +29,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "game"))
 from themes.sugar_rush import (APPLE, BG, CARAMEL, GREY, ICE,  # noqa: E402
                                IVORY, LATTE, LEMON, LILAC, SAKURA, SCARLET, TAN)
 
-VOX = 5            # mm pro Voxel. 2,5 war zu kleinteilig, 1,25 zu filigran
-N = 16             # Grundflaeche 16 x 16 Voxel = 80 x 80 mm, wie ein Sprite
+VOX = 5            # mm per voxel. 2.5 was too fiddly, 1.25 too filigree
+N = 16             # base area 16 x 16 voxels = 80 x 80 mm, like a sprite
 
-# Bambu PLA Matte. Die Namen landen in den Dateinamen.
+# Bambu PLA Matte. The names end up in the file names.
 FIL = dict(ivory=IVORY, latte=LATTE, sakura=SAKURA, lemon=LEMON, ice=ICE, lilac=LILAC,
            tan=TAN, caramel=CARAMEL, scarlet=SCARLET, apple=APPLE,
            dark_chocolate=(77, 51, 36), charcoal=(0, 0, 0),
-           plum=(149, 0, 81), dark_blue=(4, 47, 86))       # Plum, Dark Blue: nur Markerzellen
-# Wuerfelseiten: Normale, vier Ecken gegen den Uhrzeigersinn von aussen gesehen.
+           plum=(149, 0, 81), dark_blue=(4, 47, 86))       # Plum, Dark Blue: marker cells only
+# Cube faces: normal, four corners counter-clockwise as seen from outside.
 FACES = (((1, 0, 0), ((1, 0, 0), (1, 1, 0), (1, 1, 1), (1, 0, 1))),
          ((-1, 0, 0), ((0, 0, 0), (0, 0, 1), (0, 1, 1), (0, 1, 0))),
          ((0, 1, 0), ((0, 1, 0), (0, 1, 1), (1, 1, 1), (1, 1, 0))),
@@ -47,7 +47,7 @@ FACES = (((1, 0, 0), ((1, 0, 0), (1, 1, 0), (1, 1, 1), (1, 0, 1))),
 
 
 def neighbour(m, n):
-    """m um n Zellen verschoben gelesen, ausserhalb False."""
+    """m read shifted by n cells, False outside."""
     k = max(map(abs, n))
     p = np.pad(m, k)
     x, y, z = m.shape
@@ -55,17 +55,17 @@ def neighbour(m, n):
 
 
 def tops(solid):
-    """Index des obersten gefuellten Voxels je Saeule, -1 wenn leer."""
+    """Index of the topmost filled voxel per column, -1 if empty."""
     return np.where(solid.any(2), solid.shape[2] - 1 - np.argmax(solid[:, :, ::-1], 2), -1)
 
 
 
 
-# Von oben gesehen, in Voxeln, Mitte zwischen den vier mittleren Zellen
+# Seen from above, in voxels, centered between the four middle cells
 I, J = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
 X, Y = I + 0.5 - N / 2, J + 0.5 - N / 2
 RHO = np.hypot(X, Y)
-# Laengsstreifen: je Seitenflaeche laufen sie quer zu ihr, dann bleiben sie gerade
+# Long stripes: per side face they run across it, so they stay straight
 STRIPE = np.where(np.abs(X) > np.abs(Y), J, I) % 2 == 0
 
 
@@ -78,8 +78,8 @@ def box(w, d):
 
 
 def stack(*layers):
-    """Schichten von unten: (Maske, Filament oder Feld aus Filamenten).
-    Ein '*' vor dem Filament heisst Deko: faellt weg, wo der Marker hinkommt."""
+    """Layers from the bottom: (mask, filament or array of filaments).
+    A '*' before the filament means decoration: drops out where the marker goes."""
     g = np.full((N, N, len(layers)), "", "<U16")
     for k, (m, fil) in enumerate(layers):
         g[..., k][m] = np.broadcast_to(fil, (N, N))[m]
@@ -87,7 +87,7 @@ def stack(*layers):
 
 
 def cupcake(cup, rim, frost, top, cup_c, rim_c, frost_c):
-    """Radien in Voxeln von unten; Becher gestreift, Rand steht ueber."""
+    """Radii in voxels from the bottom; cup striped, rim overhangs."""
     return stack(*[(disc(r), np.where(STRIPE, *cup_c)) for r in cup],
                  (disc(rim), rim_c),
                  *[(disc(r), frost_c) for r in frost],
@@ -95,13 +95,13 @@ def cupcake(cup, rim, frost, top, cup_c, rim_c, frost_c):
 
 
 def macaron(shell, fill):
-    """Fuellung knapp innen: sichtbarer Streifen statt tiefer Fuge im Schatten."""
+    """Filling set slightly in: visible stripe instead of a deep seam in shadow."""
     return stack((disc(3.6), shell), (disc(4.2), shell), (disc(3.9), fill),
                  (disc(4.2), shell), (disc(3.6), shell))
 
 
 def bar(wrap, choc):
-    """Liegender Riegel: links Schokostuecke, rechts Papier mit Etikett."""
+    """Lying bar: chocolate chunks on the left, paper with label on the right."""
     body, left = box(14, 8), X < -2
     blocks = left & ((I - 1) % 3 < 2) & ((J - 4) % 3 < 2)
     label = (np.abs(X - 2.5) < 2) & (np.abs(Y) < 3)
@@ -127,14 +127,14 @@ def berliner(dough, base):
 
 
 def slice_(frost, sponge, jam):
-    """Kuchenstueck, Spitze nach vorn (-y)."""
+    """Cake slice, point facing forward (-y)."""
     wedge = (np.abs(Y) < 5) & (np.abs(X) <= (Y + 5) * 0.36 + 0.5)
     return stack(*[(wedge, f) for f in (sponge, sponge, jam, sponge, sponge, frost)])
 
 
 def cake(frost, sponge, jam):
-    """Ganze Torte: Schichten, Guss mit Nasen ueber den Rand, Kerzen am Rand
-    (die Mitte gehoert dem Marker)."""
+    """Whole cake: layers, icing with drips over the edge, candles at the rim
+    (the center belongs to the marker)."""
     drip = ~disc(4.4) & STRIPE
     candle = ((np.abs(X) == 4.5) & (np.abs(Y) == 1.5)) | ((np.abs(X) == 1.5) & (np.abs(Y) == 4.5))
     return stack(*[(disc(5.2), f) for f in (sponge, jam, sponge, sponge, jam)],
@@ -142,7 +142,7 @@ def cake(frost, sponge, jam):
                  (disc(5.2), frost), (candle, "*ivory"), (candle, "*ivory"), (candle, "*lemon"))
 
 
-# Name -> Bauplan. Reihenfolge wie SPRITE im Thema: billig/leicht zuerst.
+# Name -> build plan. Order like SPRITE in the theme: cheap/light first.
 TREATS = {
     "macaron":      lambda: macaron("sakura", "ivory"),
     "riegel":       lambda: bar("scarlet", "dark_chocolate"),
@@ -167,12 +167,12 @@ TREATS = {
 }
 
 
-# Name -> (Marker-ID aus DICT_4X4_50, Zellfarbe, Grundfarbe, Suchbereich).
-# IDs 0..9 wie SPRITE im Thema, 10..13 sind neu. Farbpaare aus
-# docs/meshy-prompts.md; auf Schokolade invertiert (helle Zellen).
+# Name -> (marker ID from DICT_4X4_50, cell color, base color, search region).
+# IDs 0..9 like SPRITE in the theme, 10..13 are new. Color pairs from
+# docs/meshy-prompts.md; inverted on chocolate (light cells).
 MARKERS = {
     "macaron":        (0, "plum", "sakura", None),
-    "riegel":         (1, "charcoal", "ivory", X > -2),     # nur aufs Papier
+    "riegel":         (1, "charcoal", "ivory", X > -2),     # paper only
     "petitfour":      (2, "plum", "sakura", None),
     "berliner":       (3, "charcoal", "ivory", None),
     "cup_erdbeer":    (4, "plum", "sakura", None),
@@ -187,20 +187,21 @@ MARKERS = {
     "cup_luxus":      (13, "charcoal", "tan", None),
 }
 
-SUB = 5                # Feinraster fuer den Marker: 5 Zellen pro Voxel = 1 mm
+SUB = 5                # fine grid for the marker: 5 cells per voxel = 1 mm
 FINE = VOX / SUB
-DEPTH = 2              # mm von oben eingefaerbt; die Kamera sieht nur Oberseiten
-CAM = 1.2              # px pro mm auf dem Tablett, Kamera schaut senkrecht von oben
+DEPTH = 2              # mm colored from the top; the camera only sees top faces
+CAM = 1.2              # px per mm on the tray, camera looks straight down
 TRAY = (110, 110, 110)
 DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 _params = cv2.aruco.DetectorParameters()
-_params.detectInvertedMarker = True    # wie hw.ArucoDetector
+_params.detectInvertedMarker = True    # like hw.ArucoDetector
 DET = cv2.aruco.ArucoDetector(DICT, _params)
 
 
 def place(g, name, cell, margin):
-    """Marker mit Zellen von `cell` mm moeglichst mittig auf die Draufsicht legen.
-    None, wenn er samt `margin` mm Rand nirgends ganz auf dem Treat liegt."""
+    """Place the marker with `cell` mm cells as centered as possible on the
+    top-down view. None if it doesn't fit fully on the treat anywhere, margin
+    of `margin` mm included."""
     mid, ink, paper, region = MARKERS[name]
     t = 6 * cell + 2 * margin
     sil = (g != "").any(2)
@@ -211,29 +212,29 @@ def place(g, name, cell, margin):
     if not full.any():
         return None
     pos = np.argwhere(full)
-    # Feldmitte gegen Flaechenmitte, beides in Zellkanten gerechnet
+    # Field center vs. area center, both computed in cell edges
     x0, y0 = pos[np.argmin(((pos + t / 2 - np.argwhere(sil).mean(0) - 0.5) ** 2).sum(1))]
     g = g.copy()
     win = np.zeros(sil.shape, bool)
     win[x0:x0 + t, y0:y0 + t] = True
-    g[np.char.startswith(g, "*") & win[:, :, None]] = ""     # Deko im Feld: raus
-    bits = cv2.aruco.generateImageMarker(DICT, mid, 6)    # 6x6 samt Rand, 0 = dunkel
+    g[np.char.startswith(g, "*") & win[:, :, None]] = ""     # decoration in the field: out
+    bits = cv2.aruco.generateImageMarker(DICT, mid, 6)    # 6x6 including border, 0 = dark
     top = tops(g != "")
     for i, j in np.argwhere(win):
         u, v = (i - x0 - margin) // cell, (j - y0 - margin) // cell
-        dark = 0 <= u < 6 and 0 <= v < 6 and bits[5 - v, u] == 0   # Bildzeile laeuft gegen y
+        dark = 0 <= u < 6 and 0 <= v < 6 and bits[5 - v, u] == 0   # image row runs against y
         z = np.arange(max(0, top[i, j] - DEPTH + 1), top[i, j] + 1)
         g[i, j, z] = np.where(g[i, j, z] != "", ink if dark else paper, "")
     return g
 
 
 def view(g):
-    """Kamerabild: senkrecht von oben, oberster Voxel je Saeule."""
+    """Camera image: straight down, topmost voxel per column."""
     top = tops(g != "")
     col = np.where((top >= 0)[..., None],
                    np.take_along_axis(rgb(g), np.maximum(top, 0)[..., None, None], 2)[:, :, 0], TRAY)
     img = np.pad(col, ((8, 8), (8, 8), (0, 0)), constant_values=TRAY[0])
-    img = img[:, ::-1].transpose(1, 0, 2).astype(np.uint8)       # Zeilen = -y
+    img = img[:, ::-1].transpose(1, 0, 2).astype(np.uint8)       # rows = -y
     return cv2.resize(img, None, fx=CAM * FINE, fy=CAM * FINE, interpolation=cv2.INTER_AREA)
 
 
@@ -243,16 +244,16 @@ def found(g, mid):
 
 
 def marked(name):
-    """Feines Gitter mit dem groessten Marker, den die Kamera noch liest."""
+    """Fine grid with the largest marker the camera can still read."""
     g = TREATS[name]()
     g = g.repeat(SUB, 0).repeat(SUB, 1).repeat(SUB, 2)
     for cell in range(12, 2, -1):
-        # ohne Rand nur, wenn es mit nicht passt: dann ist das Tablett der Rand
+        # without margin only if it doesn't fit with one: then the tray is the margin
         for margin in (-(-cell // 2), 0):
             m = place(g, name, cell, margin)
             if m is not None and found(np.char.lstrip(m, "*"), MARKERS[name][0]):
                 return np.char.lstrip(m, "*"), cell
-    raise SystemExit(f"{name}: kein lesbarer Marker")
+    raise SystemExit(f"{name}: no readable marker")
 
 
 def rgb(g):
@@ -261,7 +262,7 @@ def rgb(g):
 
 
 def mesh(m):
-    """Geschlossene Huelle: jede Wuerfelseite, die an etwas anderes grenzt."""
+    """Closed shell: every cube face that borders something else."""
     tris, norms = [], []
     for n, quad in FACES:
         idx = np.argwhere(m & ~neighbour(m, n))
@@ -269,7 +270,7 @@ def mesh(m):
         tris.append(q[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3, 3))
         norms.append(np.repeat([n], 2 * len(idx), axis=0))
     tris = np.concatenate(tris) * FINE
-    # Vorzeichenbehaftetes Volumen == Voxelvolumen: Huelle zu, Normalen nach aussen
+    # Signed volume == voxel volume: shell closed, normals point outward
     vol = np.einsum("ij,ij->", tris[:, 0], np.cross(tris[:, 1], tris[:, 2])) / 6
     assert np.isclose(vol, m.sum() * FINE ** 3), (vol, m.sum() * FINE ** 3)
     return tris, np.concatenate(norms)
@@ -280,9 +281,10 @@ def hexcol(fil):
 
 
 def write_3mf(path, name, parts):
-    """Ein Objekt, ein Teil pro Filament, Extruder 1..n in Teil-Reihenfolge.
-    Bambu Studio liest model_settings.config (Teil -> Extruder) und
-    project_settings.config (Filamentfarben); andere Slicer die basematerials."""
+    """One object, one part per filament, extruders 1..n in part order.
+    Bambu Studio reads model_settings.config (part -> extruder) and
+    project_settings.config (filament colors); other slicers read the
+    basematerials."""
     n = len(parts)
     objs = []
     for k, (fil, tris) in enumerate(parts, 1):
@@ -336,7 +338,7 @@ def write_3mf(path, name, parts):
 
 
 def iso(g, px):
-    """Isometrische Vorschau, Blick von (+x, +y, oben), hinten zuerst gemalt."""
+    """Isometric preview, view from (+x, +y, above), back painted first."""
     X, Y, Z = g.shape
     a, b, c = px, px / 2, px * 1.15
     surf = pygame.Surface(((X + Y) * a, (X + Y) * b + Z * c), pygame.SRCALPHA)
@@ -348,8 +350,9 @@ def iso(g, px):
     full = g != ""
     shade = {(0, 0, 1): 1.0, (1, 0, 0): 0.78, (0, 1, 0): 0.6}
     open_ = {n: ~neighbour(full, n) for n in shade}
-    # Nur fuers Bild: Umgebungsverdeckung pro Flaeche -- je mehr Voxel direkt vor
-    # der Flaeche stehen, desto dunkler. Sonst verschwinden Rillen und Stufen.
+    # Just for the image: ambient occlusion per face -- the more voxels stand
+    # directly in front of a face, the darker it gets. Otherwise grooves and
+    # steps disappear.
     light = {}
     for n in shade:
         u, v = [e for e in ((1, 0, 0), (0, 1, 0), (0, 0, 1)) if e != n]
@@ -394,4 +397,4 @@ if __name__ == "__main__":
         sheet.blit(img, (ox + (tw - img.get_width()) // 2, oy + th - 40 - img.get_height()))
         sheet.blit(font.render(infos[name], True, GREY), (ox + 12, oy + th - 30))
     pygame.image.save(sheet, os.path.join(out, "preview.png"))
-    print(f"{len(used)} Filamente gesamt: {', '.join(sorted(used))}")
+    print(f"{len(used)} filaments total: {', '.join(sorted(used))}")

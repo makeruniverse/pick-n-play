@@ -1,99 +1,100 @@
-# Meshy-Prompts — Thema „Sugar Rush"
+# Meshy Prompts — "Sugar Rush" theme
 
-Jeder Block unten ist ein **kompletter Prompt**, Tail schon angehängt. Kopieren,
-in Meshy **Text to 3D** einfügen, generieren. Stand: 11. September 2026.
+Each block below is a **complete prompt**, tail already appended. Copy, paste
+into Meshy **Text to 3D**, generate. As of: 2026-09-11.
 
-**In Meshy:** Meshy-6, Symmetrie an bei allem Runden. Driftet ein Ergebnis, das
-beste als Referenzbild nehmen und mit **Image to 3D** weitermachen. Export als
-Multi-Color-3MF, Farbanzahl = so viele Filamente, wie wirklich geladen sind.
+**In Meshy:** Meshy-6, symmetry on for anything round. If a result drifts,
+take the best one as a reference image and continue with **Image to 3D**.
+Export as multi-color 3MF, color count = however many filaments are actually
+loaded.
 
-**Den Marker macht nicht Meshy.** Meshys Farbquantisierung würde die Zellkanten
-verwischen. Er kommt in Bambu Studio dazu: `markers/aruco_marker_<id>.svg` (oder
-später die STL, siehe `docs/todo.md`) als **Modifier mit dunklem Filament**, von
-oben ein Stück in die Oberfläche.
+**Meshy doesn't make the marker.** Meshy's color quantization would blur the
+cell edges. It gets added in Bambu Studio: `markers/aruco_marker_<id>.svg`
+(or later the STL, see `docs/todo.md`) as a **modifier with dark filament**,
+sunk a bit into the surface from above.
 
-Der Name hinter jedem Titel ist das Sprite in `game/themes/sugar_rush.py`. Wird
-ein Objekt gedruckt, gehört seine Marker-ID dort in `SPRITE`.
-
----
-
-## Warum die Tails so aussehen
-
-Drei Tails, je nach Oberseite. Jeder erzwingt dasselbe:
-
-- **Nichts oben in der Mitte.** Eine Kirsche, Kerze oder Figur säße genau auf
-  dem Marker. Deko nur an Rand und Seiten.
-- **Oberseite hell und glatt.** Keine Wirbelrippen, keine losen Streusel.
-- **Höchstens ~5 mm Höhenunterschied über der Markerfläche.** Simuliert: bis
-  ~10° Kegel geht überall auf dem Tablett, 20–30° nur in der Tablettmitte.
-- **Flacher Boden, ein Stück, keine Teller.** Druckbar, standfest, und Meshy
-  hängt sonst gern einen Teller oder eine Gabel an.
-- **Oberseite mindestens ~45 mm breit** nach dem Skalieren (30-mm-Marker plus
-  heller Rand). Die Greiferbreite des SO-101 vorher messen: gegriffen wird am
-  Becher oder an der Seite, nicht oben.
+The name after each title is the sprite in `game/themes/sugar_rush.py`. Once
+an object is printed, its marker ID belongs there in `SPRITE`.
 
 ---
 
-## Farben: Bambu und CMYK
+## Why the tails look like this
 
-Getestet (synthetisch, 36 px pro Marker, Rauschen und Seitenlicht) mit den
-Hex-Werten der Bambu-PLA-Matte-Tabelle:
+Three tails, depending on the top. Each enforces the same things:
 
-| Markerfläche (hell) | Zellen (dunkel) | Erkennung |
+- **Nothing on top in the middle.** A cherry, candle, or figure would sit
+  right on the marker. Decoration only at the edge and sides.
+- **Top surface light and smooth.** No swirl ridges, no loose sprinkles.
+- **At most ~5 mm of height difference above the marker face.** Simulated:
+  up to a ~10° cone works anywhere on the tray, 20–30° only in the middle of
+  the tray.
+- **Flat bottom, single piece, no plate.** Printable, stable, and Meshy
+  otherwise likes to attach a plate or a fork.
+- **Top surface at least ~45 mm wide** after scaling (30 mm marker plus
+  light border). Measure the SO-101's gripper width beforehand: grabbing
+  happens at the cup or the side, not the top.
+
+---
+
+## Colors: Bambu and CMYK
+
+Tested (synthetically, 36 px per marker, noise and side lighting) with the
+hex values from the Bambu PLA Matte table:
+
+| Marker face (light) | Cells (dark) | Detection |
 |---|---|---|
-| Ivory White, Desert Tan, Latte Brown, Sakura Pink, Lemon Yellow, Ice Blue, Apple Green | Charcoal, Dark Chocolate, Plum, Dark Blue | **98–100 %** |
-| Bone White, Mandarin Orange, Lilac Purple | dieselben | 85–100 %, riskant |
-| Caramel, Scarlet Red | — | nur Körper, nie Marker |
-| — | Dark Brown | zu hell als Zellfarbe |
+| Ivory White, Desert Tan, Latte Brown, Sakura Pink, Lemon Yellow, Ice Blue, Apple Green | Charcoal, Dark Chocolate, Plum, Dark Blue | **98–100%** |
+| Bone White, Mandarin Orange, Lilac Purple | same | 85–100%, risky |
+| Caramel, Scarlet Red | — | body only, never the marker |
+| — | Dark Brown | too light as a cell color |
 
-**Invertiert** (helle Zellen auf dunklem Grund, für Schokokuchen): Ivory auf
-Dark Chocolate 100 %, Desert Tan 98 %, Lemon 90 %, Sakura nur 85 %. Also Ivory
-oder Desert Tan. Der Detektor erkennt beide Richtungen (`detectInvertedMarker`).
+**Inverted** (light cells on a dark background, for chocolate cake): Ivory on
+Dark Chocolate 100%, Desert Tan 98%, Lemon 90%, Sakura only 85%. So Ivory or
+Desert Tan. The detector recognizes both directions (`detectInvertedMarker`).
 
-**CMYK-Farbmischung (Bambu Studio ≥ 2.5.3) — was sie darf und was nicht:**
+**CMYK color mixing (Bambu Studio ≥ 2.5.3) — what it can and can't do:**
 
-- Sie mischt, indem sie eine Schicht in dünnere Teilschichten verschiedener
-  Filamente zerlegt. Bambu empfiehlt das **nur für fast senkrechte Wände**,
-  ausdrücklich nicht für Schrägen und Oberseiten. Die Markerfläche ist genau
-  das. **Topping und Marker also immer aus einem einzigen, ungemischten
-  Filament.**
-- Gemischt werden darf: Becherwand, Tortenseiten, Schichtstreifen der
-  Kuchenstücke, Wrapper der Schokolade. Dort sieht man die Farbe von der Seite.
-- **Cyan und Magenta taugen nicht als Markerfläche** (zu dunkel im Grauwert,
-  Magenta lag im Test bei 0 %). Gelb und Weiß schon.
-- Das CMYW-Set hat **kein Schwarz**. Für die Markerzellen deshalb Charcoal
-  (Matte) zusätzlich laden.
-- Das CMYW-Set ist PLA Basic, also glänzend. Auf der Markerfläche lieber
-  Matte, Glanz spiegelt die Hallenbeleuchtung als weißen Fleck.
+- It mixes by splitting a layer into thinner sub-layers of different
+  filaments. Bambu recommends this **only for near-vertical walls**,
+  explicitly not for slopes and top surfaces. The marker face is exactly
+  that. **So topping and marker always from a single, unmixed filament.**
+- Allowed to be mixed: cup wall, cake sides, the layer stripes of the cake
+  slices, the chocolate wrapper. There you see the color from the side.
+- **Cyan and magenta don't work as a marker face** (too dark in grayscale,
+  magenta came out at 0% in testing). Yellow and white do.
+- The CMYW set has **no black**. Load Charcoal (Matte) in addition for the
+  marker cells.
+- The CMYW set is PLA Basic, so it's glossy. Prefer Matte on the marker
+  face — gloss reflects the hall lighting as a white spot.
 
-**H2C mit Vortek:** 7 Hotends (1 fest, 6 wechselbar), Filamentwechsel fast
-ohne Spülen. Vorschlag für die Belegung: Charcoal und Ivory Matte fest
-(Marker), Cyan, Magenta, Gelb, Weiß für die Mischung, Dark Chocolate für die
-Schokosachen.
+**H2C with Vortek:** 7 hotends (1 fixed, 6 swappable), filament changes with
+almost no purging. Suggested assignment: Charcoal and Ivory Matte fixed
+(markers), cyan, magenta, yellow, white for mixing, Dark Chocolate for the
+chocolate items.
 
-- **Alle Objekte auf eine Platte.** Die Farbwechsel pro Schicht fallen dann
-  einmal für alle an statt einmal pro Objekt. Das zählt vor allem bei den
-  Kegel-Cupcakes, deren Markerzone über ~25 Schichten läuft.
-- **Vorher ein Testplättchen pro Farbpaar drucken** (40 mm Marker) und vor die
-  Mac-Webcam halten. Das Spiel läuft am Mac und zeigt die Erkennung live.
+- **All objects on one plate.** The color changes per layer then happen once
+  for everything instead of once per object. That matters most for the cone
+  cupcakes, whose marker zone spans ~25 layers.
+- **Print a test tile per color pair first** (40 mm marker) and hold it up
+  to the Mac webcam. The game runs on the Mac and shows detection live.
 
 ---
 
-## Tails zum Nachschlagen
+## Tails for reference
 
-Stecken unten schon in jedem Prompt, hier nur zum Anpassen.
+Already baked into every prompt below, here only for adjusting.
 
-**Kegel** (Cupcakes):
+**Cone** (cupcakes):
 ```
 , smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-**Kuppel** (Macarons, Berliner, Muffin):
+**Dome** (macarons, Berliner, muffin):
 ```
 , smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
 
-**Flach** (Kuchen, Kuchenstücke, Petit Fours, Schokolade):
+**Flat** (cakes, cake slices, petit fours, chocolate):
 ```
 , flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
@@ -102,57 +103,57 @@ Stecken unten schon in jedem Prompt, hier nur zum Anpassen.
 
 ## Cupcakes
 
-Leiter von billig/leicht nach teuer/kippelig. Die Höhe kommt aus Becher und
-Etagen, die Kappe bleibt flach.
+Ladder from cheap/light to expensive/tippy. The height comes from the cup
+and tiers, the cap stays flat.
 
-### 1 · Mini-Muffin — Markerfläche Ivory (Puderzucker), Zellen Charcoal
+### 1 · Mini muffin — marker face Ivory (powdered sugar), cells Charcoal
 ```
 Cartoon mini muffin, short and wide, golden muffin top dusted with white powdered sugar, low paper cup, smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
 
-### 2 · Vanille — `cupcake_*` — Ivory, Charcoal
+### 2 · Vanilla — `cupcake_*` — Ivory, Charcoal
 ```
 Cartoon vanilla cupcake, cream frosting, wide pastel paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 3 · Schoko mit rosa Frosting — `cupcake_choc` — Sakura, Dark Chocolate
+### 3 · Chocolate with pink frosting — `cupcake_choc` — Sakura, Dark Chocolate
 ```
 Cartoon chocolate cupcake, chocolate sponge, pale pink frosting, brown ribbed paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 4 · Erdbeer — `cupcake_pink` — Sakura, Plum
+### 4 · Strawberry — `cupcake_pink` — Sakura, Plum
 ```
 Cartoon strawberry cupcake, pink frosting, strawberry slices around the rim, pastel paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 5 · Zitrone — `cupcake_lemon` — Lemon Yellow, Charcoal
+### 5 · Lemon — `cupcake_lemon` — Lemon Yellow, Charcoal
 ```
 Cartoon lemon cupcake, pale yellow frosting, lemon wedges on the rim edge, pink paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 6 · Minze-Schoko — `cupcake_mint` — Apple Green, Dark Chocolate
+### 6 · Mint chocolate — `cupcake_mint` — Apple Green, Dark Chocolate
 ```
 Cartoon mint chip cupcake, mint green frosting, chocolate chips on the rim, taller purple paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 7 · Red Velvet — Ivory (Frischkäse), Charcoal
+### 7 · Red velvet — Ivory (cream cheese), Charcoal
 ```
 Cartoon red velvet cupcake, red sponge, white cream cheese frosting, tall narrow paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 8 · Blaubeere, überhängend — Ice Blue, Dark Blue
-Kopflastig: breites Frosting auf schmalem Becher.
+### 8 · Blueberry, overhanging — Ice Blue, Dark Blue
+Top-heavy: wide frosting on a narrow cup.
 ```
 Cartoon blueberry cupcake, wide overhanging pale blue frosting on a narrow tall paper cup, blueberries around the rim, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 9 · Zwei Etagen — Sakura, Plum
+### 9 · Two tiers — Sakura, Plum
 ```
 Cartoon two-tier cupcake, two stacked frosting layers, candy-striped narrow tall paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
 
-### 10 · Luxus-Gold — Desert Tan, Charcoal
-Das teuerste Stück: hoch, schmal, kippelig.
+### 10 · Luxury gold — Desert Tan, Charcoal
+The most expensive piece: tall, narrow, tippy.
 ```
 Cartoon luxury cupcake, cream frosting, gold leaf flakes on the sides, narrow tall black-and-gold paper cup, smooth low cone-shaped frosting cap with a gentle slope, clean uninterrupted top surface, pastel frosting, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no cherry or toppings on top, no plate, no loose sprinkles
 ```
@@ -161,19 +162,19 @@ Cartoon luxury cupcake, cream frosting, gold leaf flakes on the sides, narrow ta
 
 ## Macarons
 
-Niedrig und breit: die leichtesten Stücke, also die billigsten.
+Low and wide: the lightest pieces, so the cheapest.
 
-### Rosa — `macaron_pink` — Sakura, Charcoal
+### Pink — `macaron_pink` — Sakura, Charcoal
 ```
 Cartoon pink macaron, two smooth round shells with a white cream filling, ruffled shell feet, smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
 
-### Minze — `macaron_mint` — Ice Blue, Dark Blue
+### Mint — `macaron_mint` — Ice Blue, Dark Blue
 ```
 Cartoon pale blue macaron, two smooth round shells with a white cream filling, ruffled shell feet, smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
 
-### Zitrone — `macaron_lemon` — Lemon Yellow, Charcoal
+### Lemon — `macaron_lemon` — Lemon Yellow, Charcoal
 ```
 Cartoon yellow lemon macaron, two smooth round shells with a white cream filling, ruffled shell feet, smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
@@ -182,62 +183,62 @@ Cartoon yellow lemon macaron, two smooth round shells with a white cream filling
 
 ## Petit Fours
 
-Quadratische Oberseite: passt am besten zum quadratischen Marker.
+Square top: fits the square marker best.
 
-### Rosa — `petitfour_pink` — Sakura, Plum
+### Pink — `petitfour_pink` — Sakura, Plum
 ```
 Cartoon petit four, small square cake cube covered in smooth pink fondant, tiny sugar flower on the front side, pale blue ribbon around the middle, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
-### Minze — `petitfour_mint` — Ice Blue, Dark Blue
+### Mint — `petitfour_mint` — Ice Blue, Dark Blue
 ```
 Cartoon petit four, small square cake cube covered in smooth pale blue fondant, tiny sugar flower on the front side, pink ribbon around the middle, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
 ---
 
-## Schokolade — `bar_milk` — Label Ivory, Charcoal
+## Chocolate — `bar_milk` — label Ivory, Charcoal
 
-Der Marker sitzt auf der Etikettfläche. Etikett nach dem Skalieren ≥ 45 mm.
+The marker sits on the label area. Label ≥ 45 mm after scaling.
 ```
 Cartoon chocolate bar lying flat, partly unwrapped, chunky chocolate squares showing at one end, red paper wrapper with a large plain cream label area on top, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
 ---
 
-## Berliner — `berliner` — Puderzucker Ivory, Charcoal
+## Berliner — `berliner` — powdered sugar Ivory, Charcoal
 
-Kein Donut mit Loch: das Loch schneidet den Marker.
+Not a donut with a hole: the hole would cut through the marker.
 ```
 Cartoon filled doughnut without a hole, round puffy golden dough, white powdered sugar on top, strawberry jam peeking out of one side, smooth low dome top with a gentle slope, clean uninterrupted top surface, flat bottom, chunky simple shapes, matte, symmetrical, single solid piece, no plate, no text, no loose sprinkles
 ```
 
 ---
 
-## Kuchenstücke
+## Cake slices
 
-Die Oberseite ist ein Dreieck. Damit ein 30-mm-Marker mit Rand hineinpasst,
-braucht ein Stück mit 60°-Spitze **~70 mm Länge** (45° → ~80 mm). Die
-Keilform rutscht aus dem Greifer, das ist der Schwierigkeitshebel.
+The top surface is a triangle. For a 30 mm marker with a border to fit, a
+piece with a 60° tip needs **~70 mm length** (45° → ~80 mm). The wedge shape
+slips out of the gripper, which is the difficulty lever.
 
-### Erdbeer — `slice_straw` — Sakura, Plum
+### Strawberry — `slice_straw` — Sakura, Plum
 ```
 Cartoon slice of strawberry layer cake, wide wedge shape with a 60 degree tip, three sponge layers with pink cream visible on the cut sides, pink frosting on top, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
-### Schoko — `slice_choc` — Ivory (Sahne oben), Dark Chocolate
+### Chocolate — `slice_choc` — Ivory (cream on top), Dark Chocolate
 ```
 Cartoon slice of chocolate layer cake, wide wedge shape with a 60 degree tip, dark chocolate sponge layers with white cream filling visible on the cut sides, white cream frosting on top, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
-### Zitrone — `slice_lemon` — Lemon Yellow, Charcoal
+### Lemon — `slice_lemon` — Lemon Yellow, Charcoal
 ```
 Cartoon slice of lemon layer cake, wide wedge shape with a 60 degree tip, sponge layers with pale yellow lemon cream visible on the cut sides, pale yellow frosting on top, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
 ---
 
-## Schokokuchen — `cake_choc` — **invertiert:** Dark Chocolate, Zellen Ivory
+## Chocolate cake — `cake_choc` — **inverted:** Dark Chocolate, cells Ivory
 
 ```
 Cartoon round chocolate cake, dark chocolate ganache covering the top and sides, chocolate drips running down the sides, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
@@ -245,16 +246,16 @@ Cartoon round chocolate cake, dark chocolate ganache covering the top and sides,
 
 ---
 
-## Mini-Schichttorte — `cake_straw` — Sakura, Plum
+## Mini layer cake — `cake_straw` — Sakura, Plum
 
-Das höchste Stück. Deko nur unten am Rand, nichts oben.
+The tallest piece. Decoration only at the bottom edge, nothing on top.
 ```
 Cartoon tall mini layer cake, three tiers of sponge and strawberry cream visible as stripes on the sides, smooth pink fondant top, piped cream decoration only around the bottom edge, flat smooth top surface with nothing on it, flat bottom, chunky simple shapes, matte, single solid piece, no plate, no fork, no text, no loose crumbs or sprinkles
 ```
 
 ---
 
-Quellen: [Bambu PLA Matte Hex-Tabelle](https://store.bblcdn.eu/s8/default/f131f643495b417197832b291fc7b068/Bambu_PLA_Matte_Hex_Code.pdf) ·
+Sources: [Bambu PLA Matte hex table](https://store.bblcdn.eu/s8/default/f131f643495b417197832b291fc7b068/Bambu_PLA_Matte_Hex_Code.pdf) ·
 [Bambu Wiki: Vortek](https://wiki.bambulab.com/en/h2c/manual/Vortek-workflow-and-function) ·
 [Color Mixing Guide (smith3d)](https://www.smith3d.com/bambu-studios-new-color-mixing-feature/) ·
 [Meshy Prompt Guide](https://www.meshy.ai/tutorials/3d-prompt-guide)

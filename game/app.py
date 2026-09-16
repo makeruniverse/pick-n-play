@@ -11,15 +11,15 @@ class Ctx:
     db: object
     fonts: dict
     music: object
-    leds: object             # immer da, ohne Streifen stumm -- wie music
-    views: tuple = ()        # Kamera-Passthrough, leer = kein Bild
-    demo: object = None      # VideoView der Zwischenszene, None = nur Text
-    buttons: object = None   # GPIO-Taster, None = nur Tastatur
+    leds: object             # always there, silent without a strip -- like music
+    views: tuple = ()        # camera passthrough, empty = no image
+    demo: object = None      # VideoView of the intermission scene, None = text only
+    buttons: object = None   # GPIO buttons, None = keyboard only
 
 class SceneBase:
-    MUSIC = "idle"       # None = die Szene regelt es selbst (GameScene)
-    MUSIC_IN = (0.0, 0)  # (Pause in Sekunden, Einblendung in Millisekunden)
-    TICK  = None         # abweichende Bildrate, None = FPS aus config
+    MUSIC = "idle"       # None = the scene handles it itself (GameScene)
+    MUSIC_IN = (0.0, 0)  # (pause in seconds, fade-in in milliseconds)
+    TICK  = None         # deviating frame rate, None = FPS from config
 
     def __init__(self, ctx):
         self.ctx = ctx
@@ -43,50 +43,49 @@ def action_of(e):
 
 
 def crt_gain(w, h, k):
-    """Scanlines + Vignette als Helligkeitsfaktor je Pixel. Einmal gebaut.
+    """Scanlines + vignette as a per-pixel brightness factor. Built once.
 
-    Schwarz mit Alpha a ueberblenden ist algebraisch nichts als
-    dst * (1 - a/255) -- eine Multiplikation, und die Karte dafuer steht beim
-    Start. Zur Laufzeit bleibt ein cv2.multiply ueber das fertige Bild.
+    Blending black with alpha a is algebraically nothing but
+    dst * (1 - a/255) -- a multiplication, and the map for that is ready at
+    startup. At runtime only a cv2.multiply over the finished image remains.
 
-    **Die Woelbung steckt in dieser Karte, nicht im Bild.** Vorher warpte ein
-    cv2.remap das ganze Bild. Gemessen am 10.9.2026 am Automaten kostete das
-    25,0 ms pro Bild, die gewoelbte Karte kostet 11,1 -- also genau so viel
-    wie gar keine Woelbung, weil sie beim Start gebaut wird und zur Laufzeit
-    nichts mehr tut.
+    **The barrel distortion lives in this map, not in the image.** Previously
+    a cv2.remap warped the whole image. Measured on the cabinet on 2026-09-10,
+    that cost 25.0 ms per frame; the warped map costs 11.1 -- exactly as much
+    as no distortion at all, because it's built at startup and does nothing
+    more at runtime.
 
-    Der zweite Grund ist wichtiger als die Millisekunden: remap tastet mit
-    NEAREST ab, und ein 8x8-Glyphenraster auf nicht-ganzzahlige Positionen
-    abgetastet franst aus. Die Woelbung zerlegte die Pixelschrift -- genau der
-    Effekt, vor dem FONT_SIZES in config.py warnt, nur von der anderen Seite.
-    Aus 3-8 m liest sich eine Roehre ohnehin an den Zeilen, nicht an der
-    Geometrie.
+    The second reason matters more than the milliseconds: remap samples with
+    NEAREST, and an 8x8 glyph grid sampled at non-integer positions frays.
+    The distortion broke up the pixel font -- exactly the effect FONT_SIZES
+    in config.py warns about, just from the other side. From 3-8 m a tube
+    reads from its scanlines anyway, not from its geometry.
 
-    Die Scanlinephase kommt aus der *gewoelbten* Quellzeile: die Zeilen
-    kruemmen sich wie auf einer Roehre und ruecken zum Bildrand hin zusammen.
-    Als Deckungsgrad gerechnet, nicht abgetastet -- ein punktweise gewarptes
-    3-px-Muster gibt sonst Moirestreifen am Rand.
+    The scanline phase comes from the *warped* source row: the lines curve as
+    if on a tube and draw together toward the edge of the image. Computed as
+    coverage, not sampled -- a point-wise warped 3-px pattern would otherwise
+    give moire stripes at the edge.
 
-    Woelbung *des Bildes* mit scharfer Schrift ginge als GLES-Fragmentshader
-    auf dem VideoCore, mit korrekter Filterung und ohne Bildratenkosten.
-    Bewusst nicht gebaut, siehe "CRT-Overlay" im Overview.
+    Warping *the image itself* with sharp text would work as a GLES fragment
+    shader on the VideoCore, with correct filtering and no frame-rate cost.
+    Deliberately not built, see "CRT overlay" in the overview.
 
-    Der vierte Kanal bleibt 255: das Alphabyte der Anzeigeflaeche wird nicht
-    benutzt, also wird es auch nicht gedunkelt.
+    The fourth channel stays 255: the alpha byte of the display surface is
+    not used, so it isn't darkened either.
     """
     y, x = np.indices((h, w), dtype=np.float32)
     nx = x / (w - 1) * 2 - 1
     ny = y / (h - 1) * 2 - 1
-    # Vignette aus dem *ungewoelbten* Radius, unveraendert gegenueber frueher:
-    # einen weichen Radialverlauf um 10 % zu kruemmen sieht niemand, und so
-    # bleibt die Abdunklung genau die, die in der Halle eingestellt wird.
-    a = VIGNETTE_ALPHA * (nx * nx + ny * ny)          # Ecke = 2 x ALPHA
-    f  = 1 + k * (nx * nx + ny * ny)   # aussen weiter aussen greifen = Woelbung
-    sy = (ny * f + 1) / 2 * (h - 1)    # gewoelbte Quellzeile, gebrochen
+    # Vignette from the *unwarped* radius, unchanged from before: curving a
+    # soft radial gradient by 10% is invisible to anyone, and this way the
+    # darkening stays exactly what gets set at the venue.
+    a = VIGNETTE_ALPHA * (nx * nx + ny * ny)          # corner = 2 x ALPHA
+    f  = 1 + k * (nx * nx + ny * ny)   # reach further out the further out = distortion
+    sy = (ny * f + 1) / 2 * (h - 1)    # warped source row, fractional
     ph = np.mod(sy, SCANLINE_STEP)
-    # Dreieckiger Deckungsgrad um die dunkle Zeile. Bei k = 0 faellt das auf
-    # ein Bit genau auf "jede dritte Zeile ganz dunkel" zurueck, also auf das
-    # Bisherige (nachgerechnet, groesste Abweichung 1 von 255).
+    # Triangular coverage around the dark row. At k = 0 this falls back, to
+    # within a bit, to "every third row fully dark", i.e. to the previous
+    # behavior (verified by calculation, largest deviation 1 of 255).
     a += SCANLINE_ALPHA * (np.clip(1 - ph, 0, 1)
                            + np.clip(1 - (SCANLINE_STEP - ph), 0, 1))
     return cv2.cvtColor(np.clip(255 - a, 0, 255).astype(np.uint8),
@@ -94,12 +93,12 @@ def crt_gain(w, h, k):
 
 
 def px(s):
-    """(h,w,4)-Sicht auf die Pixel einer 32-Bit-Surface, ohne Kopie.
+    """(h,w,4) view onto the pixels of a 32-bit surface, without copying.
 
-    Nicht surfarray.pixels3d: das liefert RGB, pygame speichert BGRA, also hat
-    die Sicht auf der Farbachse Schrittweite -1 und OpenCV kopiert erst — 8,3 ms
-    statt 1,4. Die Farbreihenfolge ist egal: die Verdunklungskarte ist grau,
-    alle drei Farbkanaele bekommen denselben Faktor.
+    Not surfarray.pixels3d: that returns RGB, pygame stores BGRA, so the view
+    would have stride -1 on the color axis and OpenCV would copy first — 8.3 ms
+    instead of 1.4. The color order doesn't matter: the darkening map is gray,
+    all three color channels get the same factor.
     """
     return np.asarray(s.get_view("2")).T.view(np.uint8).reshape(
         s.get_height(), s.get_width(), 4)
@@ -107,12 +106,12 @@ def px(s):
 
 def run_game(scene, width, height, fps):
     pygame.init()
-    # Kein pygame.SCALED mehr: die Entwurfsaufloesung *ist* die
-    # Panelaufloesung, es gibt nichts zu skalieren. vsync ohne SCALED ist
-    # backendabhaengig -- scheitert set_mode daran, ist Tearing besser als
-    # gar kein Bild, und der Schalter zum Nachmessen steht in config.py.
-    # Im Fenster skaliert: 1920 x 1080 passt nicht auf das MacBook-Display
-    # (1728 Punkte breit). Am Automaten laeuft Vollbild, dort greift das nie.
+    # No more pygame.SCALED: the design resolution *is* the panel resolution,
+    # there's nothing to scale. vsync without SCALED is backend-dependent --
+    # if set_mode fails on that, tearing is better than no image at all, and
+    # the switch for re-measuring is in config.py.
+    # Scaled in windowed mode: 1920 x 1080 doesn't fit the MacBook display
+    # (1728 points wide). The cabinet runs fullscreen, so this never kicks in there.
     flags = pygame.FULLSCREEN if FULLSCREEN else pygame.SCALED | pygame.RESIZABLE
     try:
         screen = pygame.display.set_mode((width, height), flags, vsync=VSYNC)
@@ -123,17 +122,17 @@ def run_game(scene, width, height, fps):
     pygame.key.set_repeat(*KEY_REPEAT)
     dt = 0.0
 
-    # Der Loop traegt den CRT-Effekt, nicht die Szene: er liegt ueber allem,
-    # also gehoert er an die eine Stelle, an der alles zusammenlaeuft.
+    # The loop carries the CRT effect, not the scene: it sits over
+    # everything, so it belongs at the one place where everything converges.
     gain  = crt_gain(width, height, BARREL_K) if CRT else None
     ticks = 0
 
     while scene is not None:
-        # Tastatur und GPIO laufen an genau einer Stelle zusammen. Die Szene
-        # sieht danach nur noch vier Strings und kann nicht wissen, woher sie
-        # kommen -- deshalb aendert der Anschluss der Knoepfe in scenes.py
-        # keine Zeile. dt ist das des letzten Bildes: dieselbe Zahl, mit der
-        # die Runde runterzaehlt, also auch fuer die Tastenwiederholung.
+        # Keyboard and GPIO come together at exactly one place. After that
+        # the scene only sees four strings and can't know where they came
+        # from -- that's why wiring up the buttons in scenes.py never
+        # changes a line here. dt is that of the last frame: the same number
+        # the round counts down with, so also for key repeat.
         actions = [a for e in pygame.event.get() if (a := action_of(e))]
         if scene.ctx.buttons:
             actions += scene.ctx.buttons.pump(dt)
@@ -141,8 +140,8 @@ def run_game(scene, width, height, fps):
             if action == "quit":
                 scene = None
                 break
-            # Jeder Knopfdruck klingt: "ok" wenn die Szene ihn genommen hat,
-            # sonst "nope". handle() gibt den Namen zurueck, None heisst nope.
+            # Every button press makes a sound: "ok" if the scene took it,
+            # otherwise "nope". handle() returns the name, None means nope.
             scene.ctx.music.sfx(scene.handle(action) or "nope")
         if scene is None:
             break
@@ -151,17 +150,17 @@ def run_game(scene, width, height, fps):
         scene.update(dt)
         scene.render(screen)
         if gain is not None:
-            # Die px()-Sichten sperren ihre Surface. Als Argumente direkt im
-            # Aufruf sterben sie mit der Zeile — sonst scheitert das Flip
-            # darunter an einer gesperrten Flaeche.
+            # The px() views lock their surface. As arguments directly in the
+            # call they die with the line -- otherwise the flip below would
+            # fail on a locked surface.
             cv2.multiply(px(screen), gain, px(screen), 1 / 255)
         pygame.display.flip()
 
-        # Tickrate der Szene, die gerade lief — vor dem Wechsel, damit der
-        # Uebergang nicht mit der Rate der naechsten Szene abgerechnet wird.
+        # Tick rate of the scene that just ran — before the switch, so the
+        # transition isn't clocked at the next scene's rate.
         dt = clock.tick(scene.TICK or fps) / 1000
-        # Ohne Ausgabe ist eine Messung auf dem Pi blind: dort haengt kein
-        # Entwickler am Bildschirm, sondern eine SSH-Sitzung am stdout.
+        # Without output, a measurement on the Pi is blind: no developer is
+        # watching a screen there, just an SSH session on stdout.
         ticks += 1
         if FPSLOG and ticks % fps == 0:
             print(f"{clock.get_fps():5.1f} fps  {type(scene).__name__}", flush=True)

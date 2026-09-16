@@ -11,20 +11,20 @@ from scenes import IdleScene
 
 
 def main():
-    # remap und multiply im Renderpfad verteilen sich damit ueber drei Kerne
-    # statt ueber alle vier -- der vierte gehoert dem Teleop-Prozess.
+    # remap and multiply in the render path spread out over three cores
+    # instead of all four -- the fourth belongs to the teleop process.
     cv2.setNumThreads(CV_THREADS)
-    pygame.mixer.pre_init(SR, -16, 1, BUF)   # muss vor pygame.init() stehen,
-    pygame.init()                            # danach ist die Puffergroesse fix
+    pygame.mixer.pre_init(SR, -16, 1, BUF)   # must come before pygame.init(),
+    pygame.init()                            # after that the buffer size is fixed
     fonts = {k: pygame.font.Font(FONT_PATH, s) for k, s in FONT_SIZES.items()}
-    # Ein Camera-Objekt je physischem Index: stehen in CAM_INDEXES zweimal
-    # dieselbe 0, wird das Geraet nicht zweimal geoeffnet (das schlaegt fehl),
-    # sondern ein Grabber speist beide Panes.
+    # One Camera object per physical index: if CAM_INDEXES has the same 0
+    # twice, the device is not opened twice (that fails), instead one
+    # grabber feeds both panes.
     cams = {i: Camera(i) for i in set(CAM_INDEXES)} if CAMERA else {}
     arm, top = CAM_INDEXES
     det = ArucoDetector(cams[top]) if cams else FakeDetector()
-    # Links reiner Passthrough, rechts dasselbe Bild plus Overlay. Nur das
-    # Top-Down-Pane bekommt den Detector mit.
+    # Left is plain passthrough, right is the same image plus overlay. Only
+    # the top-down pane gets the detector.
     ctx = Ctx(detector=det, db=DB(), fonts=fonts, music=Music(), leds=Leds(),
               views=(CameraView(cams[arm]), CameraView(cams[top], det)) if cams else (),
               demo=VideoView(DEMO_VIDEO) if DEMO_VIDEO else None,
