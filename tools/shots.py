@@ -17,6 +17,7 @@ aussieht, und ohne Scanlines sieht es aus wie ein anderes Spiel.
 """
 
 import os
+import random
 import sys
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -75,6 +76,7 @@ def shots(out):
               views=(StubView("ARM CAM", fonts["tiny"]),
                      StubView("TOP-DOWN CAM", fonts["tiny"])))
 
+    random.seed(0)    # balance.gap() wuerfelt das Ziel, sonst wandern 3-6 bei jedem Lauf
     game = scenes.GameScene(ctx)
     # Eine Runde, die knapp daneben lag: 0,30 EUR offen bei 5,00 EUR Distanz,
     # Zeit abgelaufen. Ergibt eine Punktzahl mit drei Stellen statt einer
