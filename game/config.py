@@ -3,83 +3,85 @@ import os
 import sys
 import pygame
 
-# ── Anzeige ───────────────────────────────────────────────────────────────
-# Entwurfsaufloesung = Panelaufloesung des Asus MB169CK, nativ und ohne
-# pygame.SCALED. Die Skalierung 1200 -> 1080 kostete gemessen rund 20 ms pro Bild,
-# und sie legte die 8x8-Pixelschrift auf ein Raster mit Faktor 0,9 -- also auf
-# ungleich grosse Glyphenpixel. Jede Koordinate in scenes.py ist eine absolute
-# Zahl fuer dieses Raster; ein anderes Panel heisst Layout anfassen.
+# ── Display ───────────────────────────────────────────────────────────────
+# Design resolution = panel resolution of the Asus MB169CK, native and
+# without pygame.SCALED. Scaling 1200 -> 1080 measured at around 20 ms per
+# frame, and it put the 8x8 pixel font on a grid with factor 0.9 -- i.e.
+# unevenly sized glyph pixels. Every coordinate in scenes.py is an absolute
+# number for this grid; a different panel means touching the layout.
 WIDTH, HEIGHT = 1920, 1080
 
-# 30, nicht 60. Zwei Gruende, beide unabhaengig von der Rechenleistung:
+# 30, not 60. Two reasons, both independent of compute power:
 #
-# 1. 60/30 = 2, also steht jedes Bild exakt zwei Refreshes lang und die Kadenz
-#    ist gleichmaessig. Bei 40 fps waere 60/40 = 1,5: abwechselnd ein und zwei
-#    Refreshes, sichtbares Ruckeln bei *hoeherer* Bildrate. Unterhalb von 60
-#    ist 30 auf einem 60-Hz-Panel die einzige gerade Zahl.
-# 2. Die Kameras liefern 30 Bilder/s. Alles darueber zeigt in der Runde
-#    dasselbe Kamerabild zweimal.
+# 1. 60/30 = 2, so every frame stands for exactly two refreshes and the
+#    cadence is even. At 40 fps, 60/40 = 1.5: alternating one and two
+#    refreshes, visible stutter at a *higher* frame rate. Below 60, 30 is
+#    the only even number on a 60 Hz panel.
+# 2. The cameras deliver 30 frames/s. Anything above that shows the same
+#    camera frame twice during the round.
 #
-# Es gibt in diesem Spiel keine 60-Hz-Bewegung: Sekundenzaehler, Summe,
-# blinkender Text, Kamerabild. Der Arcade-Look kommt aus Scanlines, Woelbung
-# und harten Pixelkanten, nicht aus der Bildrate. Halbe Renderlast ist
-# ausserdem halbe Waerme, und der Pi drosselt zusammen mit der Teleop.
+# There is no 60 Hz motion in this game: second counter, total, blinking
+# text, camera image. The arcade look comes from scanlines, barrel
+# distortion, and hard pixel edges, not from the frame rate. Half the render
+# load is also half the heat, and the Pi throttles together with teleop.
 FPS = 30
 IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "15"))
-                     # die Haelfte von FPS, damit die Kadenz gerade bleibt.
-                     # Der Idle-Screen aendert sich zweimal pro Sekunde -- mehr
-                     # ist sechs Stunden Waerme fuer nichts.
-                     # PNP_IDLE_FPS=30 laesst den Renderpfad unter Spielszenen-Last
-                     # messen, ohne dass jemand einen Knopf druecken muss.
-# Default ist der Automat. Zum Entwickeln und fuer Fernwartung ueber SSH lassen
-# sich die drei per Umgebungsvariable umschalten, ohne die Datei zu aendern
-# (sonst ueberschreibt das naechste git pull die lokale Anpassung):
-#   PNP_FULLSCREEN=0  Fenster statt Vollbild
-#   PNP_CAMERA=0      FakeDetector, kein Kamerazugriff
-#   PNP_FPSLOG=1      Bildrate einmal pro Sekunde auf stdout
-#   PNP_VSYNC=0       ohne Bildsynchronisation, kostet Tearing
+                     # half of FPS, so the cadence stays even.
+                     # The idle screen changes twice a second -- anything
+                     # more is six hours of heat for nothing.
+                     # PNP_IDLE_FPS=30 lets the render path be measured under
+                     # game-scene load, without anyone having to press a button.
+# Default is the cabinet. For development and remote maintenance over SSH,
+# the three can be switched via environment variable without editing the
+# file (otherwise the next git pull would overwrite the local change):
+#   PNP_FULLSCREEN=0  window instead of fullscreen
+#   PNP_CAMERA=0      FakeDetector, no camera access
+#   PNP_FPSLOG=1      frame rate once a second on stdout
+#   PNP_VSYNC=0       without vsync, costs tearing
 #
-# Am Mac sind die Defaults der Entwicklungsrechner: Fenster, keine GPIO-Knoepfe
-# (Pfeiltasten), die eingebaute Webcam in beiden Panes. Kein eigener Branch --
-# der liefe dem Automaten davon. Der Automat ist Linux, also aendert das dort nichts.
+# On the Mac the defaults are those of the dev machine: window, no GPIO
+# buttons (arrow keys), the built-in webcam in both panes. No separate
+# branch -- that would drift away from the cabinet. The cabinet is Linux, so
+# none of this changes anything there.
 MAC        = sys.platform == "darwin"
 FULLSCREEN = os.environ.get("PNP_FULLSCREEN", "0" if MAC else "1") != "0"
 FPSLOG     = os.environ.get("PNP_FPSLOG") == "1"
-# Kostete bei 60 Hz gemessen 12 bis 19 %. Bei 30 fps ist das Budget da, und
-# Tearing quer durch eine Pixelschrift sieht man aus 8 m sofort. Bleibt an.
+# Measured to cost 12 to 19% at 60 Hz. At 30 fps the budget is there, and
+# tearing running through a pixel font is visible instantly from 8 m. Stays on.
 VSYNC      = os.environ.get("PNP_VSYNC", "1") != "0"
 
-# OpenCV-Threads fuer remap und multiply im Renderpfad. Drei, nicht vier: der
-# vierte Kern gehoert dem Teleop-Prozess (CPUAffinity=3 in seiner Unit). Ohne
-# diese Zeile nimmt sich OpenCV alle Kerne und verdraengt genau den Loop, der
-# als einziger terminkritisch ist.
+# OpenCV threads for remap and multiply in the render path. Three, not four:
+# the fourth core belongs to the teleop process (CPUAffinity=3 in its unit).
+# Without this line OpenCV grabs all cores and crowds out exactly the loop
+# that's the only one on a deadline.
 CV_THREADS = int(os.environ.get("PNP_CV_THREADS", "3"))
 
-# Die eine Zeile, die sagt was die vier Knoepfe tun -- in jeder Szene an
-# derselben Stelle. Szeneninhalt endet ueber SAFE_BOTTOM, damit eine
-# wachsende Liste (Bestenliste aus der DB) nie in den Footer hineinlaeuft.
-# Abstand von der Unterkante, nicht Anteil der Hoehe: das Band ist eine feste
-# Zeile am Bildrand, es skaliert nicht mit. 80 und 160 wie vorher bei 1200.
+# The one line that says what the four buttons do -- in the same place in
+# every scene. Scene content ends above SAFE_BOTTOM, so a growing list
+# (leaderboard from the DB) never runs into the footer.
+# Distance from the bottom edge, not a fraction of the height: the band is a
+# fixed row at the screen edge, it doesn't scale along. 80 and 160 like
+# before at 1200.
 FOOTER_Y    = 1000
 SAFE_BOTTOM = 920
 
-# ── Zeiten (Sekunden) ─────────────────────────────────────────────────────
-WARN_SECONDS  = 5     # ab hier faerbt sich der Bildschirm
-IDLE_TIMEOUT  = 20    # Nicht-Idle-Szenen fallen von allein zurueck
-CONFIRM_SECONDS = 3   # Fenster fuer die Abbruch-Doppelbestaetigung
-# ROUND_SECONDS und PERFECT_HOLD haengen an der Schwierigkeit und stehen
-# deshalb im Spielmodus weiter unten, nicht hier.
+# ── Timing (seconds) ──────────────────────────────────────────────────────
+WARN_SECONDS  = 5     # from here on the screen tints
+IDLE_TIMEOUT  = 20    # non-idle scenes fall back on their own
+CONFIRM_SECONDS = 3   # window for the double-confirm to abort
+# ROUND_SECONDS and PERFECT_HOLD depend on difficulty and therefore live in
+# the game mode section further below, not here.
 
-# ponytail: >-Taps in der Runde, die sie sofort beenden. 0 = aus (Automat)
+# ponytail: >-taps during the round that end it immediately. 0 = off (cabinet)
 CHEAT_TAPS = 5
 
-# ── Thema ─────────────────────────────────────────────────────────────────
-# Farben, Texte, Sprites, LED-Farben und welches Sprite zu welchem Marker
-# gehoert, stehen in EINER Datei: themes/<name>.py. Umschalten ohne Codeaenderung:
+# ── Theme ─────────────────────────────────────────────────────────────────
+# Colors, texts, sprites, LED colors, and which sprite belongs to which
+# marker live in ONE file: themes/<name>.py. Switch without a code change:
 #   PNP_THEME=pcb uv run game/main.py
-# Die Namen unten sind der Vertrag -- jedes Thema liefert genau diese, und
-# `uv run game/sprites.py` prueft das fuer alle Dateien in themes/.
-# Neues Thema: sugar_rush.py kopieren, der Kopf der Datei sagt, was zu tun ist.
+# The names below are the contract -- every theme supplies exactly these,
+# and `uv run game/sprites.py` checks that for every file in themes/.
+# New theme: copy sugar_rush.py, the file's header says what to do.
 THEME = os.environ.get("PNP_THEME", "sugar_rush")
 THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "HOWTO",
               "LED_A", "LED_B", "BASE", "SHAPES", "SPRITES", "SPRITE")
@@ -87,115 +89,113 @@ _theme = importlib.import_module(f"themes.{THEME}")
 (BG, GREY, WHITE, ACCENT, CANDY, HOWTO,
  LED_A, LED_B, BASE, SHAPES, SPRITES, SPRITE) = (getattr(_theme, k) for k in THEME_KEYS)
 
-# ── Farben ────────────────────────────────────────────────────────────────
-# Sechs Farben als Leiter von leise nach laut, jede mit genau einem Job:
-#   BG Grund · GREY Beschriftung · WHITE neutrale Werte · ACCENT was der
-#   Besucher beeinflusst (alle vier aus dem Thema) · ORANGE Warnung · RED die
-#   letzten Sekunden. Die beiden bleiben HPI, egal welches Thema:
+# ── Colors ────────────────────────────────────────────────────────────────
+# Six colors as a ladder from quiet to loud, each with exactly one job:
+#   BG base · GREY labels · WHITE neutral values · ACCENT what the visitor
+#   influences (all four from the theme) · ORANGE warning · RED the final
+#   seconds. These two stay HPI regardless of theme:
 ORANGE = (222, 98, 7)       # HPI #DE6207
 RED    = (177, 7, 58)       # HPI #B1073A
 
-# Die Farben der vier Arcade-Knoepfe. Eigene Leiter, absichtlich neben der
-# obigen: sie sagen nichts ueber den Spielstand, sondern welcher *physische*
-# Knopf gemeint ist. Deshalb kommen sie an genau einer Stelle vor -- im
-# Footer-Band, der einzigen Zeile, in der nie ein Spielwert steht. Damit bleibt
-# die Regel "eine Farbe, ein Job" heil. Seit ACCENT pink ist, kommt Gelb
-# ueberhaupt nur noch am Knopf vor.
-BTN_GREEN  = (0, 208, 96)     # rechts -- vorwaerts, bestaetigen
-BTN_RED    = (255, 72, 72)    # links  -- zurueck, abbrechen
-BTN_BLUE   = (64, 156, 255)   # hoch
-BTN_YELLOW = (255, 200, 0)    # runter
-# BTN_RED ist deutlich heller als RED, und das ist kein Geschmack: in den
-# letzten fuenf Sekunden faerbt sich der Grund nach RED, und ein Glyph im
-# selben Ton waere dann genau dort weg, wo "ABBRECHEN" am ehesten gebraucht
-# wird.
+# The colors of the four arcade buttons. Their own ladder, deliberately kept
+# apart from the one above: they say nothing about game state, only which
+# *physical* button is meant. That's why they appear in exactly one place --
+# the footer band, the one row that never carries a game value. That keeps
+# the rule "one color, one job" intact. Since ACCENT is pink, yellow now
+# appears only on the button at all.
+BTN_GREEN  = (0, 208, 96)     # right -- forward, confirm
+BTN_RED    = (255, 72, 72)    # left  -- back, cancel
+BTN_BLUE   = (64, 156, 255)   # up
+BTN_YELLOW = (255, 200, 0)    # down
+# BTN_RED is noticeably lighter than RED, and that's not taste: in the last
+# five seconds the background tints toward RED, and a glyph in the same tone
+# would then disappear exactly where "CANCEL" is most needed.
 
-# ── Schrift ───────────────────────────────────────────────────────────────
-# Press Start 2P (SIL OFL, liegt in assets/). 8x8-Raster: Groesse / 8 ist die
-# Kantenlaenge eines Glyphenpixels, deshalb sind alle Groessen durch 8 teilbar
-# — sonst werden die Pixel innerhalb einer Glyphe ungleich gross.
-# Pfad aus __file__, nicht relativ zum cwd: der systemd-Start hat ein anderes.
+# ── Font ──────────────────────────────────────────────────────────────────
+# Press Start 2P (SIL OFL, lives in assets/). 8x8 grid: size / 8 is the edge
+# length of one glyph pixel, so all sizes are divisible by 8 -- otherwise the
+# pixels within a glyph would come out unevenly sized.
+# Path from __file__, not relative to cwd: the systemd start has a different one.
 FONT_PATH  = os.path.join(os.path.dirname(__file__), "assets",
                           "PressStart2P-Regular.ttf")
-FONT_SIZES = {"big": 168, "mid": 88, "small": 48, "tiny": 32}
+# "title" only for PICK'N'PLAY: 11 glyphs at 168 are 1848 of 1920 px, no margin left.
+FONT_SIZES = {"big": 168, "title": 144, "mid": 88, "small": 48, "tiny": 32}
 
-# ── CRT-Overlay ───────────────────────────────────────────────────────────
-# PNP_CRT=0 und PNP_BARREL=0 schalten die beiden zum Messen ab, ohne die Datei
-# anzufassen. Gedacht fuer A/B-Laeufe auf dem Pi, der Automat nimmt die Defaults.
+# ── CRT overlay ───────────────────────────────────────────────────────────
+# PNP_CRT=0 and PNP_BARREL=0 turn the two off for measuring, without touching
+# the file. Meant for A/B runs on the Pi, the cabinet uses the defaults.
 CRT            = os.environ.get("PNP_CRT", "1") != "0"
-SCANLINE_STEP  = 3     # jede dritte Zeile abdunkeln
-SCANLINE_ALPHA = 60    # in der Halle einstellen, im Zweifel runter
-VIGNETTE_ALPHA = 90    # Abdunklung in den Ecken
+SCANLINE_STEP  = 3     # darken every third row
+SCANLINE_ALPHA = 60    # tune at the venue, lower it if in doubt
+VIGNETTE_ALPHA = 90    # darkening in the corners
 BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
-                       # Woelbung der Scanlines und nichts weiter: sie kruemmen
-                       # sich damit wie auf einer Roehre und ruecken zum Rand
-                       # hin zusammen. Kostet zur Laufzeit nichts, die Karte
-                       # steht beim Start. 0 = waagerechte Zeilen.
-                       # Das Bild selbst wird nicht mehr gewoelbt, siehe
+                       # distortion of the scanlines and nothing more: they
+                       # curve as if on a tube and draw together toward the
+                       # edge. Costs nothing at runtime, the map is built at
+                       # startup. 0 = horizontal lines.
+                       # The image itself is no longer warped, see
                        # crt_gain() in app.py
 
 # ── Sound ─────────────────────────────────────────────────────────────────
-# Die Musik geht unter jedem Effekt kurz zurueck. Auf echter Arcade-Hardware
-# passierte das von selbst: NES und C64 hatten vier bis fuenf Stimmen, und ein
-# Effekt hat sich eine davon genommen. Hier ist es ein Kanalvolumen, weicher.
-DUCK         = 0.55   # Musikpegel waehrend eines Effekts (~-5 dB)
-DUCK_RELEASE = 0.35   # Sekunden zurueck auf voll
+# The music briefly ducks under every effect. On real arcade hardware that
+# happened by itself: NES and C64 had four to five voices, and an effect
+# took one of them. Here it's a channel volume, softer.
+DUCK         = 0.55   # music level during an effect (~-5 dB)
+DUCK_RELEASE = 0.35   # seconds back to full
 
-# ── Spielwerte ────────────────────────────────────────────────────────────
-# marker_id -> Preis in 10-CENT-EINHEITEN. Aenderbar ohne Codeaenderung, das
-# ist der ganze Grund fuer ArUco statt eines trainierten Modells.
+# ── Game values ───────────────────────────────────────────────────────────
+# marker_id -> price in 10-CENT UNITS. Changeable without a code change,
+# that's the whole reason for ArUco instead of a trained model.
 #
-# Warum nicht in Cent: die Preise muessen teilerfremd sein (ggT 1). Glatte
-# Preise in Cent gerechnet haetten ggT 10, und damit waere das Spiel binaer --
-# eine Distanz ist entweder durch den Teiler teilbar und dann mit einem
-# einzigen Griff zu haben, oder sie ist ueberhaupt nicht erreichbar. Es gaebe
-# kein "knapp daneben", und ohne das keine Bestenliste mit Aufloesung, sondern
-# eine Liste aus Nullen und Unmoeglichkeiten.
+# Why not in cents: the prices need to be coprime (gcd 1). Round prices
+# computed in cents would have gcd 10, which would make the game binary --
+# a distance would either be divisible by the divisor and then reachable in
+# a single move, or not reachable at all. There would be no "just off", and
+# without that no leaderboard with resolution, just a list of zeros and
+# impossibilities.
 #
-# In 10-Cent-Einheiten sind 1,40 / 1,70 / 2,10 ... teilerfremd und sehen
-# trotzdem aus wie Preise. Gerechnet wird ueberall in Einheiten, geteilt wird
-# erst bei der Anzeige -- genau einmal, in euro() in scenes.py.
+# In 10-cent units, 1.40 / 1.70 / 2.10 ... are coprime and still look like
+# prices. Everything is computed in units throughout, division happens only
+# at display time -- exactly once, in euro() in scenes.py.
 #
-# Genau ein Marker pro physischem Cupcake. ArucoDetector.marks ist ein Dict mit
-# der ID als Schluessel -- zwei Cupcakes mit demselben Marker zaehlen einmal,
-# und das waere ein stiller Wertungsfehler, der am Messetag wie ein
-# Erkennungsproblem aussieht.
+# Exactly one marker per physical cupcake. ArucoDetector.marks is a dict
+# keyed by ID -- two cupcakes with the same marker count once, and that
+# would be a silent scoring bug that looks like a detection problem on show day.
 VALUES = {0: 14, 1: 17, 2: 21, 3: 24, 4: 28,
           5: 32, 6: 36, 7: 41, 8: 46, 9: 52}
-CENTS  = 10        # ein VALUES-Schritt in Cent. Liest nur euro().
+CENTS  = 10        # one VALUES step in cents. Only read by euro().
 
-# ── Spielmodus ────────────────────────────────────────────────────────────
-# Alles, was eine Runde leichter oder schwerer macht, steht hier als Zahl --
-# und nur hier. Ein Hard Mode ist damit ein weiterer Eintrag in MODES, keine
-# Codeaenderung, und die Rundenlaenge laesst sich durchprobieren, ohne die
-# Datei anzufassen:
+# ── Game mode ─────────────────────────────────────────────────────────────
+# Everything that makes a round easier or harder lives here as a number --
+# and only here. A hard mode is thus just another entry in MODES, no code
+# change, and round length can be tried out without touching the file:
 #
-#   PNP_MODE=hard uv run game/main.py          ganzer Satz
-#   PNP_ROUND_SECONDS=20 uv run game/main.py   einzelner Wert, schlaegt den Satz
+#   PNP_MODE=hard uv run game/main.py          whole set
+#   PNP_ROUND_SECONDS=20 uv run game/main.py   single value, beats the set
 #
-# Wer hier einen Mode dazuschreibt, aendert Zahlen und kein Verhalten. Ein
-# Mode, der mehr braucht (FPV, Gegenspieler), bekommt seine Naht dort, wo er
-# sie braucht -- ein Interface auf Verdacht raet die falsche Stelle.
+# Adding a mode here changes numbers, not behavior. A mode that needs more
+# (FPV, an opponent) gets its seam where it needs it -- a speculative
+# interface would guess the wrong place.
 #
-# ROUND_SECONDS  Rundenlaenge. 30 statt 60 seit der Wertungssitzung: doppelter
-#                Durchsatz am Stand, und perfekt wird selten genug, dass die
-#                1000 etwas bedeutet.
-# PERFECT_HOLD   so lange muss die Summe stimmen, dann endet die Runde
-#                vorzeitig. Die alten 5 s waeren bei 30 s ein Sechstel der
-#                Runde. Gegen Flackern reicht ohnehin MARKER_HOLD.
-# GAP_MOVES      so viele Zuege darf die perfekte Loesung kosten. Ein
-#                teleoperierter Pick dauert 10-20 s -- bei 30 s Rundenzeit
-#                waeren drei Zuege ein Versprechen, das der Arm nicht haelt.
-# GAP_MIN/MAX    Band, in dem die Distanz zum Ziel liegen darf. Nicht der
-#                bindende Regler, siehe GAP_ONE_MAX.
-# GAP_ONE_MISS   so weit muss der beste EINZELNE Zug mindestens danebenliegen.
-#                Ohne die Untergrenze gewinnt ein Gluecksgriff, und das ist
-#                eine Ziehung, keine Aufgabe.
-# GAP_ONE_MAX    ... und so weit hoechstens. Der bindende Regler fuer die
-#                Vielfalt: am leeren Tablett laesst 15 (1,50 EUR) genau 14
-#                moegliche Ziele fuer den ganzen Messetag uebrig, 25 laesst 21.
-#                Gemessen mit diesem Preissatz, der Selbsttest in balance.py
-#                gibt die Zahl bei jedem Lauf aus.
+# ROUND_SECONDS  round length. 30 instead of 60 since the scoring meeting:
+#                double throughput at the booth, and perfect becomes rare
+#                enough that the 1000 means something.
+# PERFECT_HOLD   how long the total has to be right before the round ends
+#                early. The old 5 s would be a sixth of the round at 30 s.
+#                MARKER_HOLD is enough against flicker anyway.
+# GAP_MOVES      how many moves the perfect solution may cost. A
+#                teleoperated pick takes 10-20 s -- at 30 s round time, three
+#                moves would be a promise the arm can't keep.
+# GAP_MIN/MAX    band the distance to the target may fall in. Not the
+#                binding dial, see GAP_ONE_MAX.
+# GAP_ONE_MISS   how far off the best SINGLE move must be at minimum.
+#                Without this lower bound a lucky grab wins, and that's a
+#                raffle, not a task.
+# GAP_ONE_MAX    ... and at most this far off. The binding dial for variety:
+#                on an empty tray, 15 (EUR 1.50) leaves exactly 14 possible
+#                targets for the whole show day, 25 leaves 21. Measured with
+#                this price set, the self-test in balance.py prints the
+#                number on every run.
 MODES = {
     "normal": dict(ROUND_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
@@ -204,11 +204,11 @@ MODE = os.environ.get("PNP_MODE", "normal")
 
 
 def _mode(key):
-    """Wert aus dem aktiven Modus, per PNP_<KEY> ueberschreibbar.
+    """Value from the active mode, overridable via PNP_<KEY>.
 
-    Der Typ kommt aus dem Eintrag, nicht aus der Umgebung: PNP_PERFECT_HOLD=2.5
-    bleibt damit float und PNP_GAP_MOVES=3 wird int, ohne dass hier eine
-    Tabelle von Typen gepflegt werden muss.
+    The type comes from the entry, not from the environment: PNP_PERFECT_HOLD=2.5
+    thus stays a float and PNP_GAP_MOVES=3 becomes an int, without having to
+    maintain a table of types here.
     """
     default = MODES[MODE][key]
     return type(default)(os.environ.get("PNP_" + key, default))
@@ -222,120 +222,121 @@ GAP_MAX       = _mode("GAP_MAX")
 GAP_ONE_MISS  = _mode("GAP_ONE_MISS")
 GAP_ONE_MAX   = _mode("GAP_ONE_MAX")
 
-# ── Wertung ───────────────────────────────────────────────────────────────
-# Die Punktzahl geht bis 1000 wie bei einer Boxmaschine: zwei Teile, und der
-# zweite ist nur fuer die zu holen, die perfekt waren. Formel und Begruendung
-# stehen in balance.py bei points().
-SCORE_MAX  = 900   # fuer Genauigkeit allein
-SCORE_TIME = 100   # Zeitbonus obendrauf, zusammen also 1000
-SCORE_CURVE = 2    # Exponent. 1 = linear, 2 spreizt den Bereich, in dem die
-                   # Leute tatsaechlich landen. Ein Zeichen, falls es am
-                   # Automaten zu hart aussieht.
+# ── Scoring ───────────────────────────────────────────────────────────────
+# The score goes up to 1000 like on a boxing machine: two parts, and the
+# second is only there for those who were perfect. Formula and rationale
+# live in balance.py at points().
+SCORE_MAX  = 900   # for accuracy alone
+SCORE_TIME = 100   # time bonus on top, together 1000
+SCORE_CURVE = 2    # exponent. 1 = linear, 2 spreads out the range people
+                   # actually land in. A knob to turn if it looks too harsh
+                   # at the cabinet.
 
-# ── Zwischenszene ─────────────────────────────────────────────────────────
-# Der Idle-Screen ist stumm, die Musik faengt hier an. Sechs Stunden Chiptune
-# als Dauerteppich sind anstrengend -- und sie markieren nichts. Mit stillem
-# Idle wird der Musikeinsatz zum Signal "es geht los".
-DEMO_VIDEO = None            # Pfad zum Clip. None = nur Text, Szene laeuft trotzdem
-DEMO_SIZE  = (1024, 576)     # 16:9 -- andere Ratio verzerrt, wie bei CAM_VIEW
-# HOWTO steht im Thema.
+# ── Intermission scene ────────────────────────────────────────────────────
+# The idle screen is silent, the music starts here. Six hours of chiptune as
+# a constant backdrop is exhausting -- and it marks nothing. With a silent
+# idle, the music kicking in becomes the signal "it's starting".
+DEMO_VIDEO = None            # path to the clip. None = text only, scene still runs
+DEMO_SIZE  = (1024, 576)     # 16:9 -- a different ratio distorts, like with CAM_VIEW
+# HOWTO lives in the theme.
 
-# ── Persistenz ────────────────────────────────────────────────────────────
+# ── Persistence ───────────────────────────────────────────────────────────
 DB_PATH = "scores.db"
 TOP_N   = 10
 
-# ── Eingabe ───────────────────────────────────────────────────────────────
-# Vier Arcade-Knoepfe, sonst nichts. Konvention im ganzen Spiel:
-#   right   = vorwaerts / bestaetigen
-#   left    = zurueck / abbrechen
-#   up/down = auswaehlen
+# ── Input ─────────────────────────────────────────────────────────────────
+# Four arcade buttons, nothing else. Convention throughout the game:
+#   right   = forward / confirm
+#   left    = back / cancel
+#   up/down = select
 KEYMAP = {
     pygame.K_UP:   "up",   pygame.K_DOWN:  "down",
     pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
-    pygame.K_q:    "quit",   # ponytail: nur Entwicklung, am Automaten gibt es das nicht
+    pygame.K_q:    "quit",   # ponytail: development only, doesn't exist on the cabinet
 }
 
-# Der physische Knopf hinter jeder Richtung, als Farbe und als Glyph. Die
-# Hinweiszeile faerbt jeden Pfeil damit ein, und das ist die ganze
-# Bedienungsanleitung: der Besucher sucht die Farbe, nicht die Richtung.
-# Gruen = los, Rot = zurueck sind die einzigen zwei Farbbedeutungen, die jeder
-# mitbringt; Blau und Gelb sind frei und deshalb einfach oben und unten.
+# The physical button behind each direction, as a color and as a glyph. The
+# hint line tints each arrow with it, and that's the whole instruction
+# manual: the visitor looks for the color, not the direction. Green = go,
+# red = back are the only two color meanings everyone already knows; blue
+# and yellow are free and so simply up and down.
 BUTTON_COLORS = {"up": BTN_BLUE, "down": BTN_YELLOW,
                  "left": BTN_RED, "right": BTN_GREEN}
 ARROWS = {"▲": "up", "▼": "down", "◀": "left", "▶": "right"}
 
-# Halten scrollt durch die Buchstaben: (Verzoegerung, Wiederholrate) in ms
+# Holding scrolls through the letters: (delay, repeat rate) in ms
 KEY_REPEAT = (400, 60)
 
 # ── Hardware ──────────────────────────────────────────────────────────────
 CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
-# (Arm-Kamera, Top-Down). Zweimal derselbe Index = eine Webcam in beiden
-# Panes, das ist der Layout-Mock.
-# Der Detector haengt immer an der zweiten, der Top-Down-Kamera.
+# (arm camera, top-down). Same index twice = one webcam in both panes,
+# that's the layout mock.
+# The detector always attaches to the second, the top-down, camera.
 #
-# Am Automaten (9.9.2026 am Bild geprueft, nicht geraten): video0 steht seitlich
-# und um 90 Grad gedreht am Arm, video2 schaut senkrecht auf das Tablett.
-# NICHT (0, 1): video1 und video3 sind Metadata-Nodes und liefern kein Bild.
+# On the cabinet (checked against the image on 2026-09-09, not guessed):
+# video0 sits on the side and rotated 90 degrees on the arm, video2 looks
+# straight down onto the tray.
+# NOT (0, 1): video1 and video3 are metadata nodes and deliver no image.
 CAM_INDEXES   = (0, 0) if MAC else (0, 2)
 CAM_SIZE      = (1280, 720)
-# 544 x 306 ist exakt 16:9 (544 * 9/16 = 306) — andere Ratio verzerrt.
-# Kleiner als die frueheren 800 x 450: der Balken und die Handlungsanweisung
-# liegen jetzt darueber und brauchen den Platz. Die Panes sind Kontrolle, kein
-# Spielinhalt; aus 8 m liest ohnehin niemand ein Kamerabild.
-CAM_VIEW      = (544, 306)
-CAM_POS       = ((490, 757), (1430, 757))   # Mittelpunkte, links Arm
-MARKER_HOLD   = 0.5    # Hysterese: Marker zaehlt weiter, solange kuerzer verdeckt
-DETECT_HZ     = 15     # Erkennungsrate, entkoppelt von den 60 FPS
-# Detektionsfenster der Top-Down-Kamera, als Anteile (x, y, breite, hoehe).
-# Die Weitwinkellinse sieht sonst den halben Messestand mit; erkannt wird nur,
-# was hier drin liegt. Das Rechteck wird ins Bild gezeichnet, also stellt man
-# es in der Halle beim Ausrichten der Kamera ein und sieht sofort das Ergebnis.
+# 768 x 432 is exactly 16:9 (768 * 9/16 = 432) — a different ratio distorts.
+# Twice the area of the earlier 544 x 306: the player steers the arm by these
+# images, so they get priority. The instruction sits above, the bar below,
+# the timer pie in the 192 px gap between the two.
+CAM_VIEW      = (768, 432)
+CAM_POS       = ((480, 486), (1440, 486))   # centers, left is the arm
+MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
+DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
+# Detection window of the top-down camera, as fractions (x, y, width, height).
+# The wide-angle lens otherwise sees half the booth; only what's inside this
+# window is detected. The rectangle is drawn into the image, so it's set in
+# the hall while aligning the camera and the result is visible immediately.
 TRAY_ROI      = (0.20, 0.15, 0.60, 0.70)
-MARK_FONT     = "tiny"    # Schriftgroesse der eingeblendeten Preise. Wird
-                          # zur Zeit von nichts gelesen: die Einblendung ist
-                          # seit dem 11.9.2026 auskommentiert, weil die Preise
-                          # waehrend der Runde verdeckt bleiben sollen. Steht
-                          # hier, damit das Einkommentieren in GameScene.overlay
-                          # eine Handbewegung bleibt -- beim Ausrichten der
-                          # Kamera will man sehen, WELCHEN Marker sie erkennt.
-MARK_WIDTH    = 5         # Strichstaerke des Detektionsfensters
-# ── Knoepfe ───────────────────────────────────────────────────────────────
-# BCM-Nummern, nicht Header-Pins. So verdrahtet am 11.9.2026: Header 22 · 24 ·
-# 26 · 28 sind GPIO 25 · 8 · 7 · 1, gemeinsame Masse an Header 30. Eine Reihe,
-# ein Stecker.
+MARK_FONT     = "tiny"    # font size of the overlaid prices. Currently read
+                          # by nothing: the overlay has been commented out
+                          # since 2026-09-11, because the prices are meant to
+                          # stay hidden during the round. Kept here so that
+                          # uncommenting it in GameScene.overlay stays a
+                          # one-line change -- when aligning the camera you
+                          # want to see WHICH marker it detects.
+MARK_WIDTH    = 5         # line width of the detection window
+# ── Buttons ───────────────────────────────────────────────────────────────
+# BCM numbers, not header pins. Wired like this since 2026-09-11: header
+# 22 · 24 · 26 · 28 are GPIO 25 · 8 · 7 · 1, common ground at header 30. One
+# row, one connector.
 #
-# Zwei davon waren frueher als vergeben gefuehrt und sind es jetzt nicht mehr:
-#   1          ID_SC des HAT-EEPROMs. Wird nur beim Booten gelesen, danach
-#              ein normaler Pin. Knopf beim Einschalten nicht gedrueckt halten.
-#   7, 8       CE1/CE0 von SPI0. Deshalb darf SPI0 NICHT an sein
-#              (dtparam=spi=on), sonst belegt der Kernel die Pins und gpiozero
-#              meldet "GPIO busy". Der Streifen laeuft ueber SPI5, siehe unten.
+# Two of these used to be listed as taken and no longer are:
+#   1          ID_SC of the HAT EEPROM. Only read at boot, a normal pin
+#              afterward. Don't hold the button down while powering on.
+#   7, 8       CE1/CE0 of SPI0. That's why SPI0 must NOT be enabled
+#              (dtparam=spi=on), otherwise the kernel claims the pins and
+#              gpiozero reports "GPIO busy". The strip runs over SPI5, see below.
 #
-# Taster gegen GND, interner Pull-up, gedrueckt = LOW. Kein Widerstand,
-# kein Kondensator: das Entprellen macht gpiozero.
+# Buttons against GND, internal pull-up, pressed = LOW. No resistor, no
+# capacitor: debouncing is done by gpiozero.
 #
-# Der Not-Aus ist NICHT hier. Er sitzt in der Servo-Stromversorgung und trennt
-# 12 V. Ein Not-Aus, der erst durch Python muss, ist keiner.
-BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blau, gelb, rot, gruen
-# Wie CAMERA: Default ist der Automat, PNP_BUTTONS=0 zum Entwickeln ohne GPIO.
+# The emergency stop is NOT here. It sits in the servo power supply and cuts
+# 12 V. An emergency stop that has to go through Python first isn't one.
+BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blue, yellow, red, green
+# Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
 BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
 
-# ── LED-Streifen ──────────────────────────────────────────────────────────
-# WS2812-Protokoll ueber SPI5, Daten auf GPIO 14 (Header 8). Der RP1 des Pi 5
-# fuehrt dort SPI5-MOSI heraus (dtoverlay=spi5-1cs-pi5, belegt auch 12, 13, 15),
-# also bleibt der Treiber derselbe wie auf SPI0. GPIO 14 ist sonst UART0 mit
-# der Bootkonsole: die muss aus, sonst gehen Kernelmeldungen als Farben raus.
-# Einrichtung in docs/betrieb.md. Fehlt das Geraet (Mac, SPI aus), bleiben die
-# LEDs stumm -- wie Music ohne Audiogeraet.
+# ── LED strip ─────────────────────────────────────────────────────────────
+# WS2812 protocol over SPI5, data on GPIO 14 (header 8). The RP1 on the Pi 5
+# routes SPI5-MOSI out there (dtoverlay=spi5-1cs-pi5, also occupies 12, 13,
+# 15), so the driver stays the same as on SPI0. GPIO 14 is otherwise UART0
+# with the boot console: that has to be off, or kernel messages come out as
+# colors. Setup in docs/operation.md. If the device is missing (Mac, SPI
+# off), the LEDs stay silent -- like Music without an audio device.
 LED_DEV     = "/dev/spidev5.0"
-# Anzahl und Helligkeit per Umgebung, damit der erste Test am Streifen keine
-# Dateiaenderung auf dem Pi braucht: PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1
-LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 480))   # ponytail: geraten, 3 m x 160/m
-LED_ORDER   = "GRB"   # WS2812B. WS2811-Streifen (12/24 V) sind oft RGB -- am Streifen pruefen
+# Count and brightness via environment, so the first test on the strip needs
+# no file change on the Pi: PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1
+LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 480))   # ponytail: guessed, 3 m x 160/m
+LED_ORDER   = "GRB"   # WS2812B. WS2811 strips (12/24 V) are often RGB -- check on the strip
 LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 0.3))
-                      # Strombudget: 3 m FCOB bei Vollweiss ~8,5 A an 5 V. Das ist
-                      # Netzteil- und Waermefrage in einer Zahl, nicht Geschmack.
+                      # power budget: 3 m FCOB at full white ~8.5 A at 5 V.
+                      # That's a PSU and heat question in one number, not taste.
 LED_FPS     = 30
-LED_STRIPES = 24      # Zuckerstangen-Streifen ueber die ganze Laenge, dichteunabhaengig
-# LED_A / LED_B (Zuckerstange, Balken) kommen aus dem Thema; Rot bleibt HPI:
+LED_STRIPES = 24      # candy-cane stripes across the full length, density-independent
+# LED_A / LED_B (candy cane, bar) come from the theme; red stays HPI:
 LED_RED     = (255, 0, 20)

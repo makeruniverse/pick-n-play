@@ -1,19 +1,19 @@
-"""Screenshots aller Szenen, ohne Automat, ohne Kamera, ohne Fenster.
+"""Screenshots of all scenes, no cabinet, no camera, no window.
 
-    uv run tools/shots.py [zielordner]      # Vorgabe: docs/shots
+    uv run tools/shots.py [target_dir]      # default: docs/shots
 
-Fuer das Build-Log. Nach jeder UI-Aenderung einmal laufen lassen, dann liegt
-der Stand als PNG im Repo und `git diff --stat docs/shots` sagt, welche Szenen
-sich geaendert haben.
+For the build log. Run once after every UI change, then the current state
+sits as a PNG in the repo and `git diff --stat docs/shots` shows which scenes
+changed.
 
-Derselbe Trick wie der Layout-Selbsttest am Ende von `scenes.py`: SDL auf den
-Dummy-Treiber, ein Stub-Ctx statt Musik, Datenbank und Detector, dann
-`scene.render()` auf eine eigene Flaeche. Kein Automat, kein Vergleichsbild,
-nichts zu pflegen. Der Unterschied zum Selbsttest ist eine Zeile -- statt die
-Rechtecke zu pruefen, wird die Flaeche gespeichert.
+Same trick as the layout self-test at the end of `scenes.py`: SDL on the
+dummy driver, a stub ctx instead of music, database and detector, then
+`scene.render()` onto its own surface. No cabinet, no reference image,
+nothing to maintain. The difference from the self-test is one line -- instead
+of checking the rectangles, the surface gets saved.
 
-Das CRT-Overlay liegt mit drauf: das Bild soll zeigen, wie der Automat
-aussieht, und ohne Scanlines sieht es aus wie ein anderes Spiel.
+The CRT overlay is included: the image should show what the cabinet looks
+like, and without scanlines it looks like a different game.
 """
 
 import os
@@ -33,26 +33,26 @@ import scenes                                                   # noqa: E402
 
 
 class Stub:
-    """Musik, Datenbank und Detector auf einmal -- sie tun hier alle nichts."""
+    """Music, database and detector all in one -- they all do nothing here."""
 
     def __getattr__(self, _):    return lambda *a, **k: None
-    # Punkte, absteigend -- seit der Wertungssitzung ist hoch gut, und eine
-    # Attrappe mit einstelligen Zahlen zeigt im Build-Log ein Spiel, das es
-    # nicht mehr gibt. Vierstellig ganz oben: das ist eine perfekte Runde.
+    # Scores, descending -- since the scoring session, high is good, and a
+    # dummy with single-digit numbers would show a game in the build log that
+    # no longer exists. Four digits at the top: that's a perfect round.
     def top(self, n=5):          return [("VAD", 1000), ("MAX", 948), ("ANN", 871),
                                          ("LEO", 795), ("KIM", 640)][:n]
-    # Leer, wie am Automaten bei Rundenbeginn: nur so bekommt GameScene eine
-    # Distanz, die zu einer echten Runde passt. Was im Bild auf dem Tablett
-    # liegt, setzt der Plan unten ueber `total`.
+    # Empty, like the cabinet at the start of a round -- only this way does
+    # GameScene get a distance that matches a real round. What's shown on the
+    # tray in the image is set by the plan below via `total`.
     def fresh(self):             return {}
 
 
 class StubView:
-    """Kamera-Pane als Platzhalter.
+    """Camera pane as a placeholder.
 
-    Ohne das haette der Rundenbildschirm im Build-Log zwei schwarze Loecher an
-    der auffaelligsten Stelle -- ein Bild, das etwas Falsches ueber den Stand
-    sagt. Ein beschrifteter Kasten sagt „hier ist die Kamera", und das stimmt.
+    Without this the round screen in the build log would have two black holes
+    in the most noticeable spot -- an image that says something wrong about
+    the state. A labeled box says "this is the camera," and that's true.
     """
 
     det = None
@@ -68,6 +68,14 @@ class StubView:
         return self.surf
 
 
+def burst(x, y, t):
+    """Sprinkle pop, already t seconds in -- at t = 0 it is a single clump."""
+    fx = scenes.Sprinkles(x, y)
+    for _ in range(round(t * 30)):
+        fx.update(1 / 30)
+    return fx
+
+
 def shots(out):
     pygame.init()
     fonts = {k: pygame.font.Font(FONT_PATH, s) for k, s in FONT_SIZES.items()}
@@ -76,17 +84,17 @@ def shots(out):
               views=(StubView("ARM CAM", fonts["tiny"]),
                      StubView("TOP-DOWN CAM", fonts["tiny"])))
 
-    random.seed(0)    # balance.gap() wuerfelt das Ziel, sonst wandern 3-6 bei jedem Lauf
+    random.seed(0)    # balance.gap() rolls the target, otherwise 3-6 drifts each run
     game = scenes.GameScene(ctx)
-    # Eine Runde, die knapp daneben lag: 0,30 EUR offen bei 5,00 EUR Distanz,
-    # Zeit abgelaufen. Ergibt eine Punktzahl mit drei Stellen statt einer
-    # glatten Zahl, an der man den Hochdreher nicht beurteilen kann.
+    # A round that landed just off: EUR 0.30 short at EUR 5.00 distance, time
+    # ran out. Gives a score with three digits instead of a round number that
+    # wouldn't let you judge the count-up.
     done = scenes.Result(target=67, total=64, dist=50, left=0.0,
                          marks={0: 1, 3: 1, 7: 1, 9: 1})
     board = scenes.LeaderboardScene(ctx, done)
-    # (Dateiname, Szene, Zustand). Der Zustand wird ins __dict__ geschrieben --
-    # dieselbe Technik wie im Selbsttest, damit auch die Zwischenstaende ins
-    # Bild kommen, die man von Hand kaum trifft (letzte Sekunden, PERFECT).
+    # (filename, scene, state). The state gets written into __dict__ -- same
+    # technique as in the self-test, so the in-between states that are hard to
+    # hit by hand also make it into the image (final seconds, PERFECT).
     plan = [
         ("1-idle",         scenes.IdleScene(ctx),                     {}),
         ("2-howto",        scenes.HowToScene(ctx),                    {}),
@@ -96,11 +104,12 @@ def shots(out):
         ("5-game-warning", game, dict(left=WARN_SECONDS * 0.4)),
         ("6-game-perfect", game, dict(left=ROUND_SECONDS * 0.7,
                                       total=game.target, hit=1.0,
-                                      fx=scenes.Sprinkles())),
-        # done=True: der Screenshot zeigt den Endzustand, nicht die erste
-        # Zehntelsekunde des Hochlaufs.
+                                      fx=burst(960, 178, 0.25))),
+        # done=True: the screenshot shows the final state, not the first
+        # tenth of a second of the count-up.
         ("7-score",        scenes.DisplayScoreScene(ctx, done),
-                           dict(shown=done.score, done=True, t=2.5)),
+                           dict(shown=done.score, done=True, t=2.5,
+                                fx=burst(960, 300, 2.5))),
         ("8-name",         board, dict(cursor=2)),
     ]
 
@@ -108,7 +117,7 @@ def shots(out):
     os.makedirs(out, exist_ok=True)
     for name, scene, state in plan:
         scene.__dict__.update(state)
-        # 32 Bit, sonst hat get_view("2") in px() nicht die Form, die cv2 will.
+        # 32 bit, otherwise get_view("2") in px() doesn't have the shape cv2 wants.
         surf = pygame.Surface((WIDTH, HEIGHT), depth=32)
         surf.fill(BG)
         scene.render(surf)
