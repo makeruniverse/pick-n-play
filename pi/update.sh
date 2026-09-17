@@ -12,9 +12,11 @@ R=/home/ubuntu/picknplay
 URL=https://github.com/makeruniverse/pick-n-play.git
 BAD=/var/lib/pnp/bad
 
-g()       { sudo -H -u ubuntu timeout 120 git -C $R "$@"; }
+# as ubuntu, via setpriv: sudo would log two PAM lines per call, every 5 min
+as_ubuntu() { HOME=/home/ubuntu setpriv --reuid=ubuntu --regid=ubuntu --init-groups "$@"; }
+g()       { as_ubuntu timeout 120 git -C $R "$@"; }
 changed() { ! g diff --quiet "$old" "$new" -- "$@"; }
-sync()    { sudo -H -u ubuntu timeout 600 /home/ubuntu/.local/bin/uv --directory $R sync --extra pi; }
+uv_sync() { as_ubuntu timeout 600 /home/ubuntu/.local/bin/uv --directory $R sync --extra pi; }
 healthy() {
     for u in $units; do
         systemctl is-active -q $u || return 1
@@ -27,7 +29,7 @@ main() {
     if ! g fsck --connectivity-only --no-progress >/dev/null 2>&1; then
         echo "repo broken, re-cloning"
         rm -rf $R.new
-        sudo -H -u ubuntu timeout 300 git clone -q -b expo $URL $R.new || return 0
+        as_ubuntu timeout 300 git clone -q -b expo $URL $R.new || return 0
         mv $R/.venv $R/scores.db* $R.new/ 2>/dev/null
         mv $R $R.broken.$(date +%s) && mv $R.new $R
         systemctl restart pnp-expo teleop
@@ -49,7 +51,7 @@ main() {
 
     echo "update ${old:0:7} -> ${new:0:7}"
     g checkout -q -f -B expo "$new" || return 0
-    changed uv.lock pyproject.toml && sync
+    changed uv.lock pyproject.toml && uv_sync
     changed pi/setup.sh && bash $R/pi/setup.sh
     units=pnp-expo
     changed teleop && units="$units teleop"   # restarting teleop drops the arm, only if needed
@@ -63,7 +65,7 @@ main() {
     echo "update ${new:0:7} unhealthy, rolling back to ${old:0:7}"
     echo "$new" > $BAD
     g checkout -q -f -B expo "$old"
-    changed uv.lock pyproject.toml && sync
+    changed uv.lock pyproject.toml && uv_sync
     changed pi/setup.sh && bash $R/pi/setup.sh
     systemctl restart $units
 }

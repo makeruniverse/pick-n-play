@@ -107,4 +107,5 @@ EOF
 
 systemctl daemon-reload
 systemctl enable -q pnp-expo.service teleop.service pnp-update.timer
+systemctl start pnp-update.timer   # a timer only runs once started, not just enabled
 echo "expo setup done"
