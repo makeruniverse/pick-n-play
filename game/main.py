@@ -1,11 +1,14 @@
+import os
+
 import cv2
 import pygame
 from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA,
-                    CAM_INDEXES, CAM_ZOOM, DEMO_VIDEO, CV_THREADS, BUTTONS)
+                    CAM_INDEXES, CAM_ZOOM, DEMO_VIDEO, CV_THREADS, BUTTONS,
+                    CAM_STALE)
 from app import Ctx, run_game
 from db import DB
 from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
-                Leds, VideoView)
+                Leds, VideoView, notify)
 from music import Music, SR, BUF
 from scenes import IdleScene
 
@@ -30,7 +33,24 @@ def main():
               views=(CameraView(cams[arm]), CameraView(cams[top], det)) if cams else (),
               demo=VideoView(DEMO_VIDEO) if DEMO_VIDEO else None,
               buttons=Buttons() if BUTTONS else None)
-    run_game(IdleScene(ctx), WIDTH, HEIGHT, FPS)
+    # Expo mode (pi/setup.sh): systemd sets RUNTIME_DIRECTORY and NOTIFY_SOCKET.
+    # The scene name goes to a file so the updater only restarts between
+    # rounds; the watchdog ping only goes out while every camera delivers.
+    run_dir = os.environ.get("RUNTIME_DIRECTORY")
+    last = None
+
+    def beat(scene):
+        nonlocal last
+        name = type(scene).__name__
+        if run_dir and name != last:
+            with open(os.path.join(run_dir, "state"), "w") as f:
+                f.write(name)
+            last = name
+        if all(c.age() < CAM_STALE for c in cams.values()):
+            notify("WATCHDOG=1")
+
+    notify("READY=1")
+    run_game(IdleScene(ctx), WIDTH, HEIGHT, FPS, beat)
     ctx.leds.close()
     for c in cams.values():
         c.close()

@@ -102,7 +102,7 @@ def px(s):
         s.get_height(), s.get_width(), 4)
 
 
-def run_game(scene, width, height, fps):
+def run_game(scene, width, height, fps, beat=None):
     pygame.init()
     # No more pygame.SCALED: the design resolution *is* the panel resolution,
     # there's nothing to scale. vsync without SCALED is backend-dependent --
@@ -145,6 +145,8 @@ def run_game(scene, width, height, fps):
             break
 
         scene.ctx.music.update()
+        if beat:
+            beat(scene)    # expo heartbeat, see main.py
         scene.update(dt)
         scene.render(screen)
         if gain is not None:

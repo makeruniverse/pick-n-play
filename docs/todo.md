@@ -1,4 +1,4 @@
-# To-dos — As of 2026-09-11
+# To-dos — As of 2026-09-17
 
 Order follows the project's principle: something runs after every step.
 Legend: ● done · ◐ started · ○ open · ✱ waiting on a decision
@@ -9,7 +9,7 @@ Legend: ● done · ◐ started · ○ open · ✱ waiting on a decision
 
 The game is harder than expected. The scoring scales stay as they are.
 
-- ○ **Geofencing the arms**: not today, see section 1
+- ◐ **Geofencing the arms**: code done (2026-09-17), limits still to dial in, see section 1
 - ● **Remove the vignette**: the panel has poor viewing angles, so dark corners look even darker
 - ● **Slightly brighter background**: the whole screen looks a bit dark
 - ● **Smaller detection window**: right now everything on the surface falls inside it
@@ -20,17 +20,25 @@ The game is harder than expected. The scoring scales stay as they are.
 
 ## 1 · Hardware integration
 
-### ○ Geofencing the arms
-`run_teleop.sh` starts the plain `lerobot-teleoperate`. `SO101FollowerConfig`
-only knows `max_relative_target` — that limits the **step size**, not the
-**position**. LeRobot has no absolute joint limits.
+### ◐ Geofencing the arms
+`SO101FollowerConfig` only knows `max_relative_target` — that limits the
+**step size**, not the **position**. LeRobot has no absolute joint limits.
 
-So a custom teleop loop (`teleop/run.py`, ~30 lines): read the leader, clamp
-each joint into a band, write the follower. The limits come from a table in
-the same file and get dialed in on the machine, not guessed.
+Done 2026-09-17: `teleop/run.py` replaces `run_teleop.sh`. It reads the
+leader, clamps each joint into its band from `LIMITS`, writes the follower,
+and pings the systemd watchdog. At the edge only that joint stops.
 
-Side effect in our favor: the loop then becomes our file, and idle torque
-shutoff, park pose, and watchdog will later have a home.
+Open: `LIMITS` is still the full range. On the machine run `pnp-arm-limits`,
+move the leader to the safe edges, Ctrl-C, paste the printed table.
+Idle torque shutoff, park pose and wake ramp have a home now, not built.
+
+### ○ Self-healing: calibration without us
+If teleop can't start because the calibration doesn't match (motor swapped,
+`~/.cache` wiped), `connect()` asks on stdin, and under systemd that's a
+restart loop. Goal: a layperson can recalibrate at the booth, guided by the
+screen and the four buttons, no keyboard. Needs: teleop reports "needs
+calibration" to the game, a calibration scene, LeRobot's calibrate() driven
+without `input()`. Not started.
 
 ### ● Buttons on GPIO
 Pins **17 · 27 · 22 · 23** (header 11 · 13 · 15 · 16), buttons against GND,

@@ -1,6 +1,7 @@
 import fcntl
 import os
 import random
+import socket
 import struct
 import threading
 import time
@@ -10,9 +11,20 @@ import numpy as np
 import pygame
 
 from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ,
-                    TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT,
+                    TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
                     LED_STRIPES, LED_A, LED_B, LED_RED)
+
+
+def notify(msg):
+    """sd_notify without the dependency: one datagram to systemd. No-op
+    outside a Type=notify unit (Mac, pnp-start)."""
+    addr = os.environ.get("NOTIFY_SOCKET")
+    if not addr:
+        return
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+        s.connect("\0" + addr[1:] if addr[0] == "@" else addr)   # @ = abstract socket
+        s.sendall(msg.encode())
 
 
 def _quad(cx, cy, r=0.06):
@@ -85,6 +97,7 @@ class Camera:
         self.lock = threading.Lock()
         self.frame = None
         self.seq = 0          # counts new frames so CameraView can cache
+        self.t = time.monotonic()   # last new frame, see age()
         self.running = True
         threading.Thread(target=self._loop, daemon=True).start()
         # isOpened() only says the device let itself be opened -- whether
@@ -113,6 +126,12 @@ class Camera:
             with self.lock:
                 self.frame = frame
                 self.seq += 1
+                self.t = time.monotonic()
+
+    def age(self):
+        """Seconds since the last new frame. A dead or hung camera only shows
+        up here: read() keeps returning the last frame."""
+        return time.monotonic() - self.t
 
     def read(self):
         with self.lock:
@@ -224,9 +243,17 @@ class Buttons:
         self.btns = {a: Button(p, pull_up=True, bounce_time=0.02)
                      for p, a in pins.items()}
         self.wait = {}     # action -> seconds until the next repeat
+        self.held = 0.0    # all four pressed for this long, see pump()
 
     def pump(self, dt):
         """Actions that have fired since the last frame."""
+        # Staff escape hatch: all four held for HOLD_QUIT seconds -> "quit".
+        # In expo mode systemd starts the game again, so this is a restart.
+        pressed = [b.is_pressed for b in self.btns.values()]
+        self.held = self.held + dt if all(pressed) else 0.0
+        if self.held >= HOLD_QUIT:
+            self.held = 0.0
+            return ["quit"]
         out = []
         for a, b in self.btns.items():
             if not b.is_pressed:
@@ -409,12 +436,14 @@ class Leds:
         for o in range(0, len(data), self.chunk):
             os.write(self.fd, data[o:o + self.chunk])
 
-    def close(self):
+    def close(self, rgb=(0, 0, 0)):
+        """Off, don't stay stuck on the last frame. The expo unit passes
+        LED_DOWN here when the game crashed (pi/setup.sh, ExecStopPost)."""
         if not self.run:
             return
         self.run = False
         self.th.join()
-        self._write(np.zeros((self.n, 3)))   # off, don't stay stuck on the last frame
+        self._write(np.tile(rgb, (self.n, 1)))
         os.close(self.fd)
 
 
@@ -480,7 +509,7 @@ if __name__ == "__main__":
         is_pressed = False
     btn = Buttons.__new__(Buttons)
     btn.delay, btn.rate = 0.5, 0.25
-    btn.btns, btn.wait = {"up": _Pin()}, {}
+    btn.btns, btn.wait, btn.held = {"up": _Pin()}, {}, 0.0
     assert btn.pump(0.125) == []                        # not pressed
     btn.btns["up"].is_pressed = True
     assert btn.pump(0.125) == ["up"], "edge doesn't fire immediately"
@@ -491,6 +520,10 @@ if __name__ == "__main__":
     assert btn.pump(0.75) == ["up"] * 3, "long frames swallow repeats"
     btn.btns["up"].is_pressed = False
     assert btn.pump(0.125) == [] and btn.wait == {}, "release not forgotten"
+    # All buttons held for HOLD_QUIT -> quit, once
+    btn.btns["up"].is_pressed = True
+    btn.pump(HOLD_QUIT / 2)
+    assert btn.pump(HOLD_QUIT / 2) == ["quit"] and btn.held == 0.0
 
     # 5 · FakeDetector has the same interface: starts empty, adds over time
     fk = FakeDetector(period=0.05)

@@ -337,6 +337,8 @@ MARK_WIDTH    = 5         # line width of the detection window
 # The emergency stop is NOT here. It sits in the servo power supply and cuts
 # 12 V. An emergency stop that has to go through Python first isn't one.
 BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blue, yellow, red, green
+HOLD_QUIT     = 5.0    # all four buttons held this long -> game exits (expo: systemd restarts it)
+CAM_STALE     = 5.0    # no new camera frame for this long -> stop the watchdog, systemd restarts
 # Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
 BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
 
@@ -360,3 +362,4 @@ LED_FPS     = 30
 LED_STRIPES = 24      # candy-cane stripes across the full length, density-independent
 # LED_A / LED_B (candy cane, bar) come from the theme; red stays HPI:
 LED_RED     = (255, 0, 20)
+LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarting it

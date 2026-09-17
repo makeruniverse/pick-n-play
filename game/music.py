@@ -30,7 +30,9 @@ import pygame
 from config import ROUND_SECONDS, WARN_SECONDS, DUCK, DUCK_RELEASE, VOLUME
 
 SR   = 44100    # 22050 rounds F5 23 cents too flat -- the intervals sound off
-BUF  = 512      # ~12 ms latency, short enough for button blips
+# 512 underran on the Pi under load (measured 2026-09-17, 3 busy cores:
+# 10 dropouts in 100 s at 512, none at 2048). ~46 ms is still fine for blips.
+BUF  = 2048
 DIV  = 4        # tokens per quarter note -> sixteenth notes
 EDGE = 128      # ~3 ms ramp at every note edge, otherwise every edge clicks
 
@@ -336,6 +338,7 @@ class Music:
     """Silent when there's no audio device -- scenes notice nothing of it."""
 
     REPEAT_MS = 90   # the same SFX firing faster than this gets swallowed
+    NO_DUCK = {"blip"}   # fires on every new marker -- ducking on it made the music pump
 
     def __init__(self):
         self.on = pygame.mixer.get_init() == (SR, -16, 1)
@@ -423,8 +426,9 @@ class Music:
         self._last = (name, t)
         # Drop immediately, then ramp back up over DUCK_RELEASE: fast attack,
         # slow release. The other way around, you'd hear the ducking itself.
-        self.duck = DUCK
-        self._volumes()
+        if name not in self.NO_DUCK:
+            self.duck = DUCK
+            self._volumes()
         for s in self.sfx_[name]:
             s.play()
 

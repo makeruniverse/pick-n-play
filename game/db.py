@@ -32,6 +32,8 @@ class DB:
 
     def __init__(self, path=DB_PATH):
         self.con = sqlite3.connect(path)
+        # WAL: a pulled plug loses at most the last round, never the file.
+        self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("""CREATE TABLE IF NOT EXISTS runs (
                                 ts    TEXT DEFAULT (datetime('now')),
                                 name  TEXT NOT NULL,
