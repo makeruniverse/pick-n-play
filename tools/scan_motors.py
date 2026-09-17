@@ -1,12 +1,13 @@
-"""Pingt beide Servo-Busse durch und sagt, welche Motoren antworten.
+"""Pings both servo buses and reports which motors respond.
 
-Laeuft auf dem Pi im conda-Env der Teleop, nicht unter uv:
+Runs on the Pi in the teleop's conda env, not under uv:
     ~/miniforge3/envs/lerobot/bin/python tools/scan_motors.py
 
-Teleop muss dafuer gestoppt sein, sonst sind die Ports belegt.
-Ein gesunder SO-101 meldet sechs Motoren, IDs 1-6, Modell 777 (STS3215).
-Schweigt ein Bus komplett, obwohl der Adapter da ist, fehlt fast immer die
-Servo-Stromversorgung -- der USB-Adapter haengt am Pi, die Motoren nicht.
+Teleop must be stopped for this, otherwise the ports are taken.
+A healthy SO-101 reports six motors, IDs 1-6, model 777 (STS3215).
+If a bus stays silent entirely even though the adapter is there, it's almost
+always missing servo power -- the USB adapter is connected to the Pi, the
+motors aren't.
 """
 
 from scservo_sdk import PacketHandler, PortHandler
@@ -17,7 +18,7 @@ BAUD = 1_000_000
 for port in PORTS:
     ph = PortHandler(port)
     if not (ph.openPort() and ph.setBaudRate(BAUD)):
-        print(f"{port} -> Port laesst sich nicht oeffnen (Adapter ab? Teleop laeuft noch?)")
+        print(f"{port} -> port won't open (adapter unplugged? teleop still running?)")
         continue
     pk = PacketHandler(0)
     found = []
@@ -26,4 +27,4 @@ for port in PORTS:
         if result == 0:
             found.append(f"{motor_id}(m{model})")
     ph.closePort()
-    print(f"{port} -> {', '.join(found) if found else 'KEINE Motoren'}")
+    print(f"{port} -> {', '.join(found) if found else 'NO motors'}")

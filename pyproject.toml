@@ -8,3 +8,14 @@ dependencies = [
     "opencv-python>=5.0.0.93",
     "pygame-ce>=2.5.8",
 ]
+
+# Nur auf dem Automaten: `uv sync --extra pi`. lgpio baut eine C-Erweiterung
+# gegen Linux-Header und laesst sich am Entwicklungsrechner nicht installieren
+# -- deshalb ein Extra und kein normales dependency. Am Mac laeuft das Spiel
+# mit PNP_BUTTONS=0, und `from gpiozero import Button` in hw.Buttons wird dann
+# nie ausgefuehrt.
+[project.optional-dependencies]
+pi = [
+    "gpiozero>=2.0",
+    "lgpio>=0.2.2",
+]

@@ -1,897 +1,1295 @@
 # PICK'N'PLAY — Project Overview
 
-**Titel:** PICK'N'PLAY (vorher Arbeitstitel: TRAY RUNNER)
-**Stand:** August 2026 · Konzept steht, Hardware im Bau, Software im Bau
-**Plattform:** Raspberry Pi · Python · pygame
+**Title:** PICK'N'PLAY (previous working title: TRAY RUNNER)
+**Status:** August 2026 · concept finished, hardware in progress, software in progress
+**Platform:** Raspberry Pi · Python · pygame
 
 ---
 
-## Stand: 28. August 2026
+## Scoring (2026-09-11)
 
-**UX-Pass über alle fünf Szenen.** Anlass war ein Klippfehler auf dem
-Leaderboard: die fünfte Bestenlisten-Zeile und die Abbruch-Rückfrage
-überdeckten sich um 528 × 30 px, sichtbar erst ab fünf Einträgen in der DB.
-Der Fehler war kein Zahlendreher, sondern eine fehlende Invariante — eine
-datenabhängig lange Liste und ein Overlay teilten sich denselben Raum ohne
-Absprache.
+The scoring system had been completely open since 2026-09-10 and no longer is.
 
-Vier Änderungen, alle in „UI-Layout" ausgeschrieben:
+**Before:** `score = |target − tray sum|`, low is good, leaderboard sorted
+ascending — plus two explanatory lines (`THE LOWER THE BETTER`,
+`LOWER MEANS BETTER`), without which you'd read the list backwards. The
+finding was that the number needed a set of instructions.
 
-1. **Footer-Band** (`FOOTER_Y`, `SAFE_BOTTOM`, `footer()`) — eine Zeile pro
-   Szene an derselben Stelle für die vier Knöpfe. Die Rückfrage *ersetzt* sie,
-   statt daneben zu stehen: damit kann die Fehlerklasse nicht wiederkommen.
-2. **Preiszeile statt Preistabelle** in `DisplayScoreScene` — die ArUco-ID-Spalte
-   ist raus, die Werte sind sortiert, und gelb sind die, die tatsächlich lagen.
-3. **`BEST — LOWEST WINS`** über beiden Bestenlisten, und `TOP 10!` heißt jetzt
-   `ENTER YOUR NAME` — die alte Überschrift versprach ein Gate, das es nicht gibt.
-4. **`OFF BY` in der Runde** — die Differenz, die der Besucher vorher im Kopf
-   bilden musste, steht jetzt groß da. `PERFECT n` erbt denselben Platz.
+**Now:** 0 to 1000, high is good, made of two parts:
 
-Dazu ein **Layout-Selbsttest** in `scenes.py` nach der Hauskonvention:
-`uv run game/scenes.py` → `ok`. Er fängt jeden `draw()`-Aufruf ab und prüft
-Bildgrenzen, `SAFE_BOTTOM` und Überdeckung über alle Szenen und Zustände.
-Gegengeprüft, dass er scheitern kann.
+```
+accuracy = 900 · (1 − off/distance) ²      distance = gap at round start
+time     = 100 · time_left/(30 − 3)        only ≠ 0 when perfect
+```
+
+Three decisions are baked into this:
+
+**What's scored is the fraction of the distance closed, not the absolute
+error.** An absolute scale needs a constant ("this many points per 10
+cents") that has to be re-guessed every time prices change. The fraction
+needs none. A side effect that almost single-handedly solves the tie
+problem: two players, both EUR 0.30 off, get different scores if their
+starting distance was different.
+
+**The time bonus can only be earned on a perfect score — no special-case
+branch needed.** The round only ends early via `PERFECT_HOLD`, so time
+left > 0 is equivalent to a hit. Someone who's off and thinks instead of
+rushing loses nothing because of it, and that matters: the skill of the
+game is estimating.
+
+**The database keeps storing the physical truth** (`off`, `dist`,
+`secs`), not the score. A changed formula therefore applies retroactively
+to old rounds too. The price: the leaderboard is no longer an `ORDER BY`,
+because the score is a ratio — `top()` reads every row and computes in
+Python. A trade-show day is a few hundred rows.
+
+**Prices instead of points.** Ten cupcakes from EUR 1.40 to EUR 5.20.
+Calculated in 10-cent units, because the prices must be coprime — round
+prices in cents would have a GCD of 10, and the game would be binary
+again (distance divisible by the divisor → one grab is enough, otherwise
+unreachable at all). Division happens exactly once, in `euro()` in
+`scenes.py`.
+
+**Round length and difficulty are now a mode.** `MODES` in
+`config.py`, switchable with `PNP_MODE`, individual values with
+`PNP_ROUND_SECONDS=20` — the numbers are still being tuned a lot, and a
+hard mode is just another entry in the dict, not a code change.
+
+**Two follow-on findings, both measured instead of guessed:**
+
+`GAP_MOVES` had to go from 3 to 2. A teleoperated pick takes 10–20 s; with
+a 30-second round, three moves would be a promise the arm can't keep —
+and the old self-test showed that 113 of 200 rounds would actually have
+needed three.
+
+The bar had the wrong scale. It was the sum of all ten cupcakes
+(EUR 31.10), but since the tray starts empty, everything now plays out
+under `GAP_MAX` (EUR 9.80) — the finish line and the fill sat in the left
+quarter. Now `SCALE = GAP_MAX`.
+
+**Open, and only to be settled at the machine:** whether `GAP_ONE_MAX = 25`
+gives the right variety. With an empty tray, the set of possible targets
+is finite and the same every day — at 15 there would be 14 targets, at
+25 there are 21. The self-test in `balance.py` prints the number on
+every run.
+
+## Status: 2026-09-11
+
+**The game runs on the Mac**, no branch needed: `config.MAC` sets window
+mode, arrow keys, and the built-in webcam as the default there for both
+panes. The machine itself is Linux, nothing changes for it.
+
+**The objects are cupcakes, their value is their price** — harder to
+grab means pricier. Markers as SVG (`tools/marker_svg.py`), a cone
+topping with the marker extruded into it from above, a chocolate cake
+with an inverted marker (`detectInvertedMarker`). A color test against
+the Bambu PLA mat table is in `docs/todo.md`.
+
+**New look "Sugar Rush"**: chocolate background, pink instead of yellow,
+pixel sprites in `game/sprites.py`, conveyor belts in idle, candy-cane
+bars, sprinkles. The layout coordinates are unchanged. **Not measured on
+the Pi yet** — drawing there was 1.5 ms per frame, the sprites are
+pre-rendered blits, but it hasn't been re-measured.
+
+**The theme is swappable.** Colors, text, sprites, LED colors, and the
+marker → sprite mapping live in one file, `game/themes/sugar_rush.py`.
+`config.py` loads it via `PNP_THEME` and `THEME_KEYS` names what every
+theme must provide. Scenes never name a sprite, they read `LADDER` (the
+objects by price). A second theme (PCB components) is a copy of the
+file. Deliberately not in the theme: HPI red/orange, button colors,
+`VALUES`, title, music.
+
+**LED module written** (`hw.Leds`, direct SPI), untested on the actual
+strip.
 
 ---
 
-## Stand: 27. August 2026
+## Status: 2026-09-10
 
-**Was läuft:** Das Skelett ist durchklickbar. Alle vier Szenen zeichnen nach dem
-Layout unten, `FakeDetector` liefert wechselnde Zahlen, SQLite speichert und
-sortiert richtig. Die sechs Befunde in `scenes.py` sind behoben (siehe unten).
+**The machine runs at a stable 30 fps, with the game and teleop running
+at the same time.** That had been the open item blocking sign-off since
+2026-09-09. Measured on the machine, 45 seconds straight: 29.4 to
+30.3 fps, no drop, while going from 61.5 to 75.7 °C.
 
-Seit heute steht außerdem die Optik: **Press Start 2P** als Schrift, die
-Farb-ID auf HPI-Rot und -Orange, und das **CRT-Overlay** mit Wölbung,
-Scanlines und Vignette. Beides in eigenen Abschnitten weiter unten.
+Four changes, in order of their yield:
 
-Quellcode liegt seit heute in `game/`. Kein Import ändert sich dadurch:
-`uv run game/main.py` setzt `sys.path[0]` auf `game/`, also finden die Module
-sich weiterhin flach. Der Ordner bildet die Prozessgrenze aus
-„Prozess-Architektur" ab — ein späteres `teleop/` steht daneben, nicht darin.
+1. **`pygame.SCALED` is gone, rendering is now native at 1920 × 1080.**
+   This was by far the biggest item and the worst-estimated one: the
+   guess was 8.5 ms, the actual figure was around 20. The scene itself
+   draws in 1.4 to 2.0 ms — the 25 ms that used to be booked as "scene +
+   flip" were almost entirely the 1200 → 1080 scaling.
+2. **The curvature no longer warps the image, it warps the scanlines.**
+   It now lives in the darkening map that's built once at startup and
+   costs nothing at runtime. See "Measurement on the Pi".
+3. **Target frame rate 30 instead of 60**, idle 15 instead of 20.
+   Rationale in `config.py` and below.
+4. **`cv2.setNumThreads(3)`** — otherwise OpenCV grabs all four cores
+   and crowds out exactly the teleop loop, the one process that's
+   actually time-critical.
 
-| Datei | Zustand |
+To make this work, the layout was **re-laid-out for the 1080 grid, not
+scaled**: a plain ×0.9 would have compressed the line spacing relative
+to the unchanged glyph height, and that's exactly where the clipping bug
+from 2026-08-28 sat. The cursor bar in `LeaderboardScene` went in the
+process from a magic number to `CURSOR_Y`/`CURSOR_H` — it used to be a
+`fill()` and therefore invisible to the layout self-test, blind to
+exactly the class of bug the test was built for.
+
+**Two incidental findings:**
+
+The git repo on the Pi was corrupted — six objects, five of them zero
+bytes long. That's the signature of a hard power-off, not a dying card:
+`dmesg` shows not a single I/O or EXT4 message. Fixed by setting the
+broken objects aside and re-fetching from origin.
+
+The Pi throttles when measuring even with teleop *stopped*: from 63.7 to
+80.7 °C in 25 seconds. The same `remap` cost 8.7 ms cold and 12.5 warm —
+35% difference from temperature alone. **Any measurement without a fan
+is also measuring the throttling.** Active cooling is therefore no
+longer a precaution but a prerequisite for reliable numbers.
+
+---
+
+## Status: 2026-08-28
+
+**UX pass over all five scenes.** The trigger was a clipping bug on the
+leaderboard: the fifth leaderboard row and the cancel confirmation
+overlapped by 528 × 30 px, visible only once there were five entries in
+the DB. The bug wasn't a transposed digit but a missing invariant — a
+data-dependent-length list and an overlay sharing the same space without
+coordinating.
+
+Four changes, all written up in "UI Layout":
+
+1. **Footer band** (`FOOTER_Y`, `SAFE_BOTTOM`, `footer()`) — one line
+   per scene, in the same place, for the four buttons. The confirmation
+   *replaces* it instead of sitting next to it: that way this class of
+   bug can't come back.
+2. **A price row instead of a price table** in `DisplayScoreScene` — the
+   ArUco ID column is gone, the values are sorted, and the ones that
+   actually were on the tray are yellow.
+3. **`BEST — LOWEST WINS`** above both leaderboards, and `TOP 10!` is
+   now `ENTER YOUR NAME` — the old headline promised a gate that doesn't
+   exist.
+4. **`OFF BY` during the round** — the difference the visitor
+   previously had to compute in their head is now shown large.
+   `PERFECT n` inherits the same spot.
+
+Plus a **layout self-test** in `scenes.py`, following house convention:
+`uv run game/scenes.py` → `ok`. It intercepts every `draw()` call and
+checks screen bounds, `SAFE_BOTTOM`, and overlap across all scenes and
+states. Verified that it can actually fail.
+
+---
+
+## Status: 2026-08-27
+
+**What works:** The skeleton is click-through. All four scenes draw
+according to the layout below, `FakeDetector` returns changing numbers,
+SQLite stores and sorts correctly. The six findings in `scenes.py` are
+fixed (see below).
+
+As of today the look is also in place: **Press Start 2P** as the font,
+the color ID on HPI red and orange, and the **CRT overlay** with
+curvature, scanlines, and vignette. Both covered in their own sections
+further below.
+
+Source code has lived in `game/` since today. No import changes because
+of it: `uv run game/main.py` sets `sys.path[0]` to `game/`, so the
+modules still find each other flat. The folder maps to the process
+boundary from "Process architecture" — a later `teleop/` will sit next
+to it, not inside it.
+
+| File | State |
 |---|---|
-| `game/config.py` | fertig — Zeiten, Farben, Schrift, CRT, Keymap, Werte, Hardware-Konstanten |
-| `game/app.py` | fertig — `Ctx`, `SceneBase`, `action_of`, `run_game`, CRT-Overlay |
+| `game/config.py` | done — timing, colors, font, CRT, keymap, values, hardware constants |
+| `game/app.py` | done — `Ctx`, `SceneBase`, `action_of`, `run_game`, CRT overlay |
 | `game/assets/` | Press Start 2P (SIL OFL) + `OFL.txt` |
-| `game/scenes.py` | **fünf** Szenen inkl. `render()`, `footer()`, Layout-Selbsttest (`uv run game/scenes.py` → `ok`) |
-| `game/db.py` | fertig, mit `assert`-Selbsttest (`uv run game/db.py` → `ok`) |
-| `game/hw.py` | `FakeDetector`, `Camera` (mit Warmup-Guard), `ArucoDetector`, `CameraView`, `VideoView` fertig; `Buttons` offen |
-| `game/main.py` | fertig — Verdrahtung, vier Fontgrößen aus `FONT_SIZES` |
-| `game/music.py` | fertig — Notation, Synthese, Ducking, `Ctx.music`, Selbsttest (`uv run game/music.py` → `ok`) |
-| `game/balance.py` | fertig — Zielwert-Findung aus dem Tablett, Selbsttest (`uv run game/balance.py` → `ok`) |
+| `game/scenes.py` | **five** scenes incl. `render()`, `footer()`, layout self-test (`uv run game/scenes.py` → `ok`) |
+| `game/db.py` | done, with an `assert` self-test (`uv run game/db.py` → `ok`) |
+| `game/hw.py` | `FakeDetector`, `Camera` (with warmup guard), `ArucoDetector`, `CameraView`, `VideoView` done; `Buttons` open |
+| `game/main.py` | done — wiring, four font sizes from `FONT_SIZES` |
+| `game/music.py` | done — notation, synthesis, ducking, `Ctx.music`, self-test (`uv run game/music.py` → `ok`) |
+| `game/balance.py` | done — target-value picking from the tray, self-test (`uv run game/balance.py` → `ok`) |
 
-### Befunde in `game/scenes.py` — erledigt
+### Findings in `game/scenes.py` — resolved
 
-Die sechs Befunde vom 27. August (doppeltes `handle`, fehlendes `self.top`,
-`tray_sum()` im falschen Block, `top(TOP_N)` statt `top(5)`, Magic Number
-`3.0`, Sprachmix) stehen alle behoben im Code. Nachgeprüft am selben Tag,
-headless durchgespielt: Idle → Runde → Score → Initialen → Idle, der Name
-steht danach in der Bestenliste.
+The six findings from 2026-08-27 (duplicate `handle`, missing
+`self.top`, `tray_sum()` in the wrong block, `top(TOP_N)` instead of
+`top(5)`, magic number `3.0`, mixed languages) are all fixed in the
+code. Re-checked the same day, played through headless: Idle → Round →
+Score → Initials → Idle, the name shows up in the leaderboard
+afterward.
 
-`scenes.py` und `app.py` mischten Tabs und Leerzeichen; alle Dateien in `game/`
-stehen jetzt auf vier Leerzeichen (`expand -t4`). Die Mischung war keine
-Kosmetikfrage, sondern eine Falle für jedes Werkzeug, das die Datei anfasst.
+`scenes.py` and `app.py` mixed tabs and spaces; every file in `game/`
+now uses four spaces (`expand -t4`). The mix wasn't a cosmetic issue but
+a trap for any tool that touches the file.
 
-### Arbeitsweise in diesem Projekt
+### Workflow on this project
 
-**Ablauf pro Feature — vier Schritte, in dieser Reihenfolge:**
+**Per feature — four steps, in this order:**
 
-1. **Vadim fragt nach einem Feature.**
-2. **Der Assistent überlegt und präsentiert** — Lösungsweg, die Alternativen die
-   er verworfen hat und warum, und den Code. Dazu eine *kurze* Erklärung der
-   Stellen, an denen etwas Neues passiert. Kurz heißt kurz: wenn die Erklärung
-   länger ist als der Code, stimmt etwas mit dem Code nicht.
-3. **Vadim gibt Freigabe** — oder korrigiert die Richtung. Ohne Freigabe wird
-   keine `.py`-Datei angefasst.
-4. **Der Assistent implementiert** und sagt hinterher, was tatsächlich geprüft
-   wurde und was nicht.
+1. **Vadim asks for a feature.**
+2. **The assistant thinks it through and presents it** — the approach,
+   the alternatives it rejected and why, and the code. Plus a *short*
+   explanation of the spots where something new is happening. Short
+   means short: if the explanation is longer than the code, something's
+   wrong with the code.
+3. **Vadim gives the go-ahead** — or corrects the direction. No `.py`
+   file gets touched without a go-ahead.
+4. **The assistant implements it** and afterward states what was
+   actually checked and what wasn't.
 
-Der Punkt an Schritt 2 und 3 ist nicht die Genehmigung, sondern dass die
-Entwurfsentscheidung einmal ausgesprochen wird, bevor sie im Code steht. Ein
-Feature, das man nicht in fünf Sätzen erklären kann, ist zu groß geschnitten.
+The point of steps 2 and 3 isn't the approval — it's that the design
+decision gets said out loud once before it ends up in the code. A
+feature that can't be explained in five sentences is cut too big.
 
-Für Vorschläge gilt die Reihenfolge aus dem Ladder-Prinzip: braucht es das
-überhaupt → Standardbibliothek → natives Plattform-Feature → vorhandene
-Abhängigkeit → eine Zeile → erst dann eigener Code.
+For suggestions, the ladder principle's order applies: does it need to
+exist at all → standard library → native platform feature → existing
+dependency → one line → only then custom code.
 
-Dieses Dokument pflegt der Assistent laufend mit. Es ist in Arbeitssprache
-Deutsch geschrieben; **alles, was auf dem Bildschirm des Automaten steht, ist
-Englisch** (siehe „Anzeigesprache").
+The assistant keeps this document up to date on an ongoing basis. It's
+written in German as the working language; **everything that appears on
+the machine's screen is in English** (see "Display language").
 
-### Reihenfolge ab hier
+### Order from here
 
-Regel: nach jedem Schritt läuft etwas, und jeder Schritt ist am Bildschirm zu
-sehen. Schritt 1–3 sind heute machbar, 4–5 brauchen Hardware.
+Rule: something runs after every step, and every step is visible on
+screen. Steps 1–3 are doable today, 4–5 need hardware.
 
-1. ~~Befunde 1–5 beheben~~ — erledigt, Meilenstein 1–4 steht.
-2. ~~`music.py`~~ — erledigt, siehe „Sound". Offen bleibt das Abhören auf dem
-   Automatenlautsprecher: Lautstärken sind am Kopfhörer gesetzt, die Halle ist
-   lauter. Die Melodien stehen als Zeichenketten in `PIECES` — nachbessern ist
-   eine Zeile ändern, kein Umbau.
-3. ~~CRT-Overlay in `run_game`~~ — erledigt, inklusive Wölbung und Pixelfont.
-   Die Messung auf dem Pi liegt seit dem 9.9.2026 vor und ist negativ, siehe
-   „Messung auf dem Pi". Offen bleibt die Einstellung in der Halle.
-4. ~~`Camera` + `ArucoDetector`~~ — erledigt, inkl. Passthrough-Inset. Offen
-   bleibt die Erkennungsrate gegen die *gedruckten* Marker unter Hallenlicht.
-5. Teleop-Prozess: Torque-Zustandsmaschine, Heartbeat-Empfänger, Weckrampe.
+1. ~~Fix findings 1–5~~ — done, milestones 1–4 stand.
+2. ~~`music.py`~~ — done, see "Sound". Still open: listening on the
+   machine's actual speaker — volumes are set on headphones, the hall is
+   louder. The tunes are strings in `PIECES` — tweaking them is a
+   one-line change, not a rebuild.
+3. ~~CRT overlay in `run_game`~~ — done, including curvature and the
+   pixel font. Frame rate has been signed off since 2026-09-10: a stable
+   30 fps with teleop running, see "Measurement on the Pi". Still open:
+   dialing in the settings in the hall (`SCANLINE_ALPHA`,
+   `VIGNETTE_ALPHA`).
+4. ~~`Camera` + `ArucoDetector`~~ — done, including the passthrough
+   inset. Still open: the detection rate against the *printed* markers
+   under hall lighting.
+5. Teleop process: torque state machine, heartbeat receiver, wake ramp.
 6. `Buttons` (GPIO), LEDs, systemd.
 
-Nicht dazwischenschieben: `db.qualifies()` als Gate vor dem Leaderboard
-(Balancing-Frage, siehe Offene Punkte). Der Demo-Clip hat seinen Platz
-(`HowToScene`, `DEMO_VIDEO` in `config.py`) und wartet nur noch auf einen
-Aufbau zum Filmen — bis dahin läuft die Szene als Textseite.
+Not to be squeezed in ahead of schedule: `db.qualifies()` as a gate
+before the leaderboard (a balancing question, see Open Items). The demo
+clip has its spot (`HowToScene`, `DEMO_VIDEO` in `config.py`) and is
+just waiting on a setup to film — until then the scene runs as a text
+page.
 
 ---
 
-## Was
+## What
 
-Ein Arcade-Automat mit echtem Roboterarm. Besucher steuern per Teleoperation einen SO-101-Follower-Arm und lösen ein Wertschätzungsspiel gegen die Uhr. Auftragsarbeit für eine MINT-Messe zur Anwerbung prospektiver HPI-Studierender.
+An arcade machine with a real robot arm. Visitors teleoperate an SO-101
+follower arm and play a valuation game against the clock. Commissioned
+work for a STEM trade fair recruiting prospective HPI students.
 
-Der Arcade-Rahmen ist keine Deko, sondern die Bedienungsanleitung: Jeder versteht einen Spielautomaten sofort. Kein Erklärtext, kein Personal nötig, um den Einstieg zu erklären.
+The arcade framing isn't decoration, it's the instruction manual:
+everyone instantly understands an arcade machine. No explanatory text,
+no staff needed to explain how to get started.
 
-## Spielmechanik
+## Game mechanics
 
-Adaptiert von Googles *Price-a-Tray* (GDC-Demo). Ablauf:
+Adapted from Google's *Price-a-Tray* (GDC demo). Sequence:
 
-1. Auf dem Tablett liegen vorbeladene Objekte, jedes mit einem verdeckten Punktwert.
-2. Auf dem Display steht ein Zielwert.
-3. 60 Sekunden: Objekte tauschen, entfernen, hinzufügen.
-4. Score = Betrag der Differenz zwischen Tablettsumme und Zielwert. **Über und unter zählen gleich — es gibt kein Scheitern, nur eine Zahl.** Steht `OFF BY 0` fünf Sekunden lang, endet die Runde vorzeitig (`PERFECT_HOLD`) — die Hände liegen am Leader-Arm, ein „Fertig"-Knopf wäre unerreichbar.
-5. Am Ende: Reveal der gesamten Preistabelle. Lernmoment und zweite Belohnung.
+1. The tray is empty. Next to it sits the display case: ten cupcakes,
+   each with a hidden price.
+2. The display shows a target price, e.g. `GOAL €6.30`.
+3. 30 seconds: place cupcakes on the tray (and take them off again if
+   you get it wrong).
+4. During the round **no score** is shown on screen, only the price.
+   Over and under count the same — there's no failing, only a number. If
+   the sum stays exactly on target for `PERFECT_HOLD` seconds, the round
+   ends early — hands are on the leader arm, a "done" button would be
+   out of reach.
+5. Afterward the score screen counts the score up, like a boxing
+   machine. See "Scoring".
+6. Below that: a reveal of the full price table. A learning moment and a
+   second reward.
 
-Der Skill liegt im Rückschluss („was war das Ding wert?"), nicht in der Feinmotorik. Das ist bewusst so gewählt — der Arm hat zu viel Getriebespiel für ein Präzisionsspiel.
+The skill lies in the inference ("what was that thing worth?"), not in
+fine motor control. That's a deliberate choice — the arm has too much
+gear backlash for a precision game.
 
-**Vorbeladenes Tablett** ist die zentrale Anpassung gegenüber Google: Teleoperierte Picks dauern 10–20 s statt 1–2 s mit der Hand. Tauschen statt Aufbauen hält die Runde spielbar.
+**An empty tray and 30 seconds** are the central adaptation from
+Google's version: teleoperated picks take 10–20 s instead of 1–2 s by
+hand, so two moves make a full round. The tray is cleared after every
+round — that way everyone starts from the same state, and nobody
+inherits their predecessor's task.
 
-## Arcade-Framing
+Until 2026-09-11 it was thought the other way around (a pre-loaded tray,
+swap instead of build up, 60 s). Clearing the tray between rounds tipped
+it over: if you start empty, you can't swap.
 
-| Element | Umsetzung |
+## Arcade framing
+
+| Element | Implementation |
 |---|---|
-| Kabinett | Aluminium-Extrusion-Box (Follower innen), Leader-Arm davor auf Podest |
-| Marquee | Beleuchtetes Schild oben, Spieltitel + HPI-Logo. Physisch, nicht auf dem Screen |
-| Attract Mode | Bei Leerlauf: LED-Loop am Kabinett, Display zeigt High Scores im Wechsel mit Titel. **Der Arm bewegt sich nicht** — siehe „Idle, Cooldown, Strom" |
-| Bedienung | **Vier Arcade-Buttons in Kreuzanordnung, sonst nichts.** Rechts = vorwärts/bestätigen, links = zurück/abbrechen, hoch/runter = auswählen. Dieselben vier Knöpfe starten das Spiel, brechen ab und tippen die Initialen. Keine Tastatur, kein Joystick, kein Extra-Startknopf. |
-| Timer | Hintergrundfarbe: schwarz bei Start, ab 5 s Restzeit nach HPI-Rot laufend. Aus 8 m lesbar. |
-| High Score | Top 10, drei Buchstaben Initialen, Eingabe über dieselben vier Buttons |
-| Optik | **Press Start 2P** (Pixelfont, kein Antialiasing), Monospace, hoher Kontrast, schwarzer Grund. Darüber ein **CRT-Overlay** — Wölbung, Scanlines, Vignette, siehe eigener Abschnitt |
-| Sound | **Low-Bit-Arcade-Musik**, deklarativ notiert und zur Laufzeit synthetisiert, siehe eigener Abschnitt. Messehalle ist laut — Sound ist Beiwerk, nie Informationsträger. |
-| LED-Streifen | Adressierbar, Zustandsanzeige am Kabinett: Idle-Loop, Laufzeit, letzte 5 s, Score-Reveal |
-| Not-Aus | Roter Pilzknopf. Funktional nötig, passt visuell perfekt. |
+| Cabinet | Aluminum extrusion box (follower inside), leader arm in front on a pedestal |
+| Marquee | Lit sign on top, game title + HPI logo. Physical, not on screen |
+| Attract mode | When idle: LED loop on the cabinet, display alternates between high scores and title. **The arm doesn't move** — see "Idle, cooldown, power" |
+| Controls | **Four arcade buttons in a cross layout, nothing else.** Right = forward/confirm, left = back/cancel, up/down = select. The same four buttons start the game, cancel it, and type initials. No keyboard, no joystick, no separate start button. |
+| Timer | Background color: black at start, running toward HPI red from 5 s remaining. Readable from 8 m. |
+| High score | Top 10, three-letter initials, entered with the same four buttons |
+| Visuals | **Press Start 2P** (pixel font, no antialiasing), monospace, high contrast, black background. On top of that a **CRT overlay** — curvature, scanlines, vignette, see its own section |
+| Sound | **Low-bit arcade music**, notated declaratively and synthesized at runtime, see its own section. The trade-show hall is loud — sound is garnish, never a carrier of information. |
+| LED strip | Addressable, status indicator on the cabinet: idle loop, round in progress, last 5 s, score reveal |
+| E-stop | Red mushroom button. Functionally necessary, fits visually perfectly. |
 
-**Anzeigesprache: Englisch.** Entschieden am 27. August 2026. Arcade-Konvention — `PRESS`, `GOAL`, `TIME`, `TOP 10` liest jeder sofort als Automatensprache, auch elf Jahre alt. Deutsche Wörter sind zudem länger, und Breite ist bei Schriftgröße 200 die knappste Ressource auf dem Schirm. Dieses Dokument bleibt Deutsch, die Zeichenketten im Code sind Englisch.
+**Display language: English.** Decided on 2026-08-27. Arcade convention
+— `PRESS`, `GOAL`, `TIME`, `TOP 10` reads instantly as arcade-speak to
+anyone, even an eleven-year-old. German words are also longer, and width
+is the scarcest resource on screen at font size 200. This document stays
+in German, the strings in the code are English.
 
-**Lesbarkeit vor Effekt.** Die Zielgruppe steht 3–8 m entfernt in einer hellen Halle. Zielwert, aktuelle Summe und Restzeit sind die drei Zahlen, die immer groß und immer an derselben Stelle stehen. Alles andere ist Beiwerk.
+**Readability over effect.** The target audience stands 3–8 m away in a
+brightly lit hall. Target value, current sum, and time remaining are the
+three numbers that are always large and always in the same place.
+Everything else is garnish.
 
 ## Hardware
 
-- **Rechner: Raspberry Pi** (Modell noch festzulegen, siehe Offene Punkte)
-- SO-101 Follower (12 V STS3215) in der Box, Leader (7,4 V) außen
-- **Zwei Kameras:**
-  - *Top-Down*, fest montiert, Autofokus und Belichtung fixiert — liefert die Marker-Erkennung
-  - *Arm-Kamera*, reiner Passthrough auf dem Display, keine Auswertung — das
-    gilt weiterhin, das Overlay liegt nur auf der Top-Down-Kamera
-- **Display: Asus MB169CK, 15,6", 1920 × 1080 (16:9).** Am 9.9.2026 per EDID am Pi ausgelesen. **Korrektur:** hier stand vorher „1920 × 1200 (16:10)", das war falsch — die MB169-Reihe ist FHD. Die Entwurfsauflösung in `config.py` steht weiterhin auf 1200, `pygame.SCALED` rechnet also mit Faktor 0,9 herunter. Das kostet Schärfe an der Pixelfont und Rechenzeit, siehe „Messung auf dem Pi". Zweites Display optional für Zuschauer
-- **Vier Arcade-Buttons** (hoch/runter/links/rechts) an GPIO, plus Not-Aus. **Panel 3 mm** — Snap-in (Sanwa OBSF-30, spezifiziert für 2–4 mm) liegt im Bereich, aber bei Sperrholz sind Schraubtaster (Seimitsu PS-14-KN, OBSN-30) mit Mutter die haltbarere Wahl. Lochmaß 30 mm, Flachstecker 2,8 mm.
-- WS2812B-Streifen. Auf Pi 5 funktioniert `rpi_ws281x` nicht (RP1); Optionen: PIOLib, SPI-Weg (`rpi5-ws2812`, `Pi5Neo`) oder Auslagerung auf einen ESP32 mit WLED via UDP/DDP. Letzteres nimmt Timing, Netzteil und Pegelwandlung aus dem Pi.
-- 3D-gedruckte Pucks: flacher Boden, tiefer Schwerpunkt, einheitliche Greifrippe, ArUco-Marker plan oben
-- Tablett mit Rand
+- **Computer: Raspberry Pi** (model still to be decided, see Open Items)
+- SO-101 follower (12 V, STS3215) in the box, leader (7.4 V) outside
+- **Two cameras:**
+  - *Top-down*, fixed mount, autofocus and exposure locked — provides
+    marker detection
+  - *Arm camera*, pure passthrough on the display, no processing — this
+    still holds, the overlay only sits on the top-down camera
+- **Display: Asus MB169CK, 15.6", 1920 × 1080 (16:9).** Read out via
+  EDID on the Pi on 2026-09-09. **Correction:** this used to say
+  "1920 × 1200 (16:10)", which was wrong — the MB169 series is FHD.
+  Since 2026-09-10 the design resolution is the same number and
+  `pygame.SCALED` is gone — scaling by a factor of 0.9 cost around
+  20 ms per frame and the pixel font's sharpness, see "Resolution and
+  fullscreen". A second display is optional for onlookers.
+- **Four arcade buttons** (up/down/left/right) on GPIO, plus an e-stop.
+  **3 mm panel** — snap-in (Sanwa OBSF-30, rated for 2–4 mm) is within
+  range, but for plywood, screw-mount buttons (Seimitsu PS-14-KN,
+  OBSN-30) with a nut are the more durable choice. 30 mm hole, 2.8 mm
+  spade terminals.
+- WS2812B strip. On the Pi 5, `rpi_ws281x` doesn't work (RP1); options:
+  PIOLib, the SPI route (`rpi5-ws2812`, `Pi5Neo`), or offloading to an
+  ESP32 with WLED via UDP/DDP. The latter takes timing, power supply,
+  and level shifting off the Pi.
+- 3D-printed pucks: flat base, low center of gravity, uniform grip rib,
+  ArUco marker flat on top
+- Tray with a rim
 
-**Kein Jetson.** Die einzige Rechtfertigung für einen Jetson wäre CUDA-Inferenz, und ML ist bewusst nicht im Spiel. Der vorhandene Jetson Nano hängt auf JetPack 4.6 / Ubuntu 18.04 / Python 3.6 fest, LeRobot verlangt Python ≥3.12. Alter Stack, ungenutzte GPU, keine Gegenleistung.
+**No Jetson.** The only justification for a Jetson would be CUDA
+inference, and ML is deliberately not part of the game. The existing
+Jetson Nano is stuck on JetPack 4.6 / Ubuntu 18.04 / Python 3.6, and
+LeRobot requires Python ≥3.12. Old stack, unused GPU, nothing gained.
 
 ## Software
 
 Python · OpenCV (ArUco) · pygame · SQLite
 
-**ArUco statt Machine Learning.** Marker-IDs mappen deterministisch auf Werte. Kein Training, kein Datensatz, kein Beleuchtungsrisiko, Werte per Dictionary-Reload änderbar. Ersetzt Googles kompletten Vertex-AI-/GCS-Stack.
+**ArUco instead of machine learning.** Marker IDs map deterministically
+to values. No training, no dataset, no lighting risk, values changeable
+via a dictionary reload. Replaces Google's entire Vertex AI/GCS stack.
 
-**pygame statt Browser-Frontend.** Ein Prozess, eine Sprache, kein Chromium, kein Webserver, kein JPEG-Encoding pro Frame. Vollbild direkt über KMSDRM ohne Desktop-Umgebung. Der Arcade-Button kommt als normales Event rein. Preis dafür: Layout ist Handarbeit in Koordinaten, kein CSS. Bei dieser Optik — Monospace, große Zahlen, schwarzer Grund — ist das kein Verlust.
+**pygame instead of a browser frontend.** One process, one language, no
+Chromium, no web server, no JPEG encoding per frame. Fullscreen directly
+over KMSDRM without a desktop environment. The arcade button comes in as
+a normal event. The price for that: layout is manual work in
+coordinates, no CSS. With this look — monospace, big numbers, black
+background — that's not a loss.
 
-Falls ML am Stand gezeigt werden soll: nur als paralleler Schauwert auf einem zweiten Monitor, **niemals im kritischen Pfad der Spiellogik.**
+If ML is supposed to be shown at the booth: only as a parallel showpiece
+on a second monitor, **never in the critical path of game logic.**
 
-## Prozess-Architektur
+## Process architecture
 
-**Zwei getrennte Prozesse. Sie reden nicht miteinander.**
+**Two separate processes. They don't talk to each other.**
 
-| Prozess | Aufgabe | Abhängigkeiten |
+| Process | Job | Dependencies |
 |---|---|---|
-| Teleop | Leader lesen → Follower schreiben, ~30–50 Hz konstant | LeRobot (oder Feetech-SDK direkt) |
-| Spiel | Kamera → ArUco → Zustand → Rendern | OpenCV, pygame, SQLite |
+| Teleop | Read leader → write follower, ~30–50 Hz constant | LeRobot (or the Feetech SDK directly) |
+| Game | Camera → ArUco → state → render | OpenCV, pygame, SQLite |
 
-Die Spiellogik braucht Kamerabild, Marker-IDs, Timer und Buttondruck. Sie braucht **nie** den Armzustand. Der Besucher schiebt Pucks, die Kamera sieht das Ergebnis — der Arm ist reine Eingabemethode.
+The game logic needs the camera image, marker IDs, a timer, and button
+presses. It **never** needs arm state. The visitor pushes pucks, the
+camera sees the result — the arm is purely an input method.
 
-Konsequenzen:
+Consequences:
 
-- Kein gemeinsamer Loop. Rendering darf die Armsteuerung nicht ins Stottern bringen.
-- Kein Protokoll zwischen beiden. Nichts zu synchronisieren, nichts zu debuggen.
-- Absturz des einen tötet nicht das andere.
-- Notfalls laufen sie auf zwei Rechnern. Falls LeRobot auf dem Pi zickt: Teleop auf einem Laptop, Spiel auf dem Pi.
+- No shared loop. Rendering must not make the arm control stutter.
+- No protocol between the two. Nothing to synchronize, nothing to
+  debug.
+- One crashing doesn't kill the other.
+- If needed, they can run on two machines. If LeRobot acts up on the
+  Pi: teleop on a laptop, game on the Pi.
 
-**Teleop läuft durchgehend, nicht pro Runde.** Kein Start von LeRobot aus der Spiellogik heraus. Motorinitialisierung und Kalibrierung bei jedem Besucher wären Sekunden Wartezeit plus ein Absturzrisiko, das mit jeder Runde neu gezogen wird.
+**Teleop runs continuously, not per round.** No starting LeRobot from
+within the game logic. Motor init and calibration for every visitor
+would mean seconds of waiting plus a crash risk drawn fresh every round.
 
-**Kamera-Passthrough auf dem Spielbildschirm ist optional.** Der echte Arm ist im Kabinett sichtbar; ein Live-Bild ist aus 8 m Entfernung ohnehin unlesbar. Falls überhaupt, dann als kleines Inset („was die Maschine sieht") in niedriger Auflösung, nie als Hauptfläche.
+**Camera passthrough on the game screen is optional.** The real arm is
+visible in the cabinet; a live feed is unreadable from 8 m anyway. If
+used at all, then as a small inset ("what the machine sees") at low
+resolution, never as the main area.
 
-**LeRobot-Installation:** Python-Version des Pi prüfen. Bookworm liefert 3.11, aktuelles LeRobot verlangt ≥3.12 — dann miniforge/pyenv, oder auf LeRobot 0.4.x pinnen (≥3.10). Auf ARM fällt LeRobot beim Video-Decoding automatisch von TorchCodec auf pyav zurück, das ist erwartet und kein Fehler.
+**LeRobot installation:** check the Pi's Python version. Bookworm ships
+3.11, current LeRobot requires ≥3.12 — then either miniforge/pyenv, or
+pin to LeRobot 0.4.x (≥3.10). On ARM, LeRobot automatically falls back
+from TorchCodec to pyav for video decoding — that's expected, not a
+bug.
 
-Die Servo-Kalibrierung (Offsets, Drehrichtungen, Endanschläge) wird nicht selbst geschrieben. Genau die Sorte Bug, die stundenlang wie ein Verkabelungsfehler aussieht.
+Servo calibration (offsets, rotation directions, end stops) is not
+being written from scratch. That's exactly the kind of bug that looks
+like a wiring fault for hours.
 
 ---
 
-## Code-Struktur (Spielprozess)
+## Code structure (game process)
 
 ```
 picknplay/
-  game/         # Spielprozess, gestartet mit: uv run game/main.py
-    main.py     # Verdrahtung: Ctx bauen, Startszene bauen, run_game aufrufen
-    config.py   # Konstanten: Zeiten, Farben, Schrift, CRT, Keymap, Werte, Pfade
-    app.py      # Ctx, SceneBase, action_of, run_game, CRT-Overlay
+  game/         # game process, started with: uv run game/main.py
+    main.py     # wiring: build Ctx, build the start scene, call run_game
+    config.py   # constants: timing, colors, font, CRT, keymap, values, paths
+    app.py      # Ctx, SceneBase, action_of, run_game, CRT overlay
     assets/     # PressStart2P-Regular.ttf, OFL.txt
     scenes.py   # IdleScene, GameScene, DisplayScoreScene, LeaderboardScene
-    hw.py       # Kamera-Grabber, ArucoDetector, FakeDetector, Buttons, LEDs
-    db.py       # SQLite Highscore
-    music.py    # Notation -> Square-Wave-Synthese -> pygame.mixer.Sound
-  markers/      # generierte ArUco-PNGs
-  archive/      # Vorstufen, nicht importiert
-  scores.db     # entsteht beim ersten Start, relativ zum Arbeitsverzeichnis
+    hw.py       # camera grabber, ArucoDetector, FakeDetector, Buttons, LEDs
+    db.py       # SQLite high scores
+    music.py    # notation -> square-wave synthesis -> pygame.mixer.Sound
+  markers/      # generated ArUco PNGs
+  archive/      # earlier drafts, not imported
+  scores.db     # created on first run, relative to the working directory
 ```
 
-**Flach statt Pakete, aber in einem Unterordner.** Der ursprüngliche Plan sah `app/`, `scenes/`, `hw/`, `data/` als Pakete vor. Bei rund 500 Zeilen Gesamtcode kostet das nur `__init__.py`-Rauschen und lange Importpfade; sieben Dateien, die je auf einen Bildschirm passen, sind schneller zu überblicken. Aufteilen, sobald eine Datei das nicht mehr tut.
+**Flat instead of packages, but in one subfolder.** The original plan
+had `app/`, `scenes/`, `hw/`, `data/` as packages. At around 500 lines of
+total code, that only buys `__init__.py` noise and long import paths;
+seven files that each fit on one screen are faster to take in. Split
+them up once one of them stops fitting.
 
-`game/` ist **kein Paket** — kein `__init__.py`, keine relativen Importe. Python setzt `sys.path[0]` auf das Verzeichnis der gestarteten Datei, also finden sich die Module gegenseitig flach wie vorher. Der Ordner trennt Quellcode von Markern, Archiv und Dokument und markiert die Prozessgrenze: ein späteres `teleop/` steht daneben, denn die beiden Prozesse teilen sich nichts.
+`game/` is **not a package** — no `__init__.py`, no relative imports.
+Python sets `sys.path[0]` to the directory of the file that was
+started, so the modules still find each other flat, same as before. The
+folder separates source code from markers, the archive, and the
+document, and marks the process boundary: a later `teleop/` will sit
+next to it, since the two processes share nothing.
 
-**`scenes.py` importiert `hw.py` nie.** Nur `main.py` kennt beide Seiten und steckt sie zusammen. Ein falscher Import fällt damit sofort auf.
+**`scenes.py` never imports `hw.py`.** Only `main.py` knows both sides
+and wires them together. A wrong import stands out immediately because
+of this.
 
-### Vier Prinzipien
+### Four principles
 
-**Der Loop besitzt die Zeit, die Szene besitzt nur Zustand.**
-`clock.tick(fps)` liefert `dt` in Sekunden, der Loop reicht es durch. `update(dt)` rechnet, `render(screen)` zeichnet nur schon Berechnetes. Ein langsamer Frame darf die Spiellogik nicht driften lassen.
+**The loop owns time, the scene only owns state.**
+`clock.tick(fps)` returns `dt` in seconds, the loop passes it through.
+`update(dt)` computes, `render(screen)` only draws what's already been
+computed. A slow frame must not let game logic drift.
 
-**`Ctx` ist eine Naht, kein Container.**
-Szenen rufen `self.ctx.detector.tray_sum()` und wissen nie, ob dahinter OpenCV oder eine Attrappe steckt. Damit ist das gesamte Spiel ohne Arm, Kamera und LEDs schreib- und testbar; der Tausch auf echte Hardware ist eine Zeile in `main.py`. Duck Typing, kein Framework.
+**`Ctx` is a seam, not a container.**
+Scenes call `self.ctx.detector.tray_sum()` and never know whether OpenCV
+or a stand-in sits behind it. That makes the entire game writable and
+testable without an arm, camera, or LEDs; swapping in real hardware is
+one line in `main.py`. Duck typing, no framework.
 
-**Szenen kennen Aktionen, keine Tasten.**
-`action_of(event)` übersetzt Pfeiltasten *und* GPIO zu vier Strings: `"up"`, `"down"`, `"left"`, `"right"`. Der Loop übersetzt einmal zentral und ruft `scene.handle(action)`; unbekannte Tasten werden vorher verworfen, damit keine Szene je einen Sonderfall prüfen muss. Tastatur beim Entwickeln, Arcade-Button auf der Messe, Szenen unverändert.
+**Scenes know actions, not keys.**
+`action_of(event)` translates arrow keys *and* GPIO into four strings:
+`"up"`, `"down"`, `"left"`, `"right"`. The loop translates once,
+centrally, and calls `scene.handle(action)`; unknown keys are discarded
+beforehand, so no scene ever has to check a special case. Keyboard while
+developing, arcade button at the show, scenes unchanged.
 
-Bewusst *keine* semantischen Namen wie `"start"`/`"back"`. Bei genau vier Knöpfen ohne Beschriftung ist die Richtung die Bedeutung, und eine Zwischenschicht, die `"right"` in `"start"` übersetzt, wäre eine Abstraktion mit genau einer Implementierung. Die Konvention (rechts vorwärts, links zurück) lebt stattdessen in einem Kommentar in `config.py` und wird in jeder Szene gleich angewandt.
+Deliberately *no* semantic names like `"start"`/`"back"`. With exactly
+four unlabeled buttons, direction is the meaning, and a layer
+translating `"right"` into `"start"` would be an abstraction with
+exactly one implementation. The convention (right = forward, left =
+back) instead lives in a comment in `config.py` and is applied the same
+way in every scene.
 
-`pygame.key.set_repeat()` liefert die Wiederholung beim Halten — nötig, um durchs Alphabet zu scrollen. **Achtung bei der Integration:** GPIO-Callbacks haben keine Auto-Repeat, die muss `hw.py` selbst erzeugen.
+`pygame.key.set_repeat()` provides repeat-on-hold — needed to scroll
+through the alphabet. **Watch out during integration:** GPIO callbacks
+have no auto-repeat, `hw.py` has to generate that itself.
 
-**Kein `on_enter`/`on_exit`. Szenen sind Wegwerf-Objekte.**
-Jeder Übergang baut eine neue Instanz (`self.switch_to(GameScene(self.ctx))`), also ist `__init__` der Eintrittspunkt und das Ende der Referenz ist der Austritt. Ein zweites Hook-Paar für denselben Moment wäre nur eine weitere Stelle, an der Zustand vergessen werden kann. Der einzige Preis: `__init__` läuft rund einen Frame vor der Aktivierung — bei 60-Sekunden-Runden irrelevant.
+**No `on_enter`/`on_exit`. Scenes are throwaway objects.**
+Every transition builds a new instance (`self.switch_to(GameScene(self.ctx))`),
+so `__init__` is the entry point and the end of the reference is the
+exit. A second hook pair for the same moment would just be one more
+place where state can be forgotten. The only cost: `__init__` runs about
+one frame before activation — irrelevant for 60-second rounds.
 
-**Eine Zeitquelle pro Runde.**
-Kein `set_timer` parallel zu einem `t_start`. Die Restzeit ist ein `float` in der Szene, den `update(dt)` runterzählt; aus derselben Zahl folgen Anzeige *und* Übergang. Zwei Uhren laufen auseinander, und das sieht auf einem Automaten mit Publikum nach einem Bug aus, weil es einer ist.
+**One time source per round.**
+No `set_timer` running alongside a `t_start`. Time remaining is a
+`float` on the scene that `update(dt)` counts down; both the display
+*and* the transition follow from the same number. Two clocks drift
+apart, and on a machine with an audience that looks like a bug because
+it is one.
 
-### Szenen und Übergänge
+### Scenes and transitions
 
-| Szene | Verlässt nach | Ziel |
+| Scene | Leaves on | Target |
 |---|---|---|
 | Idle | `right` | HowTo |
 | HowTo | `right` | Game |
-| HowTo | `left` oder Timeout | Idle |
-| Game | 60 s abgelaufen | Score |
-| Game | `left` zweimal innerhalb 3 s | Idle |
+| HowTo | `left` or timeout | Idle |
+| Game | 60 s elapsed | Score |
+| Game | `left` twice within 3 s | Idle |
 | Score | `right` | Leaderboard |
 | Score | `left` | Idle |
-| Leaderboard | `right` auf dem letzten Feld (speichert) | Idle |
-| Leaderboard | `left` auf dem Zurück-Pfeil | Idle |
+| Leaderboard | `right` on the last field (saves) | Idle |
+| Leaderboard | `left` on the back arrow | Idle |
 
-Die Leaderboard-Eingabe ist ein einzelner Cursor-Index: `0` = Zurück-Pfeil, `1..3` = die drei Buchstaben. `up`/`down` ändern den Buchstaben unter dem Cursor, `left`/`right` bewegen ihn. Dadurch braucht die Szene keinen Eingabemodus — Position *ist* der Modus.
+The leaderboard input is a single cursor index: `0` = back arrow, `1..3`
+= the three letters. `up`/`down` change the letter under the cursor,
+`left`/`right` move it. That means the scene needs no input mode —
+position *is* the mode.
 
-**Jede Nicht-Idle-Szene hat einen Inaktivitäts-Timeout zurück auf Idle.** Besucher gehen mitten in der Eingabe weg; der Automat muss sich ohne Personal selbst zurücksetzen.
+**Every non-idle scene has an inactivity timeout back to idle.**
+Visitors walk away mid-input; the machine has to reset itself without
+staff.
 
-### Nebenläufigkeit im Spielprozess
+### Concurrency in the game process
 
-- **Kamera-Grabber und Detection laufen als Threads, nicht als Prozesse.** `read()` und `detectMarkers()` sind C++-Code und geben das GIL frei — ein Thread liefert dort echte Parallelität. Shared Memory zwischen Prozessen wird erst nötig, wenn in Python selbst gerechnet wird.
-- **Muster: Thread schreibt in ein Attribut (unter Lock), Loop liest.** Nie umgekehrt.
-- **Der Grabber hält immer das neueste Bild**, nicht das älteste. Sonst liefert der V4L2-Puffer alte Frames und die Erkennung hinkt sichtbar hinterher.
-- **GPIO-Callbacks laufen in einem fremden Thread.** Tastendruck in eine `queue.SimpleQueue` legen, einmal pro Frame im Loop leeren.
-- **LEDs blockieren nie.** `set_state()` kommt sofort zurück — bei WLED ein `sendto`, bei lokalen LEDs ein Worker-Thread mit Zustandsslot.
-- **Kern-Zuteilung passiert in der systemd-Unit (`CPUAffinity=`)** auf Prozessebene, nicht im Python-Code. Erst pinnen, wenn gemessen wurde, dass es stottert.
+- **The camera grabber and detection run as threads, not processes.**
+  `read()` and `detectMarkers()` are C++ code and release the GIL — a
+  thread gets real parallelism there. Shared memory between processes
+  only becomes necessary once actual computation happens in Python
+  itself.
+- **Pattern: a thread writes into an attribute (under lock), the loop
+  reads.** Never the other way around.
+- **The grabber always holds the newest frame**, not the oldest.
+  Otherwise the V4L2 buffer delivers old frames and detection visibly
+  lags behind.
+- **GPIO callbacks run on a foreign thread.** Put key presses into a
+  `queue.SimpleQueue`, drain it once per frame in the loop.
+- **LEDs never block.** `set_state()` returns immediately — for WLED
+  that's a `sendto`, for local LEDs a worker thread with a state slot.
+- **Core assignment happens in the systemd unit (`CPUAffinity=`)** at
+  the process level, not in the Python code. Pin only once measurement
+  shows stuttering.
 
 ---
 
-## Idle, Cooldown, Strom
+## Idle, cooldown, power
 
-Entschieden am 27. August 2026, nachdem die Hardware-Einbindung anstand.
+Decided on 2026-08-27, once hardware integration was on the agenda.
 
-**Im Idle ist der Follower stromlos.** Die STS3215 halten Position über
-Dauerstrom gegen die Schwerkraft — das ist die Wärmequelle, und sie verschwindet
-nur, wenn das Halten aufhört. Sechs Stunden Messe bei 100 % Einschaltdauer sind
-der sichere Weg, den Gripper-Servo zu verlieren. Mit Abschaltung zwischen den
-Runden werden aus 100 % rund 67 % (60 s Runde von 90 s pro Besucher), und die
-Pausen sind gleichmäßig über den Tag verteilt.
+**In idle, the follower is powered off.** The STS3215 hold position via
+continuous current against gravity — that's the heat source, and it
+only goes away once holding stops. Six hours at the trade show at 100%
+duty cycle is the sure way to lose the gripper servo. With power-off
+between rounds, 100% becomes roughly 67% (a 60 s round out of 90 s per
+visitor), and the breaks are evenly spread across the day.
 
-**Preis dafür: der Arm fällt.** Es braucht eine Pose, in der er stromlos stabil
-steht und nicht auf das Tablett kippt. Das ist ein Konstruktionsauftrag
-(Anschlag oder Ablage), keine Software-Aufgabe, und es blockiert die
-Torque-Abschaltung bis es gelöst ist.
+**Price for that: the arm falls.** It needs a pose in which it stands
+stable with power off and doesn't tip onto the tray. That's a
+mechanical design task (a stop or a rest), not a software task, and it
+blocks torque shutdown until it's solved.
 
-**Die Attract-Mode-Armbewegung ist gestrichen.** Sie stand im Widerspruch zur
-Zeile darüber: eine Idle-Bewegungsschleife ist 100 % Einschaltdauer in genau
-den Phasen, in denen niemand spielt — der größte Wärme- und Verschleißposten
-des Standes, für Publikum, das gerade nicht da ist. Die Bewegung im Attract
-Mode machen die LEDs. Sie sind aus 8 m ohnehin besser sichtbar als ein Arm im
-Kabinett.
+**The attract-mode arm movement is cut.** It contradicted the point
+above: an idle movement loop is 100% duty cycle in exactly the phases
+when nobody is playing — the single biggest heat and wear item on the
+booth, for an audience that isn't there right now. The LEDs handle the
+movement in attract mode. They're better visible from 8 m than an arm
+in the cabinet anyway.
 
-**Aufwecken ist die gefährliche Stelle.** Follower stromlos, Besucher stellt den
-Leader irgendwohin, Torque an — der Follower springt schlagartig auf die
-Leader-Pose. Die Reihenfolge, die das verhindert: Goal-Position auf die
-**Ist-Position** des Followers setzen, *dann* Torque einschalten, dann das Goal
-über ~1,5 s zur Leader-Pose rampen. Ohne diese drei Schritte hat man
-Servowärme gegen einen Ruck pro Besucher getauscht, 240-mal am Tag. Eine
-EEPROM-Drehmomentgrenze hilft dagegen nicht — der Sprung passiert innerhalb des
-erlaubten Moments.
+**Waking up is the dangerous part.** Follower powered off, visitor
+moves the leader somewhere, torque turns on — the follower would snap
+instantly to the leader's pose. The order that prevents that: set the
+goal position to the follower's **actual position**, *then* enable
+torque, then ramp the goal to the leader's pose over ~1.5 s. Skip these
+three steps and you've traded servo heat for a jerk per visitor, 240
+times a day. An EEPROM torque limit doesn't help against this — the
+jump happens within the allowed torque.
 
-**Die Prozessgrenze bekommt genau einen Kanal.** „Roboter im Idle aus" heißt,
-dass das Spiel dem Teleop-Prozess seinen Zustand mitteilen muss. Gewählt: ein
-UDP-Datagramm an localhost, ein paar Mal pro Sekunde, Inhalt ist der
-Szenenname. Einseitig, verlustfest, ohne Verbindung und ohne Protokoll.
+**The process boundary gets exactly one channel.** "Robot off while
+idle" means the game has to tell the teleop process its state. Chosen:
+a UDP datagram to localhost, a few times per second, content is the
+scene name. One-way, lossy-tolerant, connectionless, protocol-free.
 
-Die entscheidende Eigenschaft ist nicht der Mechanismus, sondern die Auslegung:
-**kein Paket bedeutet „aus".** Stirbt der Spielprozess, hängt die Kamera, wird
-ein Kabel gezogen — dann kühlt der Arm ab, statt unbeaufsichtigt durchzuheizen.
-Ein Kanal, bei dem Stille als „letzter Zustand gilt weiter" gelesen wird,
-verwandelt jeden Absturz in sechs Stunden Dauerlast. Teleop wartet nie auf das
-Spiel; das wäre die Kopplung, die die Zwei-Prozess-Architektur vermeiden soll.
+The decisive property isn't the mechanism but the intent behind it: **no
+packet means "off."** If the game process dies, the camera hangs, or a
+cable gets pulled, the arm cools down instead of quietly overheating
+unattended. A channel where silence reads as "last state still applies"
+turns every crash into six hours of continuous load. Teleop never waits
+on the game; that would be exactly the coupling the two-process
+architecture is meant to avoid.
 
-**Cooldown ist kein Spielmechanismus.** Die Servos führen ihre Temperatur in
-einem Register; gelesen wird sie mit 1 Hz, nicht im Teleop-Takt — Temperatur
-ändert sich über Zehner-Sekunden, und jeder Read kostet Buszeit im
-30–50-Hz-Zyklus. Der Wert geht ins Log und auf die LED-Farbe. Erst an einer
-harten Grenze schaltet der Teleop-Prozess das Drehmoment ab, unabhängig vom
-Spielzustand. Bewusst *keine* Runden-Sperre: „bitte warten" ist am Messestand
-mit Warteschlange ein sichtbarer Ausfall, und wenn die harte Grenze greift, ist
-ohnehin etwas anderes kaputt.
+**Cooldown is not a game mechanic.** The servos track their temperature
+in a register; it's read at 1 Hz, not on the teleop tick — temperature
+changes over tens of seconds, and every read costs bus time in the
+30–50 Hz cycle. The value goes into the log and onto the LED color.
+Only at a hard limit does the teleop process cut torque, independent of
+game state. Deliberately *no* round lockout: "please wait" is a visible
+outage at a booth with a queue, and if the hard limit ever triggers,
+something else is already broken anyway.
 
-**Kerne: nur Teleop wird gepinnt.** `CPUAffinity=3` und `Nice=-10` in der
-Teleop-Unit, `CPUAffinity=0-2` für das Spiel. Der Teleop-Loop ist CPU-leicht —
-er wartet auf dem seriellen Bus —, aber terminkritisch: verspätete Zyklen sieht
-man als Ruckeln im Arm. Das sind zwei verschiedene Probleme; Affinität löst
-„darf nicht verdrängt werden", Priorität löst „darf nicht zu spät kommen".
-IRQ-Affinität bleibt liegen, bis gemessen ist, dass sie fehlt.
+**Cores: only teleop gets pinned.** `CPUAffinity=3` and `Nice=-10` in
+the teleop unit, `CPUAffinity=0-2` for the game. The teleop loop is
+CPU-light — it waits on the serial bus — but time-critical: late cycles
+show up as jitter in the arm. Those are two different problems;
+affinity solves "must not get preempted," priority solves "must not run
+late." IRQ affinity is left alone until measurement shows it's missing.
 
-Was Pinning **nicht** trennt: Speicherbandbreite, den USB-Host-Controller und
-das Wärmebudget. Throttelt der Pi, sinkt der Takt für alle vier Kerne
-gleichzeitig — auch für den gepinnten Teleop-Loop.
+What pinning does **not** separate: memory bandwidth, the USB host
+controller, and the thermal budget. If the Pi throttles, clock speed
+drops for all four cores at once — including the pinned teleop loop.
 
-**Not-Aus trennt die 12-V-Schiene physisch.** Ein Pilzknopf, den eine
-Python-Schleife per GPIO abfragt, ist kein Not-Aus, sondern ein Knopf: wenn der
-Prozess hängt — der Fall, gegen den man sich absichert — tut er nichts. Die
-Software-Aufgabe daran ist nicht das Auslösen, sondern das saubere Hochfahren
-danach, denn der Follower steht dann irgendwo (siehe Weckrampe).
+**The e-stop physically disconnects the 12 V rail.** A mushroom button
+that a Python loop polls via GPIO isn't an e-stop, it's a button: if
+the process hangs — the exact case you're guarding against — it does
+nothing. The software task here isn't triggering the stop, it's the
+clean startup afterward, because the follower then sits somewhere (see
+wake ramp).
 
-**LEDs bleiben auf dem ESP32.** WLED über UDP nimmt Timing, Pegelwandlung und
-das Netzteil aus dem Pi. Ein WS2812B-Strang ist bei Vollweiß mit ~60 mA pro LED
-der größte Einzelverbraucher am Stand, deutlich vor dem Pi —
-Helligkeitsbegrenzung ist damit Powermanagement und Wärmemanagement in einer
-Zahl.
+**LEDs stay on the ESP32.** WLED over UDP takes timing, level shifting,
+and the power supply off the Pi. A WS2812B strand at full white with
+~60 mA per LED is the single largest power draw at the booth, well
+ahead of the Pi — brightness limiting is therefore power management and
+thermal management in one number.
 
-**Zwei Fehlerbilder, die am Messetag garantiert falsch diagnostiziert werden:**
-Unterspannung am Pi zeigt sich als Drosselung *und* als USB-Aussetzer — „die
-Kamera fällt sporadisch aus" ist meist die Stromversorgung, nicht der Code. Und
-Einschaltstrom: alles gleichzeitig am selben Schalter kann Netzteile in die
-Strombegrenzung treiben, dann startet der Automat „manchmal nicht", was nach
-Software aussieht.
+**Two failure modes that will definitely get misdiagnosed at the trade
+show:** undervoltage on the Pi shows up as throttling *and* as USB
+dropouts — "the camera cuts out sporadically" is usually the power
+supply, not the code. And inrush current: everything switching on at
+once on the same switch can push power supplies into current limiting,
+then the machine "sometimes doesn't start," which looks like software.
 
-**Der Idle-Screen rendert mit 20 FPS statt 60** (`IDLE_FPS` in `config.py`,
-`TICK` als Klassenattribut der Szene). Er zeigt einen Text, der zweimal pro
-Sekunde blinkt, und eine Bestenliste, die sich gar nicht ändert — dafür 60-mal
-pro Sekunde 2,3 Megapixel durch die Barrel-Distortion zu schieben ist sechs
-Stunden Wärme in einem geschlossenen Alu-Kabinett, für ein Bild, das niemand
-ansieht. Der unsichtbarste Hebel im ganzen Projekt und der billigste.
+**The idle screen renders at 20 FPS instead of 60**
+(`IDLE_FPS` in `config.py`, `TICK` as a class attribute of the scene).
+It shows text that blinks twice a second and a leaderboard that doesn't
+change at all — pushing 2.3 megapixels through the barrel distortion 60
+times a second for that is six hours of heat in a closed aluminum
+cabinet for an image nobody is looking at. The least visible lever in
+the whole project and the cheapest.
 
-Aktive Kühlung und ein Luftweg im Kabinett bleiben trotzdem erste Ordnung; jede
-Software-Sparmaßnahme ist zweite.
+Active cooling and an airflow path in the cabinet remain first-order
+regardless; every software saving is second-order.
 
-### Was gemessen werden muss
+### What needs to be measured
 
-- Haltestrom und Servotemperatur des Followers in Arbeitspose, mit Puck im
-  Gripper, über 10 Minuten
-- Ob und wo der Arm stromlos stabil steht
-- Beide Kameras gleichzeitig am realen Pi, in den Formaten, die gewählt werden
-- Pi-Temperatur im geschlossenen Kabinett unter Volllast
-- Teleop-Zykluszeit-Jitter, gemessen *während* das Spiel rendert — vorher ist
-  jede Aussage über Kerne geraten
+- Holding current and servo temperature of the follower in working
+  pose, with a puck in the gripper, over 10 minutes
+- Whether and where the arm stands stable with power off
+- Both cameras simultaneously on the real Pi, in the formats that get
+  chosen
+- Pi temperature in the closed cabinet under full load
+- Teleop cycle-time jitter, measured *while* the game is rendering —
+  before that, any statement about cores is a guess
 
-### Kamera und Passthrough (umgesetzt am 27. August)
+### Camera and passthrough (implemented 2026-08-27)
 
-`Camera` ist ein Grabber-Thread mit `BUFFERSIZE=1`, `ArucoDetector` ein zweiter
-Thread mit `DETECT_HZ`. Zwei Threads statt einem, weil auf dem Entwicklungsrechner
-*eine* Webcam beides bedient: liefe die Erkennung im Grabber-Thread, würde die
-Bildrate des Passthrough an der Erkennungsdauer hängen.
+`Camera` is a grabber thread with `BUFFERSIZE=1`, `ArucoDetector` a
+second thread with `DETECT_HZ`. Two threads instead of one because on
+the dev machine *one* webcam serves both: if detection ran in the
+grabber thread, the passthrough frame rate would be tied to detection
+time.
 
-**Format vor Auflösung.** `MJPG` wird gesetzt, bevor Breite und Höhe gesetzt
-werden. Als YUYV kostet 720p ein Vielfaches an USB-Bandbreite, und genau daran
-entscheidet sich, ob zwei Kameras an einem Controller laufen.
+**Format before resolution.** `MJPG` is set before width and height are
+set. As YUYV, 720p costs a multiple of the USB bandwidth, and that's
+exactly what decides whether two cameras can run on one controller.
 
-**`Camera` scheitert laut**, wenn sich das Gerät nicht öffnen lässt, statt
-leise auf `FakeDetector` zurückzufallen. Erfundene Zahlen auf dem Automaten
-wären am Messestand nicht als Fehler zu erkennen; ein Startabbruch ist es.
+**`Camera` fails loudly** if the device can't be opened, instead of
+silently falling back to `FakeDetector`. Made-up numbers on the machine
+wouldn't register as an error at the trade show; a startup abort does.
 
-**Passthrough nur in der `GameScene`**, beide Bilder 880 × 495 nebeneinander.
-Im Idle bleibt die USB-Bandbreite frei und der Pi kalt — dieselbe Regel wie bei
-den Servos. Gemessen 1,5 ms pro Frame fuer die ganze Szene inklusive beider
-Panes; `CameraView` konvertiert nur, wenn die Kamera wirklich ein neues Bild
-geliefert hat (Sequenzzaehler in `Camera`), sonst wuerde jedes Kamerabild bei
-30 fps Quelle und 60 fps Rendern zweimal umgerechnet.
+**Passthrough only in `GameScene`**, both images 800 × 450 side by
+side. In idle, USB bandwidth stays free and the Pi stays cool — same
+rule as for the servos. Measured 1.5 ms per frame for the whole scene,
+including both panes; `CameraView` only converts when the camera has
+actually delivered a new frame (a sequence counter in `Camera`). Since
+the target frame rate is now 30, source and rendering run at the same
+speed and the counter rarely saves anything — it stays anyway: it costs
+one comparison and covers the case where a camera drops out or hangs.
 
-**`CAM_INDEXES` ist ein Paar**, `(Arm, Top-Down)`. Stehen zweimal dieselbe 0
-darin, oeffnet `main.py` das Geraet trotzdem nur einmal (`set()`) und speist
-beide Panes aus einem Grabber — das ist der Layout-Mock mit einer Webcam.
-Echte Hardware ist `(0, 1)`, eine Zahl. Der Detector haengt immer an der
-zweiten, der Top-Down-Kamera. `pygame.image.frombuffer(..., "BGR")` spart das `cvtColor`,
-pygame-ce nimmt OpenCVs Kanalreihenfolge direkt an.
+**`CAM_INDEXES` is a pair**, `(arm, top-down)`. If the same 0 appears
+twice, `main.py` still only opens the device once (`set()`) and feeds
+both panes from one grabber — that's the layout mock with a single
+webcam. Real hardware is `(0, 1)`, one number. The detector always
+hangs off the second, the top-down camera. `pygame.image.frombuffer(..., "BGR")`
+saves the `cvtColor` call — pygame-ce accepts OpenCV's channel order
+directly.
 
-### Befund: Race in `tray_sum()` (behoben)
+### Finding: race in `tray_sum()` (fixed)
 
-`seen` wurde vom Detector-Thread beschrieben und vom Render-Loop ohne Lock
-gelesen. Ein Update auf einen bestehenden Schlüssel ist harmlos, ein **neuer**
-Schlüssel während der Iteration nicht: `RuntimeError: dictionary changed size
-during iteration`. Reproduziert, nicht theoretisch. Der Moment, in dem es
-zuschlägt, ist genau der, in dem ein Marker zum ersten Mal auftaucht — also
-mitten in der Runde. Pro Runde unwahrscheinlich, über 240 Besucher nicht.
-`fresh()` hält jetzt einen `threading.Lock`.
+`seen` was written by the detector thread and read by the render loop
+without a lock. An update to an existing key is harmless, a **new** key
+during iteration is not: `RuntimeError: dictionary changed size during
+iteration`. Reproduced, not theoretical. The moment it strikes is
+exactly the moment a marker first appears — i.e. mid-round. Unlikely per
+round, not unlikely over 240 visitors. `fresh()` now holds a
+`threading.Lock`.
 
-### Overlay auf der Top-Down-Kamera
+### Overlay on the top-down camera
 
-**Nur das Top-Down-Pane bekommt einen Detector.** Die Arm-Kamera bleibt reiner
-Passthrough — sie sieht das Tablett aus einem anderen Winkel, dort gälten die
-Ecken nicht, und ein zweiter Detector kostete Rechenzeit für Dekoration.
-`CameraView(cam, det=None)` trägt die Zuordnung: das Pane weiß, ob es etwas
-einzublenden hat.
+**Only the top-down pane gets a detector.** The arm camera stays pure
+passthrough — it sees the tray from a different angle, the corners
+wouldn't apply there, and a second detector would cost compute time for
+decoration. `CameraView(cam, det=None)` carries the mapping: the pane
+knows whether it has anything to overlay.
 
-**Gezeichnet wird nur die Zahl**, in `MARK_FONT`/`YELLOW`, zentriert auf dem
-Schwerpunkt der vier Marker-Ecken. Kein Viereck und keine Unterlage: der Marker
-markiert sich selbst, ein Rahmen darum sagt nichts, was das Bild nicht schon
-zeigt, und verdeckt den Puck. Entschieden am 27. August, nachdem beides einmal
-auf dem Schirm stand.
+**Prices have not been shown in the image since 2026-09-11.** Before
+that, the overlay drew the value of every detected marker at the
+centroid of its four corners. That contradicted the game's basic rule:
+"EVERY TREAT HAS A HIDDEN PRICE" — anyone who can read the prices during
+the round calculates instead of estimating, and the reveal at the end
+loses its learning moment. From 8 m nobody read it anyway; at the
+machine, where hands are on the leader arm and the screen is an arm's
+length away, they did.
 
-Der Preis ist benannt und in Kauf genommen: Gelb auf einem hellen Puck hat
-keinen garantierten Kontrast mehr. Wenn das in der Halle nicht steht, ist ein
-schwarzer Schatten hinter der Ziffer (dieselbe Zahl 2 px versetzt in `BLACK`)
-die nächstkleinere Stufe — nicht die Unterlage zurück.
+The code sits commented out in `GameScene.overlay`, because while
+setting up the camera it's the only thing that shows *which* marker
+detection sees, not just that it sees one. `MARK_FONT` in `config.py`
+only still exists for that.
 
-Gemessen 1,5 ms pro Frame für die ganze Szene inklusive beider Kamerabilder.
-Vorgerenderte Zahl-Surfaces waren geplant und sind gemessen überflüssig: acht
-`font.render` kosten 0,01 ms. Ein Cache für nichts.
+What remains is the detection window — chrome in `GREY`, not a game
+value.
 
-**Verdeckte Marker bleiben stehen**, exakt so lange wie in der Summe — Overlay
-und `TOTAL` lesen dieselbe `MARKER_HOLD`-Frist aus derselben Momentaufnahme,
-die `update()` einmal pro Frame zieht. Sie können gar nicht widersprechen. Ohne
-das stünde „TOTAL 165" da, während nur vier von fünf Rahmen zu sehen sind, und
-das sähe nach einem Fehler aus, weil es einer wäre.
+**Occluded markers stay put**, for exactly as long as they do in the
+sum: `TOTAL` and the sum read the same `MARKER_HOLD` window from the
+same snapshot that `update()` pulls once per frame. They can't
+disagree.
 
-### Detektionsfenster (`TRAY_ROI`)
+### Detection window (`TRAY_ROI`)
 
-Die Top-Down-Kamera ist Weitwinkel und sieht den halben Messestand mit.
-`TRAY_ROI` begrenzt die Erkennung auf ein Rechteck in Bildanteilen.
+The top-down camera is wide-angle and sees half the booth. `TRAY_ROI`
+limits detection to a rectangle in image fractions.
 
-**Umgesetzt als Zuschnitt, nicht als Filter.** Der Detector schneidet den
-Ausschnitt aus dem Frame (eine numpy-Sicht, keine Kopie) und erkennt nur darin.
-Das erledigt beides in einem Schritt und ist billiger: gemessen **1,21 ms statt
-2,00 ms** pro Durchlauf bei 60 % × 70 %. Ein Marker am Bildrand verschwindet
-dabei von selbst, statt erkannt und danach verworfen zu werden.
+**Implemented as a crop, not a filter.** The detector cuts the region
+out of the frame (a numpy view, not a copy) and only detects within it.
+That does both jobs in one step and is cheaper: measured **1.21 ms
+instead of 2.00 ms** per pass at 60% × 70%. A marker at the image edge
+simply disappears instead of being detected and then discarded.
 
-Die Ecken kommen anschließend zurück auf Anteile am *ganzen* Bild gerechnet,
-damit die Szene nur mit dem Pane-Rechteck multiplizieren muss.
+The corners then come back as fractions of the *whole* image, so the
+scene only has to multiply by the pane rectangle.
 
-**Das Rechteck steht in `GREY` im Bild** — Chrome, kein Spielwert, deshalb nicht
-Gelb. Es ist sichtbar, weil man `TRAY_ROI` beim Ausrichten der Kamera in der
-Halle einstellt und sonst blind justieren müsste. Gleiche Regel wie
+**The rectangle is drawn in `GREY`** — chrome, not a game value, hence
+not yellow. It's visible because you set `TRAY_ROI` while aligning the
+camera in the hall, and would otherwise have to aim blind. Same rule as
 `SCANLINE_ALPHA`.
 
-**Fremde Marker-IDs werden verworfen.** Was nicht in `VALUES` steht, gehört
-nicht zum Spiel — ein ausgedruckter Testbogen auf dem Tisch kann damit keine
-Punkte erzeugen.
+**Unknown marker IDs are discarded.** Anything not in `VALUES` isn't
+part of the game — a printed test sheet on the table can't score points
+because of this.
 
-### Ton bei neuer Erkennung
+### Sound on new detection
 
-`"blip"` in `SFX`: eine einzelne hohe Note, `duty=0.125`, `vol=1200` gegen 2600
-bei `"ok"`, 200 ms. Kein Recycling des Knopftons — sonst klingt ein Puck wie ein
-Knopfdruck und der Signifier-Mechanismus verliert seine Eindeutigkeit.
+`"blip"` in `SFX`: a single high note, `duty=0.125`, `vol=1200` versus
+2600 for `"ok"`, 200 ms. No recycling of the button sound — otherwise a
+puck sounds like a button press and the signifier mechanism loses its
+uniqueness.
 
-Ausgelöst wird bei **neu erkannt**, nicht bei sichtbar, sonst feuert es
-`DETECT_HZ`-mal pro Sekunde. Der Vergleich steht in `GameScene.update`, eine
-Mengendifferenz gegen den letzten Frame. Damit fällt zweierlei von selbst
-heraus: fünf Pucks gleichzeitig geben **einen** Ton, und ein kurz verdeckter
-Marker piept nicht erneut, weil ihn die Hysterese gar nicht erst verlässt.
+Triggered on **newly detected**, not on visible, otherwise it fires
+`DETECT_HZ` times per second. The comparison sits in `GameScene.update`,
+a set difference against the last frame. Two things fall out of that
+for free: five pucks at once produce **one** sound, and a briefly
+occluded marker doesn't beep again, because the hysteresis never lets
+it leave in the first place.
 
-Die Logik steht in der Szene, nicht im Thread — `hw.py` importiert weiterhin
-kein `music`, und „Thread schreibt, Loop liest" bleibt unverletzt.
+The logic sits in the scene, not in the thread — `hw.py` still doesn't
+import `music`, and "thread writes, loop reads" stays intact.
 
-**`INTER_LINEAR` statt `INTER_AREA`:** gemessen 0,17 ms statt 3,5 ms pro Frame.
-AREA mittelt beim Verkleinern über alle Quellpixel und ist bei Faktor 3
-zwanzigmal teurer. Hinter Scanlines sieht das niemand — 3,5 ms wären auf dem Pi
-ein Fünftel des Frame-Budgets für ein Inset, das laut Layout-Prinzip Beiwerk
-ist.
+**`INTER_LINEAR` instead of `INTER_AREA`:** measured 0.17 ms instead of
+3.5 ms per frame. AREA averages over all source pixels when shrinking
+and is twenty times more expensive at a factor of 3. Behind scanlines
+nobody sees the difference — 3.5 ms would be a fifth of the frame
+budget on the Pi for an inset that, per the layout principle, is
+garnish.
 
 ---
 
-## UI-Layout
+## UI layout
 
-### Auflösung und Vollbild
+### Resolution and fullscreen
 
-**Entwurfsauflösung = Panelauflösung: 1920 × 1200 (16:10), Asus 15".**
-Entschieden am 27. August 2026. Jede Koordinate in `scenes.py` ist eine absolute
-Zahl für dieses Raster; auf dem Zielmonitor ist die Abbildung damit 1:1, es wird
-nichts skaliert und nichts weichgezeichnet. Was man hinschreibt, steht da.
+**Design resolution = panel resolution: 1920 × 1080, Asus MB169CK.**
+Moved there on 2026-09-10. Every coordinate in `scenes.py` is an
+absolute number for this grid; on the target monitor the mapping is
+1:1, nothing gets scaled, nothing gets blurred. What you write is what
+shows up.
 
-Die vorher erwogene Variante — bei 1280 × 720 bleiben und hochskalieren — ist
-verworfen. Sie hätte auf 16:10 oben und unten je 60 px schwarze Balken erzeugt
-und jeden Pixel um Faktor 1,5 gestreckt, also *nicht* ganzzahlig: bei
-Pixelschrift ohne Antialiasing werden daraus ungleich dicke Buchstabenstriche.
-Nativ zu zeichnen kostet einmalig 22 geänderte Zahlen und ist danach für immer
-erledigt.
-
-**`pygame.SCALED` bleibt trotzdem gesetzt** — als Versicherung, nicht als
-Werkzeug:
+**`pygame.SCALED` is gone.** Until 2026-09-09 the design resolution was
+1920 × 1200, i.e. a panel that doesn't exist — the 16:10 figure was
+wrong — and `SCALED` scaled every frame down to 1080. That measured at
+around 20 ms per frame, more than CRT and curvature combined, and it
+put the 8×8 pixel font onto a grid with a factor of 0.9: unequal glyph
+pixel sizes, exactly the bug all the font sizes being divisible by 8
+exists to prevent.
 
 ```python
-flags = pygame.SCALED | (pygame.FULLSCREEN if FULLSCREEN else 0)
-screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=1)
+flags = pygame.FULLSCREEN if FULLSCREEN else 0
+try:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=VSYNC)
+except pygame.error:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
 pygame.mouse.set_visible(False)
 ```
 
-Auf dem Asus ist das Flag ein Durchreicher und tut nichts. Hängt am Messetag ein
-anderes Panel dran — und der Monitor steht unter „Offene Punkte" —, skaliert SDL
-seitenverhältnistreu in Hardware, statt dass das Layout in der Ecke klebt. Ein
-Flag als Rückfallebene ist billiger als die Annahme, dass sich nie etwas ändert.
+The `try` isn't decoration: `vsync` without `SCALED` is
+backend-dependent, and a machine that starts with an exception instead
+of a picture on the trade-show day is worse than one with tearing.
+`PNP_VSYNC=0` turns it off for re-measuring.
 
-`vsync=1` verhindert Tearing beim Farbverlauf des Timers, der einzigen Stelle,
-an der sich pro Frame eine große Fläche ändert. `set_visible(False)` nimmt den
-Mauszeiger weg, der im Vollbild sonst mitten im Bild stehen bleibt.
+`vsync` prevents tearing in the timer's color gradient, the one spot
+where a large area changes per frame. It measured a cost of 12 to 19%
+at 60 Hz; at 30 fps there's budget for it. `set_visible(False)` removes
+the mouse cursor, which would otherwise sit in the middle of the screen
+in fullscreen.
 
-**`FULLSCREEN` ist ein Schalter in `config.py`**, kein fester Wert: beim
-Entwickeln aus (Fenster, `q` beendet), am Automaten an. Ein Flag, zwei
-Betriebsarten, keine zweite Codebasis.
+**`FULLSCREEN` is a switch in `config.py`**, not a fixed value: off
+while developing (windowed, `q` quits), on at the machine. One flag,
+two modes of operation, no second codebase.
 
-**Konsequenz für später:** Das Layout ist damit an 16:10 gebunden. Ein Wechsel
-auf ein 16:9-Panel wäre kein Absturz — `SCALED` fängt ihn ab —, aber es gäbe
-dann seitliche Balken. Der Monitor gilt ab hier als gesetzte Hardware.
+**Consequence:** a different panel now means touching the layout, not
+just flipping a flag. That's a deliberately paid price — the fallback
+cost four times what it insured against, and the monitor is fixed
+hardware.
 
-### Schriftgrößen
+**Target frame rate 30, not 60.** Two reasons, both independent of
+compute power. First, 30 divides the panel's 60 Hz evenly: every frame
+stays up for exactly two refreshes. At 40 fps, 60/40 = 1.5, so
+alternately one and two refreshes — visible judder at a *higher* frame
+rate. Below 60, 30 is the only even number. Second, the cameras deliver
+30 frames/s; anything above that shows the same camera frame twice
+during the round. There's no 60 Hz motion in this game at all: a
+seconds counter, a sum, blinking text, a camera image. The arcade look
+comes from scanlines, curvature, and hard pixel edges, not from the
+frame rate. `IDLE_FPS` is set to 15, half of that, so the cadence stays
+even in idle too.
 
-`big` 168, `mid` 88, `small` 48, `tiny` 32 — alle durch 8 teilbar, Begründung
-im eigenen Abschnitt weiter unten.
+### Font sizes
 
-### Koordinaten
+`big` 168, `mid` 88, `small` 48, `tiny` 32 — all divisible by 8,
+rationale in its own section further below.
 
-Alle Koordinaten für **1920 × 1200**, Bildmitte x = 960. Zeichnen ist Handarbeit in Zahlen — das ist der bewusst gezahlte Preis für pygame statt CSS. Damit es nicht in Magic Numbers ausartet, gelten drei Regeln:
+### Coordinates
 
-- **Ein Helfer, kein Layoutsystem.** `draw(screen, font, text, x, y, color)` zeichnet einen Text zentriert auf `(x, y)`. Zentriert, nicht linksbündig, weil Zahlen ihre Breite ändern (`9` → `10`) und ein linksbündiger Wert dann sichtbar springt.
-- **`font.render(text, False, color)`** — der zweite Parameter ist Antialiasing, und der muss `False` sein. Ein Pixelfont mit Kantenglättung sieht aus 8 m matschig aus statt scharf.
-- **Farbe trägt Bedeutung, nicht Dekoration.** Sechs Farben, eine Leiter von leise nach laut, jede mit genau einem Job. Solange das gilt, ist „welche Farbe nehme ich hier" keine Entscheidung mehr, sondern eine Nachschlagung.
+All coordinates for **1920 × 1080**, screen center x = 960. Drawing is
+manual work in numbers — that's the deliberately paid price for pygame
+instead of CSS. So it doesn't spiral into magic numbers, three rules
+apply:
 
-| Farbe | Hex | Job |
+- **One helper, no layout system.** `draw(screen, font, text, x, y, color)`
+  draws text centered on `(x, y)`. Centered, not left-aligned, because
+  numbers change width (`9` → `10`) and a left-aligned value would
+  visibly jump.
+- **`font.render(text, False, color)`** — the second parameter is
+  antialiasing, and it has to be `False`. A pixel font with
+  antialiasing looks mushy from 8 m instead of sharp.
+- **Color carries meaning, not decoration.** Six colors, one ladder
+  from quiet to loud, each with exactly one job. As long as that holds,
+  "which color do I use here" is no longer a decision, just a lookup.
+
+> **Since 2026-09-11 ("Sugar Rush"):** `BLACK` is now called `BG` and is
+> `#28101E` (dark chocolate), `YELLOW` is now called `ACCENT` and is
+> `#FF65BD` (pink), `WHITE` is `#FFECF6` (cream), `GREY` is `#B0809E`.
+> The jobs are the same. New is `CANDY` — candy colors for titles and
+> sprinkles, never for game values. The tables in this section still
+> use the old names.
+
+| Color | Hex | Job |
 |---|---|---|
-| `BLACK` | `#000000` | Grund, immer |
-| `GREY` | `#787878` | Beschriftungen (`GOAL`, `TOTAL`) |
-| `WHITE` | `#F0F0F0` | neutrale Werte |
-| `YELLOW` | `#FFC800` | was der Besucher *gerade* beeinflusst |
-| `ORANGE` | `#DE6207` | Warnung — HPI-Orange |
-| `RED` | `#B1073A` | die letzten Sekunden — HPI-Rot |
+| `BLACK` | `#000000` | background, always |
+| `GREY` | `#787878` | labels (`GOAL`, `TOTAL`) |
+| `WHITE` | `#F0F0F0` | neutral values |
+| `YELLOW` | `#FFC800` | what the visitor is *currently* affecting |
+| `ORANGE` | `#DE6207` | warning — HPI orange |
+| `RED` | `#B1073A` | the final seconds — HPI red |
 
-Rot und Orange sind aus dem HPI-Logo-SVG gezogen, nicht geschätzt. `YELLOW` ist heller als das HPI-Gelb `#F7A900`, weil auf Schwarz aus 8 m das hellere gewinnt und man den Unterschied neben dem Logo nicht sieht. `GREEN` und `DARKRED` sind entfallen: Grün ist nicht HPI, und ein grüner Grund widerspricht „schwarzer Grund". `ORANGE` hat noch keinen Ort im Code — die Abbruchwarnung in `GameScene` ist der offensichtliche.
+Red and orange are pulled from the HPI logo SVG, not eyeballed.
+`YELLOW` is brighter than the HPI yellow `#F7A900`, because on black
+from 8 m the brighter one wins, and the difference isn't visible next
+to the logo. `GREEN` and `DARKRED` were dropped: green isn't HPI, and a
+green background contradicts "black background." `ORANGE` doesn't have
+a home in the code yet — the cancel warning in `GameScene` is the
+obvious spot.
 
-### Schriftgrößen
+### Font sizes
 
-`main.py` baut ein Dict und legt es in `Ctx.fonts`. Vier Größen reichen, mehr sind nur Entscheidungen ohne Nutzen.
+`main.py` builds a dict and stores it in `Ctx.fonts`. Four sizes are
+enough, more would just be decisions with no payoff.
 
-| Schlüssel | Größe | Wofür |
+| Key | Size | For |
 |---|---|---|
-| `big` | 168 | Die Zahlen, die aus 8 m lesbar sein müssen |
-| `mid` | 88 | Restzeit, Überschriften |
-| `small` | 48 | Beschriftungen, Bestenliste |
-| `tiny` | 32 | Steuerungshinweise, Preistabelle |
+| `big` | 168 | The numbers that must be readable from 8 m |
+| `mid` | 88 | Time remaining, headings |
+| `small` | 48 | Labels, leaderboard |
+| `tiny` | 32 | Control hints, price table |
 
-**Die Schrift ist Press Start 2P** (SIL OFL, liegt in `game/assets/`) — die literale Arcade-Font, den NAMCO-Automaten der 80er nachgezeichnet. Ausgewählt am 27. August 2026 gegen VT323, Silkscreen und Silkscreen Bold. Kriterium war Breite pro Ziffernhöhe, weil Breite bei diesen Größen die knappste Ressource auf dem Schirm ist:
+**The font is Press Start 2P** (SIL OFL, in `game/assets/`) — the
+literal arcade font, traced from 1980s NAMCO machines. Chosen on
+2026-08-27 over VT323, Silkscreen, and Silkscreen Bold. The criterion
+was width per digit height, because width is the scarcest resource on
+screen at these sizes:
 
-| Font | Größe für 200 px Ziffern | `"180"` | `"PICK'N'PLAY"` |
+| Font | Size for 200 px digits | `"180"` | `"PICK'N'PLAY"` |
 |---|---|---|---|
 | **Press Start 2P** | 228 | 628 px | 2480 px |
 | VT323 | 357 | 378 px | 1547 px |
 | Silkscreen | 320 | 600 px | 2240 px |
 | Silkscreen Bold | 320 | 720 px | 2680 px |
 
-VT323 ist mit Abstand die schmalste und wäre die naheliegende Wahl gewesen — aber ihre Striche sind ein Designpixel dünn, und dünn verliert aus 8 m in heller Halle. Press Start 2P hat die dicksten Striche und wird nur beim Titel breit, und der Titel ist die eine Zeichenkette, die niemand unter Zeitdruck lesen muss.
+VT323 is by far the narrowest and would have been the obvious choice —
+but its strokes are a design-pixel thin, and thin loses out from 8 m in
+a bright hall. Press Start 2P has the thickest strokes and only gets
+wide on the title, and the title is the one string nobody has to read
+under time pressure.
 
-**Warum diese vier Zahlen.** Press Start 2P hat ein **8 × 8-Raster**: Schriftgröße ÷ 8 ist die Kantenlänge eines Glyphenpixels. Nur Vielfache von 8 sind pixelgenau, alles andere macht die Pixel *innerhalb* einer Glyphe ungleich groß. `big 168` trifft die Ziffernhöhe des alten Platzhalters fast genau (147 px statt 154) und lässt `PICK'N'PLAY` 1848 px breit werden — 36 px Rand, für ein Marquee genau richtig.
+**Why these four numbers.** Press Start 2P has an **8×8 grid**: font
+size ÷ 8 is the edge length of one glyph pixel. Only multiples of 8 are
+pixel-exact, anything else makes the pixels *within* one glyph unequal
+sizes. `big 168` hits the digit height of the old placeholder almost
+exactly (147 px instead of 154) and makes `PICK'N'PLAY` 1848 px wide —
+36 px margin, exactly right for a marquee.
 
-Alle 17 Zeichenketten aus `scenes.py` sind gegen ihre verfügbare Breite geprüft, keine läuft über: **keine Koordinate ändert sich.** `main.py` baut das Dict jetzt in einer Zeile aus `FONT_SIZES`.
+All 17 strings from `scenes.py` have been checked against their
+available width, none overflows: **no coordinate changes.** `main.py`
+now builds the dict in one line from `FONT_SIZES`.
 
-Die Pfeilzeichen `▶ ◀ ▲ ▼` existieren in der Font (nachgesehen, nicht vermutet), ebenso Umlaute und `€`. **Seit dem 27. August sind sie überall im Einsatz**, die ASCII-Behelfe `<`, `>`, `^v` sind raus. Die Glyphen sind gefüllte Dreiecke auf demselben 8 × 8-Raster wie alles andere — ein selbstgezeichnetes `pygame.draw.polygon` war zwischenzeitlich im Code und flog wieder raus: es bricht das Pixelraster, skaliert nicht mit der Schriftgröße und ist Code für etwas, das die Font schon kann.
+The arrow glyphs `▶ ◀ ▲ ▼` exist in the font (checked, not assumed), as
+do umlauts and `€`. **Since 2026-08-27 they're used everywhere**, the
+ASCII fallbacks `<`, `>`, `^v` are gone. The glyphs are filled triangles
+on the same 8×8 grid as everything else — a hand-drawn
+`pygame.draw.polygon` was briefly in the code and got pulled again: it
+breaks the pixel grid, doesn't scale with the font size, and is code
+for something the font can already do.
 
-**`pygame.font.Font(pfad, größe)` mit mitgelieferter TTF ist auf dem Pi robuster als `SysFont`** — kein fontconfig, keine Frage, welche Schriften auf dem Raspberry-OS-Image liegen. Das Repository wird 118 kB schwerer und ist dafür reproduzierbar. Der Pfad wird aus `__file__` gebaut, nicht relativ zum Arbeitsverzeichnis, sonst bricht der systemd-Start.
+**`pygame.font.Font(path, size)` with a bundled TTF is more robust on
+the Pi than `SysFont`** — no fontconfig, no question of which fonts are
+on the Raspberry OS image. The repository gets 118 kB heavier and is
+reproducible in exchange. The path is built from `__file__`, not
+relative to the working directory, otherwise the systemd start breaks.
 
-### Footer-Band (28. August)
+### Footer band (2026-08-28)
 
-Zwei Konstanten in `config.py` und ein siebenzeiliger Helfer in `scenes.py`:
+Two constants in `config.py` and a seven-line helper in `scenes.py`:
 
 ```python
-FOOTER_Y    = 1120   # die eine Zeile, die sagt was die Knoepfe tun
-SAFE_BOTTOM = 1040   # kein Szeneninhalt darunter. Nie.
+FOOTER_Y    = 1000   # the one line that says what the buttons do
+SAFE_BOTTOM =  920   # no scene content below this. Ever.
 ```
 
-**Der Anlass war ein echter Klippfehler.** Die fünfte Bestenlisten-Zeile lag
-auf y 1096…1144, die Rückfrage `PRESS ◀ AGAIN TO DISCARD` auf 1114…1146 —
-528 × 30 px Überdeckung. Sichtbar wurde sie erst, als die DB fünf Einträge
-hatte, deshalb „klippt manchmal". Ursache war nicht die Zahl 1130, sondern
-dass eine *datenabhängig lange* Liste und ein Overlay sich denselben Raum
-ohne Absprache teilten.
+**The trigger was a real clipping bug.** The fifth leaderboard row sat
+at y 1096…1144, the confirmation `PRESS ◀ AGAIN TO DISCARD` at
+1114…1146 — 528 × 30 px of overlap. It only became visible once the DB
+had five entries, hence "clips sometimes." The cause wasn't the number
+1130 but that a *data-dependent-length* list and an overlay shared the
+same space without coordinating.
 
-**Die Rückfrage ersetzt die Hinweiszeile, statt daneben zu stehen.** Damit
-kann nichts mehr kollidieren — nicht weil die Zahlen jetzt passen, sondern
-weil es kein zweites Element gibt. Und es ist die bessere Rückmeldung: die
-Antwort auf einen Knopfdruck erscheint dort, wo ohnehin steht, was der Knopf
-tut. Vorher standen Cursor `◀` (510, 470) und seine Antwort 660 px auseinander.
+**The confirmation replaces the hint line instead of sitting next to
+it.** That means nothing can collide anymore — not because the numbers
+now fit, but because there's no second element. And it's the better
+feedback: the response to a button press appears exactly where it
+already says what the button does. Before, the cursor `◀` (510, 470)
+and its response sat 660 px apart.
+
+Both numbers are **distances from the bottom edge**, not fractions of
+height: the band is a fixed line at the screen edge and doesn't scale.
+When moving to 1080, they therefore stayed at 80 and 160 px from the
+edge — only the scene content above them shifted.
 
 ```python
 footer(screen, f, left=None, right=None, note=None)
 ```
 
-`note` gelb und zentriert, sonst `left` bei x = 600 und `right` bei x = 1320,
-beide `tiny` / `GREY`. **Pfeil immer zuerst** (`◀ BACK`, `▶ NEXT`) — die
-Richtung trägt die Position im Footer, nicht die Wortstellung. Vorher
-spiegelte `◀ BACK  START ▶` und `▲▼ LETTER ◀▶ FIELD` spiegelte nicht.
+`note` yellow and centered, otherwise `left` at x = 600 and `right` at
+x = 1320, both `tiny` / `GREY`. **The arrow always comes first**
+(`◀ BACK`, `▶ NEXT`) — direction is carried by position in the footer,
+not by word order. Before, `◀ BACK  START ▶` mirrored and
+`▲▼ LETTER ◀▶ FIELD` didn't.
 
-| Szene | links | rechts | `note` |
+| Scene | left | right | `note` |
 |---|---|---|---|
 | `HowToScene` | `◀ BACK` | `▶ START` | — |
 | `GameScene` | `◀ QUIT` | — | `◀ AGAIN TO QUIT` |
 | `DisplayScoreScene` | `◀ BACK` | `▶ NEXT` | — |
-| `LeaderboardScene` | `▲▼ LETTER`, bei `cursor == 0`: `◀ DISCARD` | `▶ SAVE` bei `cursor == 3`, sonst `▶ NEXT` | `◀ AGAIN TO DISCARD` |
+| `LeaderboardScene` | `▲▼ LETTER`, at `cursor == 0`: `◀ DISCARD` | `▶ SAVE` at `cursor == 3`, otherwise `▶ NEXT` | `◀ AGAIN TO DISCARD` |
 
-`IdleScene` hat keinen Footer — das blinkende `PRESS ▶` in `mid` ist dort der
-Signifier, und ein zweiter grauer Hinweis darunter würde ihn nur schwächen.
+`IdleScene` has no footer — the blinking `PRESS ▶` in `mid` is the
+signifier there, and a second gray hint below it would only weaken it.
 
-**`◀ QUIT` steht in der Runde permanent da**, nicht erst nach dem ersten
-Druck. Ein verstecktes Bedienelement ist keins; das Versehen fängt die
-Doppelbestätigung ab, nicht die Unsichtbarkeit.
+**`◀ QUIT` sits permanently in the round**, not only after the first
+press. A hidden control isn't a control; the double confirmation
+catches the accidental press, not the invisibility.
 
-### Layout-Selbsttest (`uv run game/scenes.py` → `ok`)
+### Layout self-test (`uv run game/scenes.py` → `ok`)
 
-Dieselbe Konvention wie `db.py`, `music.py`, `balance.py`. Der Test fängt
-jeden `draw()`-Aufruf der *echten* `render()`-Methoden ab und prüft die
-Rechtecke: Bildgrenzen, `SAFE_BOTTOM`, und paarweise Überdeckung — inklusive
-der beiden Kamerapanes, die kein `draw()` sind. Durchgespielt werden alle
-Szenen, `GameScene` in drei Zuständen und `LeaderboardScene` in acht
-(vier Cursorpositionen × Rückfrage an/aus).
+Same convention as `db.py`, `music.py`, `balance.py`. The test
+intercepts every `draw()` call from the *real* `render()` methods and
+checks the rectangles: screen bounds, `SAFE_BOTTOM`, and pairwise
+overlap — including the two camera panes and the cursor bar, which
+aren't a `draw()`. The bar was only added on 2026-09-10: it used to be
+a `fill()` with a magic number and was therefore invisible to the test,
+blind to exactly the class of bug the test was built for. Now it's
+`CURSOR_Y`/`CURSOR_H` on the class and the test reads it from there.
+Every scene gets played through, `GameScene` in three states and
+`LeaderboardScene` in eight (four cursor positions × confirmation
+on/off).
 
-Kein Screenshot-Vergleich: ein Referenzbild müsste bei jeder Farbänderung
-gepflegt werden und sagt trotzdem nicht, *welche* zwei Elemente sich
-überdecken. Gegengeprüft, dass der Test scheitern kann — mit den alten
-Koordinaten meldet er die Kollision, die es tatsächlich gab.
+No screenshot comparison: a reference image would have to be maintained
+for every color change and still wouldn't say *which* two elements
+overlap. Verified that the test can actually fail — with the old
+coordinates it reports the collision that actually existed.
 
 ### IdleScene
 
-**Stumm** (`MUSIC = None` plus `ctx.music.stop()` im Konstruktor). Sechs Stunden
-Chiptune am Stück sind anstrengend — und sie markieren nichts. Erst mit stillem
-Idle wird der Musikeinsatz in der `HowToScene` zum Signal „es geht los". `stop()`
-räumt dabei auch die aufgeschobene Idle-Musik weg, die `DisplayScoreScene` per
-`MUSIC_IN` eingeplant hat.
+**Silent** (`MUSIC = None` plus `ctx.music.stop()` in the constructor).
+Six hours of chiptune straight is tiring — and it doesn't mark
+anything. Only with a silent idle does the music kicking in during
+`HowToScene` become a signal that "it's starting." `stop()` also clears
+out the deferred idle music that `DisplayScoreScene` scheduled via
+`MUSIC_IN`.
 
-`▶` führt jetzt in die `HowToScene`, nicht mehr direkt ins Spiel, und gibt
-dabei `"ok"` zurück statt `"start"` — die Startfanfare gehört an den
-tatsächlichen Rundenbeginn.
+`▶` now leads into `HowToScene` instead of directly into the game, and
+returns `"ok"` instead of `"start"` — the start fanfare belongs at the
+actual start of the round.
 
-| Element | Position | Font / Farbe |
+| Element | Position | Font / Color |
 |---|---|---|
 | `PICK'N'PLAY` | 960, 260 | `big` / `YELLOW` |
-| `PRESS ▶` — blinkt 1 Hz | 960, 560 | `mid` / `WHITE` |
+| `PRESS ▶` — blinks at 1 Hz | 960, 560 | `mid` / `WHITE` |
 | `BEST — LOWEST WINS` | 960, 690 | `tiny` / `GREY` |
-| Top 5 aus `db.top(5)` | 960, 750 + i·66 | `small` / `WHITE` |
+| Top 5 from `db.top(5)` | 960, 750 + i·66 | `small` / `WHITE` |
 
-**`LOWEST WINS` ist Pflicht, nicht Deko.** Jede Bestenliste, die ein Kind
-kennt, sortiert die größte Zahl nach oben. Hier gewinnt die kleinste, und
-ohne diese Zeile liest man die Liste falsch herum. Dieselbe Zeile steht in
-der `LeaderboardScene`.
+**`LOWEST WINS` is mandatory, not decoration.** Every leaderboard a kid
+knows sorts the biggest number to the top. Here the smallest wins, and
+without this line you'd read the list backwards. The same line appears
+in `LeaderboardScene`.
 
-Das Blinken braucht keinen Timer: `self.t += dt` in `update`, und `render` prüft `int(self.t * 2) % 2`. Eine Zeitquelle, wieder dieselbe Regel wie beim Rundentimer.
+The blinking needs no timer: `self.t += dt` in `update`, and `render`
+checks `int(self.t * 2) % 2`. One time source, same rule as with the
+round timer.
 
 ### GameScene
 
-Die drei Zahlen aus dem Lesbarkeits-Prinzip. Zielwert und Tablettsumme stehen nebeneinander, damit das Auge sie direkt vergleicht — genau das ist die Denkaufgabe des Spiels.
+The three numbers from the readability principle. Target value and
+tray sum sit next to each other, so the eye compares them directly —
+that's exactly the thinking task of the game.
 
-Seit dem 27. August liegen **beide Kamerabilder gross nebeneinander** unter
-einer dreispaltigen Kopfzeile. Die Spaltenmitten 490 / 960 / 1430 gelten fuer
-Zahl *und* Bild, damit beides uebereinander steht.
+Since 2026-08-27, **both camera images sit large, side by side** under
+a three-column header row. Column centers 490 / 960 / 1430 apply to
+both number *and* image, so both align vertically.
 
-| Element | Position | Font / Farbe |
+| Element | Position | Font / Color |
 |---|---|---|
 | `GOAL` | 490, 70 | `small` / `GREY` |
-| Zielwert | 490, 145 | `mid` / `WHITE` |
+| Target value | 490, 145 | `mid` / `WHITE` |
 | `TIME` | 960, 70 | `small` / `GREY` |
-| Restzeit, ganze Sekunden | 960, 145 | `mid` / `WHITE` |
+| Time remaining, whole seconds | 960, 145 | `mid` / `WHITE` |
 | `TOTAL` | 1430, 70 | `small` / `GREY` |
-| Tablettsumme | 1430, 145 | `mid` / `YELLOW` |
-| `OFF BY`, bei Treffer `PERFECT` | 960, 265 | `small` / `GREY` |
-| Differenz, bei Treffer der Countdown | 960, 380 | `big` / `YELLOW` |
-| Arm-Kamera (Passthrough) | 880 × 495 um 490, 740 | Rahmen `GREY` |
-| Top-Down-Kamera | 880 × 495 um 1430, 740 | Rahmen `GREY` |
-| Detektionsfenster | `TRAY_ROI` im rechten Pane | `GREY`, `MARK_WIDTH` |
-| Marker-Werte | Schwerpunkt der Marker-Ecken | `MARK_FONT` / `YELLOW` |
-| `◀ QUIT` / Abbruchwarnung | Footer | siehe Footer-Band |
+| Tray sum | 1430, 145 | `mid` / `YELLOW` |
+| `OFF BY`, `PERFECT` on a hit | 960, 265 | `small` / `GREY` |
+| Difference, countdown on a hit | 960, 380 | `big` / `YELLOW` |
+| Arm camera (passthrough) | 880 × 495 around 490, 740 | frame `GREY` |
+| Top-down camera | 880 × 495 around 1430, 740 | frame `GREY` |
+| Detection window | `TRAY_ROI` in the right pane | `GREY`, `MARK_WIDTH` |
+| Marker values | centroid of marker corners | `MARK_FONT` / `YELLOW` |
+| `◀ QUIT` / cancel warning | Footer | see Footer band |
 
-**`OFF BY` in der Runde (28. August).** Vorher standen `GOAL` und `TOTAL`
-940 px auseinander und der Besucher musste die Differenz im Kopf bilden —
-unter Zeitdruck, aus 8 m, in einer lauten Halle. Die Denkaufgabe des Spiels
-ist Pucks schieben, nicht Kopfrechnen. `GOAL` und `TOTAL` sind dafür von
-`big` auf `mid` heruntergestuft; die Differenz bekommt `big`.
+**`OFF BY` during the round (2026-08-28).** Before, `GOAL` and `TOTAL`
+sat 940 px apart and the visitor had to compute the difference in
+their head — under time pressure, from 8 m, in a loud hall. The
+thinking task of this game is pushing pucks, not mental math. `GOAL`
+and `TOTAL` were downgraded from `big` to `mid` for this; the
+difference gets `big`.
 
-Es ist **dasselbe Wort wie auf dem Score-Screen** — einmal gelernt, zweimal
-benutzt. Der Score-Screen ist damit „dein letzter Stand", kein neuer Begriff.
+It's **the same word as on the score screen** — learned once, used
+twice. The score screen thus becomes "your final result," not a new
+term.
 
-**`PERFECT n` erbt genau diesen Platz.** Steht die Summe auf dem Ziel, wird
-das große gelbe Feld zum Countdown. Damit gibt es keine zweite Stelle mehr,
-an der Countdown und Abbruchwarnung sich um dieselbe Zeile streiten — vorher
-lagen beide auf 960, 1120 und ein `elif` deckte das zu.
+**`PERFECT n` inherits exactly this spot.** Once the sum sits on
+target, the large yellow field turns into a countdown. That means
+there's no longer a second spot where the countdown and the cancel
+warning fight over the same line — before, both sat at 960, 1120 and an
+`elif` papered over it.
 
-Beide `YELLOW`: `TOTAL` und die Differenz sind dasselbe — was der Besucher
-beeinflusst, einmal als Wert und einmal als Rest. `GOAL` und `TIME` sind das
-Gegebene. Die Größe trennt sie (168 gegen 88), nicht die Farbe.
+Both `YELLOW`: `TOTAL` and the difference are the same thing — what the
+visitor is affecting, once as a value and once as a remainder. `GOAL`
+and `TIME` are the given. Size separates them (168 vs. 88), not color.
 
-Die Kamerapanes rücken von 690 auf 740, damit unter der Differenz Luft
-bleibt. Nachgerechnet im Selbsttest, nicht geschätzt.
+The camera panes moved from 690 to 740, so there's breathing room below
+the difference. Verified in the self-test, not eyeballed.
 
-`CAM_VIEW` ist 16:9 wie `CAM_SIZE`. Eine andere Ratio verzerrt das Bild, weil
-`CameraView` stur auf die Zielgroesse skaliert statt zu beschneiden. Ein
-Letterbox-Zweig waere Code fuer ein Problem, das zwei Zahlen in `config.py`
-gar nicht erst entstehen lassen.
+`CAM_VIEW` is 16:9 like `CAM_SIZE`. A different ratio distorts the
+image, because `CameraView` stubbornly scales to the target size
+instead of cropping. A letterbox branch would be code for a problem
+that two numbers in `config.py` never let arise in the first place.
 
-**Entwickler-Abkuerzung (`CHEAT_TAPS`, 27. August).** Fuenfmal `>` hintereinander
-setzt `self.left = 0.0` — die Runde endet damit ueber ihren normalen Weg in
-`update()`, inklusive Finish-Sound und Musikstufe. Ein `switch_to()` direkt aus
-`handle()` waere ein zweiter Rundenschluss neben dem echten; genau den will man
-beim Testen nicht abkuerzen. Jede andere Aktion setzt den Zaehler zurueck, und
-`CHEAT_TAPS = 0` in `config.py` schaltet das Ganze am Automaten ab.
+**Developer shortcut (`CHEAT_TAPS`, 2026-08-27).** Pressing `>` five
+times in a row sets `self.left = 0.0` — the round then ends through its
+normal path in `update()`, including the finish sound and music stage.
+A `switch_to()` called directly from `handle()` would be a second round
+ending next to the real one; that's exactly what you don't want to
+shortcut while testing. Any other action resets the counter, and
+`CHEAT_TAPS = 0` in `config.py` disables the whole thing at the
+machine.
 
-Nebeneffekt aus `KEY_REPEAT`: die Taste gedrueckt *halten* feuert die fuenf
-Wiederholungen in ~0,6 s. Auf GPIO gibt es keine Repeat-Logik, dort sind es
-fuenf echte Druecke — egal, weil der Cheat dort ohnehin aus ist.
+Side effect from `KEY_REPEAT`: holding the key down fires the five
+repeats in ~0.6 s. On GPIO there's no repeat logic, there it's five
+real presses — irrelevant, because the cheat is off there anyway.
 
-**Vorzeitiges Ende bei `OFF BY 0`.** Steht die Summe `PERFECT_HOLD` Sekunden
-lang exakt auf dem Ziel, endet die Runde — über denselben Weg wie der Ablauf
-der Uhr, also inklusive Fertigsound und Szenenwechsel. Die Hysterese in
-`fresh()` fängt das Flackern ab, die fünf Sekunden fangen die Absicht. Der
-Countdown auf dem Schirm ist Pflicht: ein Abbruch ohne Vorwarnung sieht am
-Automaten nach Absturz aus. Bleiben weniger als `PERFECT_HOLD` Sekunden, läuft
-der Zähler nicht voll und die Runde endet normal — „kurz vor Schluss" braucht
-keinen Sonderfall, weil es nur eine Zeitquelle gibt.
+**Early end at `OFF BY 0`.** If the sum sits exactly on target for
+`PERFECT_HOLD` seconds, the round ends — via the same path as the clock
+running out, including the finish sound and scene change. The
+hysteresis in `fresh()` catches the flicker, the five seconds catch the
+intent. The countdown on screen is mandatory: an abrupt end without
+warning looks like a crash on the machine. If fewer than `PERFECT_HOLD`
+seconds remain, the counter never fills and the round ends normally —
+"right before the end" needs no special case, because there's only one
+time source.
 
-**Der Zielwert kommt aus `balance.gap()`**, gerechnet gegen das Tablett, wie es
-zu Rundenbeginn tatsächlich liegt. `__init__` liest dafür einmal `fresh()` —
-Nebeneffekt: der Blip-Ton feuert nicht mehr für die fünf Pucks, die beim Start
-schon dalagen.
+**The target value comes from `balance.gap()`**, computed against the
+tray as it actually sits at round start. `__init__` reads `fresh()`
+once for this — side effect: the blip sound no longer fires for the
+five pucks that were already there at the start.
 
-**Restzeit anzeigen:** `int(self.left) + 1`. Ohne das `+ 1` zeigt der Automat in der ersten Sekunde bereits `59` und in der letzten `0`, während die Runde noch läuft.
+**Displaying time remaining:** `int(self.left) + 1`. Without the `+ 1`,
+the machine would already show `59` in the first second and `0` in the
+last, while the round is still running.
 
-**Hintergrund als Timer.** Kein zusätzliches Element, die Fläche selbst ist die Anzeige:
+**Background as a timer.** No extra element, the surface itself is the
+display:
 
 ```
-k  = 0.0, solange left > WARN_SECONDS, sonst linear bis 1.0 bei left == 0
-bg = BLACK + (RED - BLACK) * k         komponentenweise
+k  = 0.0 while left > WARN_SECONDS, otherwise linear to 1.0 at left == 0
+bg = BLACK + (RED - BLACK) * k         component-wise
 ```
 
-Von Schwarz nach HPI-Rot statt von Grün nach Dunkelrot. Der Start ist damit derselbe schwarze Grund wie überall sonst, und die letzten fünf Sekunden färben den ganzen Schirm — das ist das Signal, das aus 8 m ankommt. Weiße Schrift auf `#B1073A` bleibt lesbar; die grauen Beschriftungen verlieren in diesen fünf Sekunden Kontrast, was hinnehmbar ist, weil `GOAL` und `TOTAL` da längst bekannt sind.
+From black to HPI red instead of from green to dark red. The start is
+thus the same black background as everywhere else, and the final five
+seconds color the whole screen — that's the signal that carries from
+8 m. White text on `#B1073A` stays readable; the gray labels lose
+contrast during those five seconds, which is acceptable because `GOAL`
+and `TOTAL` are long since known by then.
 
 ### HowToScene
 
-Neu am 27. August. Erklärung, Demo-Clip, und **hier fängt die Musik an**
-(`MUSIC_IN = (0.0, 800)` — 0,8 s Einblendung, statt aus der Stille zu knallen).
+New on 2026-08-27. Explanation, demo clip, and **this is where the
+music starts** (`MUSIC_IN = (0.0, 800)` — 0.8 s fade-in, instead of
+slamming in out of silence).
 
-| Element | Position | Font / Farbe |
+| Element | Position | Font / Color |
 |---|---|---|
 | `HOW TO PLAY` | 960, 110 | `mid` / `YELLOW` |
-| Demo-Clip, nur wenn `DEMO_VIDEO` gesetzt | `DEMO_SIZE` um 960, 500 | Rahmen `GREY` |
-| Drei Zeilen aus `HOWTO` | 960, 900 + i·60 (ohne Clip: 500 + i·60) | `tiny` / `WHITE` |
-| `◀ BACK` / `▶ START` | Footer | siehe Footer-Band |
+| Demo clip, only if `DEMO_VIDEO` is set | `DEMO_SIZE` around 960, 500 | frame `GREY` |
+| Three lines from `HOWTO` | 960, 900 + i·60 (no clip: 500 + i·60) | `tiny` / `WHITE` |
+| `◀ BACK` / `▶ START` | Footer | see Footer band |
 
-**Ohne Clip rückt der Text in die Mitte.** `DEMO_VIDEO = None` ist der
-Auslieferungszustand, nicht der Ausnahmefall — den Film gibt es erst, wenn es
-einen Aufbau zum Filmen gibt, und bis dahin darf das Feature weder blockiert
-sein noch nach halbfertig aussehen.
+**Without a clip, the text moves to the middle.** `DEMO_VIDEO = None`
+is the shipping default, not the exception case — the film won't exist
+until there's a setup to film it, and until then the feature must
+neither be blocked nor look half-finished.
 
-**`VideoView` ist `CameraView` mit einer Uhr.** pygame kann kein Video, aber
-`cv2.VideoCapture` nimmt eine Datei genauso wie ein Gerät — der Player ist
-dieselbe Klasse wie der Passthrough, dieselbe `frombuffer(..., "BGR")`-Zeile,
-keine neue Abhängigkeit. Der einzige echte Unterschied: eine Kamera *drückt*
-Bilder (Grabber-Thread, Sequenzzähler), eine Datei wird *gezogen* (`dt`). Wer
-das verwechselt, baut einen Thread zu viel oder einen zu wenig.
+**`VideoView` is `CameraView` with a clock.** pygame can't do video,
+but `cv2.VideoCapture` takes a file just like a device — the player is
+the same class as the passthrough, the same `frombuffer(..., "BGR")`
+line, no new dependency. The one real difference: a camera *pushes*
+frames (grabber thread, sequence counter), a file gets *pulled* (`dt`).
+Mix those up and you build one thread too many or one too few.
 
-**Der Clip ist stumm.** Keine Tonspur, keine Synchronisation, kein zweiter
-Audiopfad — die Musik trägt die Szene. Eine Erklärstimme über Chiptune in einer
-lauten Halle wäre genau die Reizüberflutung, die der stille Idle wegnimmt.
+**The clip is silent.** No audio track, no sync, no second audio path
+— the music carries the scene. A narration voice over chiptune in a
+loud hall would be exactly the sensory overload that the silent idle
+removes.
 
-**Preis: rund 5–8 s pro Besucher**, bei 240 Besuchern etwa 25 Minuten
-Warteschlange über den Messetag. Dagegen steht, dass es keine Mindestdauer
-gibt: wer die Erklärung kennt, tippt einmal `▶` durch.
+**Price: roughly 5–8 s per visitor**, at 240 visitors about 25 minutes
+of queuing over the trade-show day. Against that: there's no minimum
+duration — anyone who already knows the explanation taps `▶` right
+through.
 
 ### DisplayScoreScene
 
-| Element | Position | Font / Farbe |
+| Element | Position | Font / Color |
 |---|---|---|
 | `OFF BY` | 960, 150 | `small` / `GREY` |
 | `self.score` | 960, 380 | `big` / `YELLOW` |
 | `GOAL` | 660, 600 | `small` / `GREY` |
-| Zielwert | 660, 690 | `mid` / `WHITE` |
+| Target value | 660, 690 | `mid` / `WHITE` |
 | `TOTAL` | 1260, 600 | `small` / `GREY` |
-| Tablettsumme | 1260, 690 | `mid` / `WHITE` |
+| Tray sum | 1260, 690 | `mid` / `WHITE` |
 | `PRICES` | 960, 860 | `tiny` / `GREY` |
-| Preiszeile, 10 Werte | x = 204 + i·168, y = 940 | `small` / `YELLOW` wenn auf dem Tablett, sonst `WHITE` |
-| `◀ BACK` / `▶ NEXT` | Footer | siehe Footer-Band |
+| Price row, 10 values | x = 204 + i·168, y = 940 | `small` / `YELLOW` if on the tray, otherwise `WHITE` |
+| `◀ BACK` / `▶ NEXT` | Footer | see Footer band |
 
-**Die Preistabelle ist eine Preis*zeile* (28. August).** Vorher stand hier
-`0 = 4`, `1 = 7`, … in fünf Spalten. Die linke Spalte war die ArUco-ID — und
-die steht auf keinem Puck als Ziffer, der Besucher hat nur ein
-Schwarz-Weiß-Muster gesehen. Der halbe Tabelleninhalt verlangte eine
-Zuordnung, deren Schlüssel niemand besitzt. Genau das machte sie
-unübersichtlich: sie sah nach Information aus und war Rauschen.
+**The price table is a price *row* (2026-08-28).** Before, this showed
+`0 = 4`, `1 = 7`, … in five columns. The left column was the ArUco ID —
+and that isn't written as a digit on any puck, the visitor only ever
+saw a black-and-white pattern. Half the table content demanded a
+mapping whose key nobody has. That's exactly what made it confusing: it
+looked like information and was noise.
 
-Jetzt: nur die Werte, **aufsteigend sortiert**, und **gelb die, die am
-Rundenende tatsächlich auf dem Tablett lagen**. Damit ist es keine
-Nachschlagetabelle mehr, sondern ein Bild der Runde — der Preiskatalog und
-was man davon hatte. Die Farbe folgt der bestehenden Leiter, kein neues
-Vokabular.
+Now: just the values, **sorted ascending**, and **the ones that
+actually were on the tray at the end of the round are yellow**. That
+makes it not a lookup table anymore but a picture of the round — the
+price catalog and what you got out of it. The color follows the
+existing ladder, no new vocabulary.
 
-Der Reveal bleibt der Lernmoment aus der Spielmechanik, und er läuft weiter
-über `sorted(VALUES.values())`, nicht über eine zweite Liste — sonst driften
-Anzeige und Wertung auseinander, sobald jemand einen Wert ändert. Alle zehn
-Werte bleiben stehen, nicht nur die eigenen: der volle Katalog ist genau das
-Wissen, das die zweite Runde besser macht als die erste.
+The reveal remains the learning moment from the game mechanics, and it
+still runs off `sorted(VALUES.values())`, not a second list —
+otherwise the display and the scoring drift apart the moment someone
+changes a value. All ten values stay on screen, not just your own: the
+full catalog is exactly the knowledge that makes the second round
+better than the first.
 
-**Der Konstruktor nimmt `marks` statt `total`.** Die Summe steckt darin, und
-die Preiszeile braucht ohnehin, *welche* Werte lagen. Ein Marker pro Puck und
-lauter verschiedene Werte, also ist `{VALUES[i] for i in marks}` verlustfrei.
+**The constructor takes `marks` instead of `total`.** The sum is
+contained in it, and the price row needs to know *which* values were
+there anyway. One marker per puck and all-distinct values, so
+`{VALUES[i] for i in marks}` loses nothing.
 
-`GOAL` und `TOTAL` stehen als zwei Spalten mit Label darüber — dieselbe
-Anordnung wie in der Kopfzeile der Runde, die der Besucher gerade 60 s lang
-gelesen hat. Vorher war es eine gequetschte Zeile `GOAL 180    TOTAL 165`.
+`GOAL` and `TOTAL` are laid out as two columns with a label above each
+— the same arrangement as the header row during the round, which the
+visitor has just spent 60 s reading. Before, it was a cramped line
+`GOAL 180    TOTAL 165`.
 
 ### LeaderboardScene
 
-Cursor-Modell, wie unter „Szenen und Übergänge" beschrieben. Der Marker ist ein Rechteck oder Unterstrich unter dem Feld mit `self.cursor`.
+Cursor model, as described under "Scenes and transitions." The marker
+is a rectangle or underline beneath the field at `self.cursor`.
 
-| Element | Position | Font / Farbe |
+| Element | Position | Font / Color |
 |---|---|---|
 | `ENTER YOUR NAME` | 960, 130 | `mid` / `YELLOW` |
-| `◀` (Zurück-Feld, `cursor == 0`) | 510, 470 | `big` / `WHITE` |
-| Buchstabe 1..3 | 840 / 1050 / 1260, 470 | `big` / `WHITE`, aktives Feld `YELLOW` |
-| Cursorbalken | `COLS[cursor] − 68`, 580, 135 × 9 | `YELLOW` |
+| `◀` (back field, `cursor == 0`) | 510, 470 | `big` / `WHITE` |
+| Letter 1..3 | 840 / 1050 / 1260, 470 | `big` / `WHITE`, active field `YELLOW` |
+| Cursor bar | `COLS[cursor] − 68`, 580, 135 × 9 | `YELLOW` |
 | `BEST — LOWEST WINS` | 960, 660 | `tiny` / `GREY` |
-| Top 5 aus `db.top(5)` | 960, 720 + i·64 | `small` / `WHITE` |
-| Knopfhinweise / Rückfrage | Footer | siehe Footer-Band |
+| Top 5 from `db.top(5)` | 960, 720 + i·64 | `small` / `WHITE` |
+| Button hints / confirmation | Footer | see Footer band |
 
-**`TOP 10!` war eine Lüge (28. August).** `db.qualifies()` wird nirgends
-aufgerufen, hier landet jeder — auch mit `OFF BY` 200. Die Überschrift
-versprach etwas, das der Code nicht prüft, und zeigte fünf Zeilen statt zehn.
-Der Screen ist eine Eingabe, also heißt er wie eine: `ENTER YOUR NAME`. Das
-`qualifies()`-Gate bleibt davon unberührt und weiter offen (Balancing-Frage,
-siehe Offene Punkte) — die ehrliche Überschrift nimmt der Entscheidung nichts
-vorweg.
+**`TOP 10!` was a lie (2026-08-28).** `db.qualifies()` is never called,
+everyone lands here — even at `OFF BY` 200. The heading promised
+something the code doesn't check, and it showed five rows instead of
+ten. The screen is an input, so it's named like one: `ENTER YOUR NAME`.
+The `qualifies()` gate is untouched by this and remains open (a
+balancing question, see Open Items) — the honest heading doesn't
+prejudge that decision.
 
-**Die Liste rückt von 860/65 auf 720/64.** Vorher lag die fünfte Zeile auf
-1096…1144 und kollidierte mit der Rückfrage; jetzt endet sie bei 1004, unter
-`SAFE_BOTTOM`.
+**The list moves from 860/65 to 720/64.** Before, the fifth row sat at
+1096…1144 and collided with the confirmation; now it ends at 1004,
+under `SAFE_BOTTOM`.
 
-**`▶ SAVE` im letzten Feld.** Dass Rechts aus dem dritten Buchstaben heraus
-speichert, stand vorher nirgends — man musste es finden. Der Footer sagt,
-was `▶` *jetzt* tut.
+**`▶ SAVE` on the last field.** That pressing right from the third
+letter saves used to be written nowhere — you had to discover it. The
+footer says what `▶` does *right now*.
 
-**Rueckfrage beim Verwerfen (27. August).** `◀` im Feld `cursor == 0` verwirft
-den gerade gespielten Score. Das passiert versehentlich, wenn man einmal zu oft
-nach links tippt, deshalb dieselbe Doppelbestaetigung wie beim Rundenabbruch:
-erster Druck setzt `self.confirm = CONFIRM_SECONDS`, zweiter innerhalb des
-Fensters geht ins Idle. Kein Dialogzustand, kein zweiter Screen — ein Float in
-`update()` traegt beide Zustaende und laeuft von allein ab.
+**Confirmation when discarding (2026-08-27).** `◀` on the field
+`cursor == 0` discards the score just played. That happens by accident
+if you tap left once too often, hence the same double confirmation as
+for canceling a round: the first press sets `self.confirm =
+CONFIRM_SECONDS`, a second press within the window goes to idle. No
+dialog state, no second screen — one float in `update()` carries both
+states and runs down on its own.
 
-Die Feldfarbe kommt aus `self.cursor`, nicht aus einem zweiten Flag. Wenn `render` ein eigenes „welches Feld ist aktiv"-Attribut bräuchte, wäre der Zustand an zwei Stellen und könnte auseinanderlaufen.
+The field color comes from `self.cursor`, not a second flag. If
+`render` needed its own "which field is active" attribute, the state
+would live in two places and could drift apart.
 
-### CRT-Overlay
+### CRT overlay
 
-Der Automat soll nach Röhre aussehen, nicht nach LCD. Drei Ebenen, alle in
-`run_game`, zwischen `scene.render(...)` und `pygame.display.flip()`:
-**Wölbung**, **Scanlines**, **Vignette**. Umgesetzt am 27. August 2026.
+The machine is supposed to look like a tube, not an LCD. Three layers,
+all in `run_game`, between `scene.render(...)` and `pygame.display.flip()`:
+**curvature**, **scanlines**, **vignette**. Implemented on 2026-08-27.
 
 ```python
 overlay = crt_overlay(width, height) if CRT else None
@@ -906,264 +1304,350 @@ frame   = pygame.Surface((width, height)).convert(screen) if maps else screen
     pygame.display.flip()
 ```
 
-**Der Loop trägt den Effekt, nicht die Szene.** Er liegt über allem, also
-gehört er an die eine Stelle, an der alles zusammenläuft. Keine Szene kennt
-ihn, keine Szene kann ihn vergessen, und Abschalten ist ein Flag in
-`config.py` statt vier Änderungen in `scenes.py`.
+**The loop carries the effect, not the scene.** It sits over
+everything, so it belongs at the one place where everything converges.
+No scene knows about it, no scene can forget it, and turning it off is
+a flag in `config.py` instead of four changes in `scenes.py`.
 
-**Einmal bauen, nicht pro Frame rechnen.** Scanlines, Vignette und die
-Wölbungstabelle entstehen beim Start. Pro Frame bleiben ein `remap` und ein
-Blit — beides C, beides konstant. Dieselbe Regel wie bei `db.top()` im
-`render`: was sich nicht ändert, wird nicht neu berechnet.
+**Built once, not computed per frame.** Scanlines, vignette, and the
+curvature table are created at startup. Per frame, what's left is one
+`remap` and one blit — both C, both constant. Same rule as with
+`db.top()` in `render`: what doesn't change doesn't get recomputed.
 
-**Die Vignette ist ein 16 × 10-Alphagitter, hochskaliert.** Ein weicher
-Radialverlauf kostet nichts, wenn man ihn winzig rechnet und den bilinearen
-Filter von `smoothscale` die Arbeit machen lässt — 160 Pixel statt 2,3
-Millionen. Draufgelegt wird sie mit `BLEND_RGBA_ADD`: beide Ebenen sind reines
-Schwarz, nur das Alpha addiert sich, und das hängt an keiner pygame-Version.
+**The vignette is a 16×10 alpha grid, scaled up.** A soft radial
+gradient costs nothing if you compute it tiny and let `smoothscale`'s
+bilinear filter do the work — 160 pixels instead of 2.3 million. It's
+composited with `BLEND_RGBA_ADD`: both layers are pure black, only the
+alpha adds up, and that doesn't depend on any pygame version.
 
-**Barrel Distortion: doch, und sie kostet wenig.** Der frühere Eintrag hier
-sagte „braucht einen Shader, also zu teuer". Das war falsch — `cv2.remap` ist
-längst eine Abhängigkeit, weil ArUco OpenCV mitbringt. Für jedes Zielpixel wird
-einmal die Quellkoordinate ausgerechnet und als Festkomma-Tabelle abgelegt
-(`cv2.convertMaps`, `CV_16SC2`); pro Frame ist es ein einziger C-Aufruf.
+**Barrel distortion: yes after all, and it costs little.** The earlier
+entry here said "needs a shader, so too expensive." That was wrong —
+`cv2.remap` has long been a dependency anyway, because ArUco brings in
+OpenCV. For every target pixel, the source coordinate is computed once
+and stored as a fixed-point table (`cv2.convertMaps`, `CV_16SC2`); per
+frame it's a single C call.
 
 ```python
-f = 1 + k * (nx² + ny²)      # aussen weiter aussen greifen = Woelbung
+f = 1 + k * (nx² + ny²)      # points further out reach even further out = curvature
 ```
 
-`BARREL_K = 0.05` ist sichtbar, ohne albern zu sein. `0` schaltet nur die
-Wölbung ab und behält Scanlines und Vignette — das ist der Notausgang, falls
-der Pi nicht mitkommt.
+`BARREL_K = 0.05` is visible without being silly. `0` only turns off
+the curvature and keeps scanlines and vignette — that's the emergency
+exit if the Pi can't keep up.
 
-**`INTER_NEAREST`, nicht `INTER_LINEAR`.** Nicht nur schneller: bilineare
-Filterung verwischt die Pixelfont, und „kein Antialiasing" ist die Regel eine
-Ebene weiter oben. Der Preis sind leicht ausgefranste Glyphenkanten am Rand,
-was auf einer Röhre nicht falsch aussieht.
+**`INTER_NEAREST`, not `INTER_LINEAR`.** Not only faster: bilinear
+filtering blurs the pixel font, and "no antialiasing" is the rule one
+level up. The price is slightly frayed glyph edges at the border, which
+doesn't look wrong on a tube.
 
-**Das Overlay kommt nach der Wölbung, nicht davor.** Mitgewölbte Scanlines
-wären authentischer, aber 1-px-Linien durch ein Nearest-Resampling geben
-Moiré. Gerade Scanlines auf gewölbtem Bild kosten nichts und bleiben sauber.
-Die Vignette deckt nebenbei die schwarzen Ecken ab, die die Wölbung erzeugt.
+**The overlay comes after the curvature, not before.** Curved
+scanlines would be more authentic, but 1-px lines through
+nearest-neighbor resampling produce moiré. Straight scanlines on a
+curved image cost nothing and stay clean. The vignette conveniently
+covers the black corners the curvature creates.
 
-**Zwei Fallen im Speicherlayout**, beide teuer erkauft und deshalb hier notiert:
+**Two traps in memory layout**, both expensively learned and therefore
+noted here:
 
-1. Der naheliegende Weg `pygame.surfarray.pixels3d` kostete **8,3 ms**, der
-   gewählte **1,4 ms**. Grund: `pixels3d` liefert RGB, pygame speichert BGRA —
-   die Sicht hat auf der Farbachse Schrittweite **−1**, und über ein rückwärts
-   laufendes Array kann OpenCV nicht scannen, es kopiert erst. `get_view("2")`
-   gibt die 32-Bit-Pixel wie sie liegen, `.T` dreht die pygame-Achsenreihenfolge
-   `(w, h)` auf die Bildkonvention `(h, w)` und macht sie damit zusammenhängend.
-   Die Farbreihenfolge ist egal, weil `remap` Pixel nur verschiebt.
-2. Eine gehaltene numpy-Sicht **sperrt** ihre Surface, und der Blit darunter
-   scheitert dann mit „Surfaces must not be locked during blit". Deshalb stehen
-   die `px(...)` als Argumente direkt im Aufruf: die Sichten sterben mit der
-   Zeile, die Sperre fällt.
+1. The obvious route, `pygame.surfarray.pixels3d`, cost **8.3 ms**, the
+   chosen one **1.4 ms**. Reason: `pixels3d` returns RGB, pygame stores
+   BGRA — the view has stride **−1** on the color axis, and OpenCV
+   can't scan a backward-running array, it copies first. `get_view("2")`
+   returns the 32-bit pixels as laid out, `.T` flips pygame's axis
+   order `(w, h)` to the image convention `(h, w)` and makes it
+   contiguous in the process. Color order doesn't matter, because
+   `remap` only moves pixels around.
+2. A held numpy view **locks** its surface, and the blit underneath
+   then fails with "Surfaces must not be locked during blit." That's
+   why the `px(...)` calls sit directly as arguments in the call: the
+   views die with the line, the lock lifts.
 
-**Gemessen** (Mac, headless, 1920 × 1200, echte Szenen):
+**Measured** (Mac, headless, 1920 × 1200, real scenes):
 
-| | ms/Frame |
+| | ms/frame |
 |---|---|
-| nur Szene + `flip` | 2,5 |
-| **+ Wölbung + Scanlines + Vignette** | **5,8** |
-| Budget bei 60 FPS | 16,7 |
+| scene + `flip` only | 2.5 |
+| **+ curvature + scanlines + vignette** | **5.8** |
+| Budget at 60 FPS | 16.7 |
 
-Der CRT-Anteil sind rund **3,3 ms**. Auf dem Pi ist das der Posten, der als
-erstes kippt — dort ist zu messen, nicht zu schätzen.
+The CRT share is about **3.3 ms**. On the Pi that's the item that tips
+over first — that has to be measured there, not guessed.
 
-#### Messung auf dem Pi, 9. September 2026
+#### Measurement on the Pi, 2026-09-09
 
-Gemessen am Automaten: Pi 5 (8 GB), Ubuntu 24.04, KMSDRM-Vollbild, beide Kameras
-aktiv, Teleop gestoppt. Der Idle-Screen wurde über `PNP_IDLE_FPS=60` auf
-Spielszenen-Last getrieben, weil über SSH bei KMSDRM keine Taste ankommt und die
-Spielszene sonst nicht erreichbar ist.
+Measured on the machine: Pi 5 (8 GB), Ubuntu 24.04, KMSDRM fullscreen,
+both cameras active, teleop stopped. The idle screen was driven up to
+game-scene load via `PNP_IDLE_FPS=60`, because no key press reaches the
+machine over SSH under KMSDRM and the game scene would otherwise be
+unreachable.
 
-| Ziel 60 fps | CPU | erreicht |
+| Target 60 fps | CPU | achieved |
 |---|---|---|
-| alles an | 268 % | **19,6** |
-| ohne Wölbung (`BARREL_K = 0`) | 195 % | **26,5** |
-| ohne CRT | 189 % | **36,6** |
-| ohne CRT, ohne Kameras | 92 % | **40,0** |
+| everything on | 268% | **19.6** |
+| without curvature (`BARREL_K = 0`) | 195% | **26.5** |
+| without CRT | 189% | **36.6** |
+| without CRT, without cameras | 92% | **40.0** |
 
-**60 fps sind auf diesem Pi nicht erreichbar.** Auch nicht entkernt. Die letzte
-Zeile ist der eigentliche Befund: 40 fps bei 92 % CPU heißt, dass da nichts mehr
-zu parallelisieren ist, der Pfad hängt an einem Thread.
+**60 fps is not reachable on this Pi.** Not even stripped down. The
+last row is the real finding: 40 fps at 92% CPU means there's nothing
+left to parallelize, the path hangs on a single thread.
 
-Drei Hypothesen wurden geprüft, zwei davon widerlegt:
+Three hypotheses were checked, two of them disproven:
 
-**Textrendering war es nicht.** `font.render()` lief für jede Zeichenkette in
-jedem Bild neu, Press Start 2P in bis zu 168 px. Ein `lru_cache` darauf brachte
-in einer Variante 10 %, sonst nichts. Der Cache bleibt drin, er kostet nichts
-und schadet nicht, aber er war nicht die Ursache.
+**It wasn't text rendering.** `font.render()` ran fresh for every
+string in every frame, Press Start 2P at up to 168 px. An `lru_cache`
+on it brought 10% in one variant, nothing in others. The cache stays
+in, it costs nothing and does no harm, but it wasn't the cause.
 
-**`vsync=1` kostet 12 bis 19 %**, erkauft sich das aber mit Tearing und bringt
-die 60 trotzdem nicht. Bleibt drin.
+**`vsync=1` costs 12 to 19%**, but buys that with tearing and still
+doesn't get to 60. Stays in.
 
-**Native 1080 statt herunterskalierter 1200 bringt am meisten**, in der Variante
-ohne Wölbung 26,5 → 34,2 fps. Das ist der Grund, warum die Auflösungsfrage oben
-unter „Offene Punkte" steht.
+**Native 1080 instead of downscaled 1200 helps the most**, in the
+no-curvature variant 26.5 → 34.2 fps. That's why the resolution
+question above is under "Open items."
 
-Dazu ein Wärmebefund, unabhängig von der Bildrate: mit Spiel **und** Teleop
-gleichzeitig läuft der Pi in unter einer Minute auf 83 °C und drosselt
-(`throttled=0xe0008`), die Bildrate fällt dabei weiter. Ohne aktive Kühlung ist
-der Dauerbetrieb am Messetag so nicht zu halten.
+On top of that, a heat finding independent of frame rate: with the
+game **and** teleop running at the same time, the Pi hits 83 °C in
+under a minute and throttles (`throttled=0xe0008`), the frame rate
+keeps dropping as it does. Without active cooling, continuous operation
+at the trade show isn't sustainable like this.
 
-Die Entscheidung, welche der drei Stellschrauben gezogen wird — Wölbung streichen,
-auf 1080 umziehen, Zielbildrate auf 30 senken — steht noch aus. Sie ist eine
-Entwurfsentscheidung, keine Konfigurationsfrage.
+#### Decided on 2026-09-10: all three, plus a fourth
 
-**Der Zielkonflikt gehört benannt:** Scanlines nehmen Helligkeit weg, und
-Lesbarkeit aus 8 m in einer hellen Halle ist das oberste Prinzip dieses
-Projekts. `SCANLINE_ALPHA` steht deshalb in `config.py` und wird **in der Halle**
-eingestellt, nicht am Schreibtisch. Im Zweifel gewinnt die Lesbarkeit.
+Measured on the same machine, native at 1920 × 1080, both cameras
+active.
 
-**Keine Chromatic Aberration.** Die bräuchte drei Remaps statt einem, und aus
-3–8 m ist sie nicht als Effekt lesbar, sondern nur als Unschärfe.
+| Target unlimited | 2026-09-09 (1200, `SCALED`) | 2026-09-10 (1080 native) |
+|---|---|---|
+| everything on | 19.6 | **28.5 cold → 26 warm** |
+| without curvature | 26.5 | **42** |
+| without CRT | 36.6 | **61** |
 
-### Sound: Low-Bit-Arcade-Musik, deklarativ notiert
+Render-path stages measured individually, on the cold Pi: drawing the
+scene 1.4–2.0 ms, `remap` 8.7 ms, scanlines 7.0 ms. For comparison, the
+floor — a plain copy of the same amount of data — costs 1.83 ms.
+`remap` runs at roughly five times that: the gather is compute-bound,
+not bandwidth-bound, and there's nothing left to gain there with
+OpenCV. Four variants were measured against each other (4× uint8, 1×
+int32, `BORDER_REPLICATE`), all within 2% of each other.
 
-Musik wird **als Daten geschrieben, nicht als Code**: eine Zeichenkette pro
-Stück, die `music.py` zur Laufzeit in einen Ton wandelt. Keine Audiodateien im
-Repository, keine Abhängigkeit, kein Lizenzthema — und Ändern einer Melodie ist
-Ändern einer Zeile.
+**Two earlier hypotheses didn't hold up.** First: the 25 ms for "scene
++ flip" were almost entirely the `SCALED` scaling, not the drawing —
+the scene itself costs 1.5 ms. Second: switching the overlay from
+pygame's alpha blit to `cv2.multiply` was supposed to save 6 ms and
+saved nothing. On the Pi the multiplication costs 7.2 ms and the blit
+6.4; in the full render path, 21.4 against 21.5 ms — a tie. The
+multiplication stayed anyway — half as much code, exact instead of
+approximated vignette, and the whole post-processing path now hangs on
+one thread setting instead of two. As a speedup it was a wrong guess.
+
+**The fourth lever wasn't on the list and beats all three others: the
+curvature moves from the image into the darkening map.** Instead of
+sending every frame through a `cv2.remap`, the static scanline and
+vignette map gets the curvature baked in — the lines curve like on a
+tube and draw together toward the edge of the screen, the image itself
+stays geometrically flat. The map is built at startup, the curvature
+costs nothing at runtime.
+
+| Variant | ms/frame | ceiling |
+|---|---|---|
+| curvature in the image (until 2026-09-09) | 24.95 | 40 fps |
+| **curved scanlines, image flat** | **11.12** | **90 fps** |
+| without curvature | 11.65 | 86 fps |
+
+So curved scanlines cost exactly as much as *no* curvature at all.
+
+**The second reason weighs heavier than the milliseconds: curvature
+was breaking up the pixel font.** `remap` samples with
+`INTER_NEAREST`, and an 8×8 glyph grid sampled at non-integer
+positions frays — letter edges turn stepped, glyph pixels become
+unequal sizes. That's the same bug that's the reason all font sizes are
+divisible by 8, just approached from the other side. From 3–8 m a tube
+reads by its lines anyway, not its geometry — the same argument that
+kept chromatic aberration out.
+
+The scanline phase comes from the curved source row and is computed
+**as a coverage fraction, not sampled**. A pointwise-warped 3-px
+pattern would otherwise give moiré stripes at the screen edge — that
+was the reason the more obvious variant (put the scanlines before the
+curvature) was rejected before it was even code. At `BARREL_K = 0` the
+map falls back bit-exact to the old flat pattern.
+
+**Result: 30 fps, 45 seconds straight, with teleop running.** 29.4 to
+30.3, no drop, while going from 61.5 to 75.7 °C.
+
+**The GPU shader remains open.** Curving *the image* with a sharp font
+would be possible as a GLES fragment shader on the VideoCore, with
+correct filtering and no frame-rate cost. Deliberately not built: a new
+dependency, a GLES context under KMSDRM, a texture upload per frame,
+and the layout self-test would no longer run headless. The code for
+image curvature (`barrel_maps`, `cv2.remap` in the loop) is in the
+history up through and including `6ed2b4a`, in case that option gets
+picked up.
+
+**The trade-off deserves naming:** scanlines remove brightness, and
+readability from 8 m in a bright hall is this project's top priority.
+`SCANLINE_ALPHA` therefore lives in `config.py` and gets tuned **in the
+hall**, not at the desk. When in doubt, readability wins.
+
+**No chromatic aberration.** It would need three remaps instead of one,
+and from 3–8 m it doesn't read as an effect, just as blur.
+
+### Sound: low-bit arcade music, notated declaratively
+
+Music is **written as data, not as code**: one string per piece, which
+`music.py` turns into sound at runtime. No audio files in the
+repository, no dependency, no licensing question — and changing a tune
+is changing one line.
 
 ```python
 # game/music.py
-ATTRACT = "c4 e4 g4 c5 - g4 e4 c4 -"     # Notenname + Oktave, "-" ist Pause
+ATTRACT = "c4 e4 g4 c5 - g4 e4 c4 -"     # note name + octave, "-" is a rest
 ```
 
-Wie das funktioniert, in vier Schritten:
+How that works, in four steps:
 
-1. **Notenname → Frequenz** ist eine Zeile: `440 * 2 ** ((halbton - 69) / 12)`.
-   Das ist die MIDI-Formel, 69 ist das Kammerton-A.
-2. **Frequenz → Samples** ist eine Rechteckschwingung: abwechselnd `+A` und
-   `-A` umschalten. Genau diese Kurvenform *ist* der Chiptune-Klang — sie
-   entsteht, weil ein NES oder ein C64 nichts anderes konnte als einen Pegel
-   an- und auszuschalten. „Low bit" ist hier keine Nachbildung, sondern der
-   direkte Weg.
-3. **Samples → `Sound`** über `pygame.mixer.Sound(buffer=...)` mit dem
-   stdlib-Modul `array`. **Kein numpy** — `pygame.sndarray` bräuchte es, der
-   `buffer`-Weg nicht, und numpy steht nicht in den Abhängigkeiten.
-4. **Das ganze Stück wird einmal beim Start gerendert** und mit `play(loops=-1)`
-   geschleift. Kein Scheduler, kein Timer-Thread, keine Note-für-Note-Ausgabe.
-   Eine Schleife, die im Audiotreiber läuft, driftet nicht — dieselbe
-   Überlegung wie „eine Zeitquelle pro Runde", nur für Audio.
+1. **Note name → frequency** is one line: `440 * 2 ** ((halbton - 69) / 12)`.
+   That's the MIDI formula, 69 is concert A.
+2. **Frequency → samples** is a square wave: alternate `+A` and `-A`.
+   That exact waveform *is* the chiptune sound — it exists because an
+   NES or a C64 couldn't do anything but switch a level on and off.
+   "Low-bit" here isn't an imitation, it's the direct approach.
+3. **Samples → `Sound`** via `pygame.mixer.Sound(buffer=...)` with the
+   stdlib module `array`. **No numpy** — `pygame.sndarray` would need
+   it, the `buffer` route doesn't, and numpy isn't among the
+   dependencies.
+4. **The whole piece is rendered once at startup** and looped with
+   `play(loops=-1)`. No scheduler, no timer thread, no note-by-note
+   output. A loop running in the audio driver doesn't drift — same
+   reasoning as "one time source per round," just for audio.
 
-`pygame.mixer.pre_init(...)` muss **vor** `pygame.init()` laufen, sonst steht
-die Puffergröße schon fest und man hört Latenz.
+`pygame.mixer.pre_init(...)` has to run **before** `pygame.init()`,
+otherwise the buffer size is already fixed and you hear latency.
 
-Angebunden wird es wie der Detector: `Ctx` bekommt ein `music`-Feld, Szenen
-rufen `self.ctx.music.play("attract")` und wissen nie, was dahinter steckt.
-Damit gibt es eine stumme Attrappe für Tests ohne Audiogerät, und der
-Kopfhörer-Test auf dem Laptop ist dieselbe Codebasis wie die Messe.
+It's wired up the same way as the detector: `Ctx` gets a `music` field,
+scenes call `self.ctx.music.play("attract")` and never know what's
+behind it. That gives a silent stand-in for tests without an audio
+device, and the headphone test on the laptop is the same codebase as
+the trade show.
 
-**Sound bleibt Beiwerk.** Die Halle ist laut; nichts im Spiel darf davon
-abhängen, dass jemand etwas hört. Das Stück läuft im Attract Mode, ein kurzer
-Beep bestätigt Knopfdrücke, ein Jingle den Score. Mehr nicht.
+**Sound stays garnish.** The hall is loud; nothing in the game may
+depend on anyone hearing anything. The piece plays in attract mode, a
+short beep confirms button presses, a jingle marks the score. Nothing
+more.
 
-#### Umgesetzt am 27. August
+#### Implemented on 2026-08-27
 
-Sechs Token in der Notation, ein Token ist ein Sechzehntel: `f4` Note, `.`
-hält, `-` Pause, `f4/a4/c5` Akkord, `a#2^f2` Glide, `k s h` Kick/Snare/Hat.
-Zwei Datentabellen am Kopf der Datei — `PIECES` und `SFX` —, darunter nur noch
-Anbindung.
+Six tokens in the notation, one token is a sixteenth note: `f4` note,
+`.` sustain, `-` rest, `f4/a4/c5` chord, `a#2^f2` glide, `k s h`
+kick/snare/hat. Two data tables at the top of the file — `PIECES` and
+`SFX` — everything below them is just wiring.
 
-**Die Schleife läuft pro Schwingung, nicht pro Sample.** Das ist die
-Entscheidung, aus der alles andere folgt. Eine Rechteckperiode ist 30 bis 500
-Samples lang; wer Lautstärke und Frequenz einmal je Periode neu berechnet,
-macht hundertmal weniger Arbeit als pro Sample — und hört keinen Unterschied,
-weil sich innerhalb einer Periode ohnehin nichts ändern kann. In dieser einen
-Schleife stecken deshalb **Hüllkurve, Vibrato, Glide, Arpeggio und die
-Kickdrum**, jedes als zwei Zeilen. Alle Stücke und Effekte rendern in 0,12 s.
+**The loop runs per cycle, not per sample.** That's the decision
+everything else follows from. One square-wave cycle is 30 to 500
+samples long; recomputing volume and frequency once per cycle does a
+hundred times less work than per sample — and you don't hear a
+difference, because nothing can change within a cycle anyway. This one
+loop is therefore where **envelope, vibrato, glide, arpeggio, and the
+kick drum** live, each as two lines. All pieces and effects render in
+0.12 s.
 
-**Ohne Hüllkurve klingt jede Note wie ein Testton.** `ENV` hält fünf Kurven
-(`pluck`, `hit`, `punch`, `swell`, `flat`), Argument sind Sekunden seit
-Notenbeginn. Das war der eigentliche Grund, warum die erste Fassung
-„computergeneriert" klang — nicht die Melodie.
+**Without an envelope, every note sounds like a test tone.** `ENV`
+holds five curves (`pluck`, `hit`, `punch`, `swell`, `flat`), argument
+is seconds since the note started. That was the actual reason the
+first version sounded "computer-generated" — not the melody.
 
-**Stimmung: die Periode wird nicht gerundet, nur ihr Ende.** Eine gerundete
-Periode zieht hohe Noten daneben — F5 bei 44100 Hz landet 12 Cent zu tief, F6
-sogar 23 — und weil jede Note anders rundet, stimmen die *Intervalle* nicht.
-Genau das hört man als „schief". Mit gebrochener Position stimmt die mittlere
-Frequenz exakt, der Rest ist ein halbes Sample Jitter. Der Selbsttest zählt
-über den ganzen Tonumfang die Nulldurchgänge einer Sekunde Ton und verlangt
-±1 Hz.
+**Tuning: the cycle isn't rounded, only its endpoint is.** A rounded
+cycle length pulls high notes off pitch — F5 at 44100 Hz lands 12 cents
+flat, F6 even 23 — and because every note rounds differently, the
+*intervals* end up wrong. That's exactly what reads as "off." With a
+fractional position, the mean frequency is exact, the rest is half a
+sample of jitter. The self-test counts zero crossings over one second
+of tone across the whole range and requires ±1 Hz.
 
-**Mischen macht der Mixer.** Ein Stück hat bis zu vier Spuren, jede liegt auf
-einem eigenen Kanal (`set_reserved(4)` von zwölf, acht bleiben den Effekten).
-Alle Spuren eines Stücks sind gleich lang, also laufen sie geschleift für immer
-synchron. Es gibt keine Additionsschleife in Python.
+**Mixing is the mixer's job.** A piece has up to four tracks, each on
+its own channel (`set_reserved(4)` out of twelve, eight stay for
+effects). All tracks in a piece are the same length, so looped they
+stay in sync forever. There's no summing loop in Python.
 
-**Intensität ist keine Automation, sondern vier Stücke.** `round0`–`round3`,
-dasselbe Riff in F-Dur bei 118 / 132 / 148 / 158 BPM, das Schlagzeug wird von
-Halbe-Backbeat bis Sechzehntel-Hats dichter. Dur, nicht Moll: die Spannung
-kommt aus Tempo und Schlagzeug, nicht aus Traurigkeit. Stufe 3, die letzten
-fünf Sekunden, legt eine tickende Uhr auf jede Viertel — die Melodie läuft
-weiter. Eine frühere Fassung ersetzte sie durch einen Alarm über
-Sechzehntel-Bassdrum; das war Hardcore-Techno und für das Publikum am
-Messestand deutlich zu viel. **Panik entsteht aus dem Ticken, nicht aus mehr
-Bassdrum.**
-`GameScene.update` ruft `music.stage(self.left)` pro Frame, gewechselt wird nur
-bei Stufenwechsel. Gemessen: 60 → 40 → 20 → 5 Restsekunden; Stufe 3 setzt mit
-`WARN_SECONDS` ein, also im selben Frame, in dem der Bildschirm rot wird.
+**Intensity isn't automation, it's four pieces.** `round0`–`round3`,
+the same riff in F major at 118 / 132 / 148 / 158 BPM, the drums get
+denser from a half-note backbeat to sixteenth-note hats. Major, not
+minor: the tension comes from tempo and drums, not from sadness. Stage
+3, the final five seconds, lays a ticking clock on every quarter note —
+the melody keeps going. An earlier version replaced it with an alarm
+over sixteenth-note bass drum; that was hardcore techno and clearly too
+much for the trade-show audience. **Panic comes from the ticking, not
+from more bass drum.**
+`GameScene.update` calls `music.stage(self.left)` every frame,
+switching only happens on a stage change. Measured: 60 → 40 → 20 → 5
+seconds remaining; stage 3 kicks in with `WARN_SECONDS`, i.e. in the
+same frame the screen turns red.
 
-**Nach dem Fertigsound kommt Stille.** `SceneBase.MUSIC_IN` ist ein Paar
-`(Pause in Sekunden, Einblendung in Millisekunden)`, `DisplayScoreScene` setzt
-`(2.2, 1500)`: die Rundenmusik hört sofort auf, die Fanfare klingt frei aus,
-zwei Sekunden passiert nichts, dann blendet die Idle-Musik ein. Die Stille ist
-der Effekt. Das Einblenden macht `Channel.play(..., fade_ms=...)`, das Warten
-`Music.update()` — aufgerufen in `run_game`, wo ohnehin jeden Frame etwas
-passiert. Kein Timer-Thread, keine zweite Zeitquelle.
+**Silence follows the finish sound.** `SceneBase.MUSIC_IN` is a pair
+`(pause in seconds, fade-in in milliseconds)`, `DisplayScoreScene` sets
+`(2.2, 1500)`: the round music stops immediately, the fanfare rings out
+freely, two seconds of nothing happens, then the idle music fades in.
+The silence is the effect. The fade-in is done by
+`Channel.play(..., fade_ms=...)`, the waiting by `Music.update()` —
+called in `run_game`, where something happens every frame anyway. No
+timer thread, no second time source.
 
-**Szenenwechsel ist Musikwechsel, deklarativ.** `SceneBase.MUSIC` ist ein
-Klassenattribut, `SceneBase.__init__` spielt es ab. Jede Szene sagt einmal,
-was bei ihr läuft; `GameScene` setzt `MUSIC = None`, weil ihre Stufe an der
-Restzeit hängt. Damit kann keine künftige Szene vergessen, die Rundenmusik
-abzustellen — Idle, Score und Leaderboard erben `"idle"` und schalten von
-allein zurück.
+**A scene change is a music change, declaratively.** `SceneBase.MUSIC`
+is a class attribute, `SceneBase.__init__` plays it. Every scene states
+once what plays during it; `GameScene` sets `MUSIC = None`, because its
+stage depends on time remaining. That way no future scene can forget to
+turn off the round music — idle, score, and leaderboard inherit
+`"idle"` and switch back automatically.
 
-**Der Fehlton kostet eine Zeile.** `handle()` gibt den Namen des Sounds zurück,
-`None` heißt „nicht genommen". In `run_game` steht deshalb:
+**The error sound costs one line.** `handle()` returns the name of the
+sound, `None` means "not taken." In `run_game` there's accordingly:
 
 ```python
 scene.ctx.music.sfx(scene.handle(action) or "nope")
 ```
 
-Damit klingt *jeder* Knopfdruck, ohne dass eine Szene daran denken muss — im
-Spiel `>` drücken brummt, im Leaderboard `^` auf dem `<`-Feld brummt. Die
-Zeile ist der ganze Signifier-Mechanismus.
+That makes *every* button press make a sound, without any scene having
+to think about it — pressing `>` during the round buzzes, pressing `^`
+on the `<` field in the leaderboard buzzes. That one line is the entire
+signifier mechanism.
 
-`Music.REPEAT_MS = 90` verschluckt denselben Effekt kurz hintereinander. Ohne
-das feuert `KEY_REPEAT` beim Buchstabenscrollen 16 Blips pro Sekunde.
+`Music.REPEAT_MS = 90` swallows the same effect firing right after
+itself. Without it, `KEY_REPEAT` fires 16 blips a second while
+scrolling through letters.
 
-**Ohne Audiogerät ist `Music` stumm statt kaputt.** `pygame.mixer.get_init()`
-muss exakt `(44100, -16, 1)` liefern, sonst rendert der Konstruktor nichts und
-jede Methode kehrt sofort zurück. Keine zweite Attrappenklasse. `pre_init`
-steht als erste Zeile in `main()` — nach `pygame.init()` ist die Puffergröße
-fest.
+**Without an audio device, `Music` is silent instead of broken.**
+`pygame.mixer.get_init()` has to return exactly `(44100, -16, 1)`,
+otherwise the constructor renders nothing and every method returns
+immediately. No second stand-in class. `pre_init` sits as the first
+line in `main()` — after `pygame.init()` the buffer size is fixed.
 
-`uv run game/music.py` prüft Taktlängen, Stimmung und Spurlängen und schreibt
-WAV-Dateien nach `/tmp/picknplay-audio`, darunter `session.wav`: Idle,
-Startfanfare, 60 Sekunden Steigerung, Fertigsound am Stück. Hören geht ohne
-das Spiel zu starten.
+`uv run game/music.py` checks bar lengths, tuning, and track lengths
+and writes WAV files to `/tmp/picknplay-audio`, including
+`session.wav`: idle, start fanfare, 60 seconds of build-up, finish
+sound, back to back. You can listen without starting the game.
 
-#### Woher die Töne kommen
+#### Where the tones came from
 
-`Dream_Sound.mp3` (101 s) wurde per FFT analysiert, nicht abgeschrieben:
-Tempo ≈ 85 BPM, Tonart F-Dur, Bass wandert F2 – Bb2 – C3 – A2/D2, die Melodie
-sitzt zwischen F4 und A5. Genau das ist die Idle-Musik geworden — 84 BPM,
-F – Dm – Bb – C, weite Halbe im Bass, dünner Puls (Duty 0.125) für die
-Arpeggien. Die Runde nimmt dieselben Töne in d-Moll: verwandt genug, dass der
-Wechsel nicht wie ein anderes Spiel klingt.
+`Dream_Sound.mp3` (101 s) was analyzed by FFT, not transcribed by ear:
+tempo ≈ 85 BPM, key F major, bass moves F2 – Bb2 – C3 – A2/D2, the
+melody sits between F4 and A5. That's exactly what became the idle
+music — 84 BPM, F – Dm – Bb – C, wide half notes in the bass, a thin
+pulse (duty 0.125) for the arpeggios. The round takes the same tones in
+D minor: related enough that the switch doesn't sound like a different
+game.
 
-Übernommen wurde also die *Beschreibung* des Stücks, keine Note. Kein Sample,
-keine Datei im Repository, kein Lizenzthema.
+So what got carried over was the *description* of the piece, not a
+single note. No sample, no file in the repository, no licensing
+question.
 
 ---
 
-## Schnittstellen der noch leeren Dateien
+## Interfaces of the still-empty files
 
-Kein `abc`, kein `Protocol`, keine Basisklasse. Ein Detector ist alles, was `tray_sum()` hat — mehr Vertrag braucht es nicht, und der Tausch Attrappe ↔ Hardware bleibt eine Zeile in `main.py`.
+No `abc`, no `Protocol`, no base class. A detector is anything that has
+`tray_sum()` — no more of a contract is needed, and swapping stand-in
+for hardware stays one line in `main.py`.
 
 ### `db.py`
 
@@ -1175,58 +1659,83 @@ class DB:
     def add(self, initials, score) -> None
 ```
 
-**`ORDER BY score ASC`.** Der Score ist der *Abstand* zum Zielwert, `0` ist perfekt. Auf `DESC` gestellt ist die Bestenliste lautlos falsch herum und niemand merkt es am Messestand. Ein `rowid ASC` als Tiebreak hält die Reihenfolge bei Gleichstand stabil.
+**`ORDER BY score ASC`.** The score is the *distance* to the target
+value, `0` is perfect. Set to `DESC`, the leaderboard is silently
+backwards and nobody notices at the trade show. A `rowid ASC` tiebreak
+keeps the order stable on ties.
 
-`qualifies(score)` ist `len(top) < TOP_N or score < top[-1][1]`.
+`qualifies(score)` is `len(top) < TOP_N or score < top[-1][1]`.
 
-Diese Datei bekommt einen `if __name__ == "__main__":`-Block mit `assert`s — Einfügen, Sortierrichtung, Verdrängung bei vollen Top 10. Die einzige Stelle im Projekt mit nicht-trivialer Vergleichslogik, und die einzige, deren Fehler man am Messetag nicht sieht.
+This file gets an `if __name__ == "__main__":` block with `assert`s —
+insertion, sort direction, eviction once the top 10 is full. The only
+spot in the project with non-trivial comparison logic, and the only one
+whose bugs you don't see on the trade-show floor.
 
 ### `hw.py`
 
 ```python
-class FakeDetector:                       # zuerst bauen, ohne Kamera
+class FakeDetector:                       # build first, without a camera
     def tray_sum(self) -> int
 
-class Camera:                             # Grabber-Thread
+class Camera:                             # grabber thread
     def __init__(self, index=CAM_INDEX, size=CAM_SIZE)
-    def read(self)      -> frame | None   # immer das NEUESTE Bild
+    def read(self)      -> frame | None   # always the LATEST frame
     def close(self)     -> None
 
 class ArucoDetector:
     def __init__(self, cam, hold=MARKER_HOLD, roi=TRAY_ROI)
-    def fresh(self) -> dict[int, quad]    # gleiche Signatur wie FakeDetector
+    def fresh(self) -> dict[int, quad]    # same signature as FakeDetector
 
-class CameraView:                         # ein Pane
+class CameraView:                         # one pane
     def __init__(self, cam, det=None, size=CAM_VIEW)
     def surface(self) -> pygame.Surface | None
 ```
 
-**Der Vertrag ist seit dem 27. August `fresh()`, nicht mehr `tray_sum()`.**
-Ein Detector ist alles, was `fresh()` hat: ein Dict von Marker-ID auf ein
-Viereck, beides braucht die Szene ohnehin. Summiert wird in der Szene, denn
-`VALUES` ist Spielregel, kein Sensorwissen — ein Detector, der Punkte kennt,
-wäre ein Sensor mit Meinung. `tray_sum()` ist ersatzlos entfallen, es hatte
-genau einen Aufrufer.
+**The contract has been `fresh()`, not `tray_sum()`, since
+2026-08-27.** A detector is anything that has `fresh()`: a dict from
+marker ID to a quad, both of which the scene needs anyway. Summing
+happens in the scene, because `VALUES` is a game rule, not sensor
+knowledge — a detector that knows point values would be a sensor with
+an opinion. `tray_sum()` was dropped with no replacement, it had
+exactly one caller.
 
-`uv run game/hw.py` prüft ohne Kamera gegen ein synthetisch gezeichnetes
-Tablett: dass `DICT_4X4_50` zu `markers/` passt, dass die Vierecke dort liegen,
-wo die Marker gezeichnet wurden (±3 px), dass `TRAY_ROI` aussortiert, was
-draußen liegt, dass die Hysterese erst hält und dann abbaut, und dass
-`FakeDetector` dieselbe Schnittstelle hat.
+`uv run game/hw.py` checks, without a camera, against a synthetically
+drawn tray: that `DICT_4X4_50` matches `markers/`, that the quads land
+where the markers were drawn (±3 px), that `TRAY_ROI` filters out
+anything outside it, that the hysteresis holds and then decays
+correctly, and that `FakeDetector` has the same interface.
 
-**`FakeDetector` zuerst.** Die Attrappe soll ihre Summe von selbst ändern (etwa alle 3 s neu würfeln), sonst steht die Tablettzahl während der ganzen Runde still und du siehst nicht, ob die Anzeige überhaupt aktualisiert.
+**`FakeDetector` first.** The stand-in should change its sum on its
+own (say, reroll every 3 s), otherwise the tray number sits still for
+the whole round and you can't tell whether the display updates at all.
 
-**`Camera` als Thread, nicht als Prozess.** `cap.read()` ist C++-Code und gibt das GIL frei. Der Thread schreibt das Bild unter Lock in ein Attribut, der Loop liest — nie umgekehrt. `CAP_PROP_BUFFERSIZE = 1`, sonst liefert der V4L2-Puffer alte Frames und die Erkennung hinkt sichtbar hinterher.
+**`Camera` as a thread, not a process.** `cap.read()` is C++ code and
+releases the GIL. The thread writes the frame into an attribute under
+lock, the loop reads — never the other way around.
+`CAP_PROP_BUFFERSIZE = 1`, otherwise the V4L2 buffer delivers old
+frames and detection visibly lags behind.
 
-**Hysterese in `ArucoDetector`:** ein Dictionary `marker_id -> Zeitpunkt der letzten Sichtung`. `tray_sum()` summiert alles, was jünger als `MARKER_HOLD` ist. Das ist die Lösung für die Hand über dem Tablett, nicht für Pucks, die wirklich verschwinden — dafür bräuchte es Positions-Tracking, und das ist bewusst nicht im Scope.
+**Hysteresis in `ArucoDetector`:** a dictionary `marker_id -> time of
+last sighting`. `tray_sum()` sums everything younger than
+`MARKER_HOLD`. That's the solution for a hand hovering over the tray,
+not for pucks that actually disappear — that would need position
+tracking, and that's deliberately out of scope.
 
-`detectMarkers()` bei `DETECT_HZ` laufen zu lassen statt bei 60 FPS: die Erkennung ist teuer und das Spiel braucht sie nicht öfter als der Besucher Pucks bewegt.
+Running `detectMarkers()` at `DETECT_HZ` instead of at 60 FPS:
+detection is expensive and the game doesn't need it more often than the
+visitor actually moves pucks.
 
-### `Buttons` (später, Meilenstein 10)
+### `Buttons` (later, milestone 10)
 
-gpiozero-Callbacks laufen in einem fremden Thread. Der Tastendruck geht in eine `queue.SimpleQueue`, `run_game` leert sie einmal pro Frame und schiebt die Aktionen durch dieselbe Stelle wie `action_of`. Damit ändert sich in `scenes.py` keine Zeile.
+gpiozero callbacks run on a foreign thread. The button press goes into
+a `queue.SimpleQueue`, `run_game` drains it once per frame and pushes
+the actions through the same spot as `action_of`. Not one line in
+`scenes.py` changes because of this.
 
-**Achtung:** `pygame.key.set_repeat()` gilt nur für die Tastatur. Das Durchscrollen der Buchstaben beim Halten muss `Buttons` selbst erzeugen — sonst funktioniert die Initialen-Eingabe auf der Messe anders als beim Entwickeln.
+**Watch out:** `pygame.key.set_repeat()` only applies to the keyboard.
+Scrolling through letters on hold has to be generated by `Buttons`
+itself — otherwise initials entry behaves differently at the trade show
+than during development.
 
 ### `main.py`
 
@@ -1238,135 +1747,216 @@ def main():
     run_game(IdleScene(ctx), WIDTH, HEIGHT, FPS)
 ```
 
-Die einzige Datei, die `scenes` **und** `hw` importiert. Der Umstieg auf echte Hardware ist genau eine Zeile: `FakeDetector()` → `ArucoDetector(Camera())`.
+The only file that imports both `scenes` **and** `hw`. Switching to
+real hardware is exactly one line: `FakeDetector()` →
+`ArucoDetector(Camera())`.
 
 
 ---
 
-## Randbedingungen
+## Constraints
 
-- **Durchsatz:** ~90 s pro Person inkl. Wechsel. 6 h Messe ≈ 240 Besucher.
-- **Toleranz:** Jede geforderte Ablagegenauigkeit ≥ 1 cm. Backlash und Totzone der Servos lassen nichts Feineres zu.
-- **Servoschutz:** Torque- und Overload-Register konservativ im EEPROM, Software-Joint-Limits, Watchdog auf Last und Temperatur.
-- **Verschleiß:** Gripper-Servo stirbt zuerst. Ersatzservos, gedruckte Ersatzteile, idealerweise kompletter Zweitarm als Hot Spare.
-- **USB-Bandbreite:** Zwei UVC-Kameras an einem Bus überallozieren Bandbreite („No space left on device"). Vor Aufbau testen, ggf. getrennte Busse oder Auflösung senken.
-- **Ergonomie:** Podest für kleinere Besucher. Desinfektionsmittel am Leader.
-- **DSGVO:** Bei Erfassung von Kontaktdaten überwiegend Minderjährige. Vorab klären.
-- **Autostart:** Beide Prozesse als systemd-Services. Der Automat muss nach Stromausfall ohne Tastatur hochkommen.
+- **Throughput:** ~90 s per person including changeover. 6 h trade show
+  ≈ 240 visitors.
+- **Tolerance:** any required placement accuracy ≥ 1 cm. Servo backlash
+  and dead zone don't allow anything finer.
+- **Servo protection:** conservative torque and overload registers in
+  EEPROM, software joint limits, a watchdog on load and temperature.
+- **Wear:** the gripper servo dies first. Spare servos, printed spare
+  parts, ideally a complete second arm as a hot spare.
+- **USB bandwidth:** two UVC cameras on one bus over-allocate bandwidth
+  ("No space left on device"). Test before the build, separate buses or
+  lower resolution if needed.
+- **Ergonomics:** a step stool for shorter visitors. Hand sanitizer at
+  the leader.
+- **GDPR:** if contact data is collected, mostly minors are involved.
+  Clarify in advance.
+- **Autostart:** both processes as systemd services. The machine has to
+  come back up after a power outage without a keyboard.
 
-## Balancing: Werte und Zielwert
+## Balancing: prices and target value
 
-Entschieden am 27. August 2026, nachdem die Bestenliste zur Frage wurde.
+Decided on 2026-08-27, revised on 2026-09-11 along with the scoring.
 
-**Der Zielwert wird nicht mehr frei gewürfelt.** `randrange(50, 300, 5)` neben
-einer Tablettsumme, die der Vorgänger hinterlassen hat, heißt: der Zufall
-entscheidet, ob jemand 3 oder 200 Punkte zu überbrücken hat. Das war die
-eigentliche Unfairness — nicht die Werte, sondern die Kopplung, die fehlte.
-`balance.gap()` liest deshalb das echte Tablett und wählt die *Distanz*:
+**The target value isn't rolled freely.** `randrange(50, 300, 5)`
+alongside a tray sum meant chance decided whether someone had to bridge
+EUR 0.30 or EUR 20. That was the actual unfairness — not the values,
+but the missing coupling. `balance.gap()` therefore reads the real tray
+and picks the *distance*:
 
-1. in `GAP_MOVES` (3) Zügen exakt schließbar — keine Runde ist unmöglich
-2. der beste einzelne Zug landet zwischen `GAP_ONE_MISS` (2) und
-   `GAP_ONE_MAX` (15) daneben
+1. exactly closable in `GAP_MOVES` (2) moves — no round is impossible
+2. the best single move lands between `GAP_ONE_MISS` (2) and
+   `GAP_ONE_MAX` (25) off, i.e. EUR 0.20 to EUR 2.50
 
-Die Untergrenze verhindert den Glückspuck, der direkt auf null führt. Die
-Obergrenze verhindert das Gegenteil: ohne sie streute derselbe Test von 2 bis
-67, und eine Runde, die nach dem besten Einzelzug noch 67 offen lässt, ist in
-60 Sekunden nicht zu holen. Gemessen über 400 zufällige Tablettzustände: im
-Median 49 zulässige Distanzen zur Auswahl, minimal 34, nie null; Rechenzeit
-unter einer Millisekunde, einmal in `GameScene.__init__`.
+The lower bound prevents the lucky grab that lands directly on zero.
+The upper bound prevents the opposite: a round that still leaves
+EUR 6.70 open after the best single move can't be closed within the
+round time.
 
-**Die Werte haben keinen gemeinsamen Teiler mehr.** Alt waren alle zehn durch 5
-teilbar — damit war das Spiel binär: Distanz durch 5 teilbar, dann genügt ein
-Puck; sonst *überhaupt nicht* erreichbar. Von 76 Distanzen im Band 30–120, die
-kein Einzelzug schafft, waren nur 4 in zwei Zügen lösbar. Mit
-`{4, 7, 12, 18, 23, 29, 36, 44, 53, 67}` sind es 71 von 74. Erst dadurch gibt
-es „knapp daneben" — und damit eine Bestenliste mit Auflösung statt einer
-Liste aus Nullen und Unmöglichkeiten.
+**The tray starts empty, and that makes the target set finite.**
+Because every round starts from the same state, the set of valid
+targets is also the same every round — with the current price set
+that's 21, and they're the entire supply of tasks for a trade-show day.
+The binding knob for that is `GAP_ONE_MAX`: at 15 there would be 14
+targets, at 25 there are 21. The band `GAP_MIN`/`GAP_MAX` is *not* it —
+it doesn't cut anything that the single-move condition doesn't already
+cut.
 
-**Ein Marker pro physischem Puck, zehn Stück.** `ArucoDetector.marks` ist ein
-Dict mit der ID als Schlüssel: zwei Pucks mit demselben Marker zählen einmal.
-Duplikate zu drucken wäre ein stiller Wertungsfehler, der am Messetag wie ein
-Erkennungsproblem aussieht. Zehn passt außerdem zum 5×2-Raster der
-Preistabelle im Score-Screen.
+`gap()` still reads the real tray instead of using a constant: a
+cupcake left lying around then changes the task along with it, instead
+of breaking it.
 
-## Preise
+**The prices share no common divisor.** Calculated in 10-cent units —
+`{14, 17, 21, 24, 28, 32, 36, 41, 46, 52}`, shown as EUR 1.40 to
+EUR 5.20. If these were round prices in cents, the GCD would be 10 and
+the game would be binary: distance divisible by the divisor, then one
+grab is enough, otherwise it's *completely* unreachable. Only
+coprimality gives you "just barely off" — and with it a leaderboard
+with resolution instead of a list of zeros and impossibles.
 
-Drei Stufen, alle erreichbar — jeder gewinnt etwas:
+**One marker per physical cupcake, ten of them.** `ArucoDetector.marks`
+is a dict keyed by ID: two cupcakes with the same marker count once.
+Printing duplicates would be a silent scoring bug that looks like a
+detection problem at the trade show. Ten also fits the grid of the
+price table on the score screen.
 
-- **Teilnahme** — Sticker oder 3D-gedruckter Keychain
-- **Score-Band** — besserer Preis, nach Genauigkeit gestaffelt
-- **Tagesbestenliste** — Hauptpreis am Ende des Messetags
+## Prizes
 
-## MVP-Meilensteine
+Three tiers, all reachable — everyone wins something:
 
-Reihenfolge nach dem Prinzip: nach jedem Schritt läuft etwas. Die Software wird gegen Attrappen fertiggestellt, bevor Hardware angeschlossen wird.
+- **Participation** — sticker or 3D-printed keychain
+- **Score band** — better prize, tiered by accuracy
+- **Daily leaderboard** — grand prize at the end of the trade-show day
 
-**Software (ohne Hardware)**
+The band boundaries aren't set yet. They belong on `off`, not on the
+score, because `off` is the physical truth of the round: proposal `0` /
+`≤ 5` (i.e. up to EUR 0.50 off) / everything else, to be confirmed once
+someone has watched real results for an afternoon.
 
-1. ● Skelett läuft — Szenenlogik, Übergänge, `main.py`/`db.py`/`hw.py` stehen, durchklickbar
-2. ◐ Lesbarkeit — Layout gezeichnet, Farbtimer steht; aus 8 m noch nicht geprüft
-3. ◐ Spiellogik — `FakeDetector` liefert Zahlen; `tray_sum()` steht im falschen Zweig (Befund 3)
-4. ◐ High Score — Cursor-Modell und SQLite stehen, `handle` doppelt (Befund 1)
-5. ◐ Attract Mode — Timeouts und Titelbild stehen, Demo-Video fehlt
-5a. ● CRT-Overlay — Wölbung, Scanlines, Vignette in `run_game`; Press Start 2P als Schrift. Stärke in der Halle einstellen, Kosten auf dem Pi messen
-5b. ● Musik — `music.py`, deklarative Notation, Square-Wave-Synthese, Ducking
-5d. ● Balancing — `balance.py`, Zielwert aus dem Tablett, Werte ohne
-    gemeinsamen Teiler; `GAP_MOVES` bleibt geraten bis jemand misst
-5c. ○ Vollbild — `pygame.SCALED`, `FULLSCREEN`-Schalter in `config.py`
+## MVP milestones
 
-Legende: ● fertig · ◐ angefangen · ○ offen
+Order follows the principle: something runs after every step. The
+software is finished against stand-ins before hardware gets connected.
+
+**Software (without hardware)**
+
+1. ● Skeleton runs — scene logic, transitions, `main.py`/`db.py`/`hw.py`
+   in place, click-through
+2. ◐ Readability — layout drawn, color timer in place; not yet checked
+   from 8 m
+3. ◐ Game logic — `FakeDetector` returns numbers; `tray_sum()` sits in
+   the wrong branch (finding 3)
+4. ◐ High score — cursor model and SQLite in place, `handle` duplicated
+   (finding 1)
+5. ◐ Attract mode — timeouts and title screen in place, demo video
+   missing
+5a. ● CRT overlay — curvature, scanlines, vignette in `run_game`; Press
+    Start 2P as the font. Tune strength in the hall, measure cost on
+    the Pi
+5b. ● Music — `music.py`, declarative notation, square-wave synthesis,
+    ducking
+5d. ● Balancing — `balance.py`, target value from the tray, values with
+    no common divisor; `GAP_MOVES` stays a guess until someone measures
+5c. ● Fullscreen — native 1920 × 1080 without `SCALED`, `FULLSCREEN`
+    switch in `config.py`, 30 fps signed off on the machine (2026-09-10)
+
+Legend: ● done · ◐ started · ○ open
 
 **Hardware**
 
-6. Arm läuft — Teleop 10 min ohne Fehler
-7. Greifen klappt — 9 von 10 Pucks ohne Kippen
-8. ◐ Marker werden erkannt — Code steht und läuft gegen die Webcam; gegen die
-   gedruckten Marker unter Hallenlicht ungeprüft
-9. ◐ Tablett wird gelesen — Hysterese steht (`MARKER_HOLD`), real ungeprüft
+6. Arm runs — teleop 10 min without a fault
+7. Grabbing works — 9 of 10 pucks without tipping
+8. ◐ Markers get detected — code in place and running against the
+   webcam; unverified against the printed markers under hall lighting
+9. ◐ Tray gets read — hysteresis in place (`MARKER_HOLD`), unverified
+   in reality
 
 **Integration**
 
-10. ● `FakeDetector` → `ArucoDetector` erledigt (`CAMERA` in `config.py`);
-    `FakeButtons` → `Buttons` offen
-11. LED-Zustände, systemd-Autostart beider Prozesse, UDP-Heartbeat
+10. ● `FakeDetector` → `ArucoDetector` done (`CAMERA` in `config.py`);
+    `FakeButtons` → `Buttons` open
+11. LED states, systemd autostart for both processes, UDP heartbeat
 
-Meilensteine 1–5 brauchen weder Arm noch Kamera und laufen parallel zur Hardware. Ein Integrationsschritt entfällt: beide Prozesse werden nur nebeneinander gestartet.
+Milestones 1–5 need neither the arm nor the camera and run in parallel
+with the hardware. One integration step falls away: both processes just
+get started next to each other.
 
-## Nicht im Scope
+## Out of scope
 
-Jetson, Browser-Frontend, WebSocket, Flask, Kubernetes, ConfigSync, GCS, Vertex-Pipelines, trainierte CV-Modelle, autonomer Betrieb ohne Teleop, FPV als eigenes Spiel (nur als optionaler Hard-Mode-Schalter). Videodekodierung im **Attract Mode** bleibt draußen — der Demo-Clip läuft in der `HowToScene`, ein paar Sekunden pro Besucher statt sechs Stunden im geschlossenen Kabinett.
+Jetson, browser frontend, WebSocket, Flask, Kubernetes, ConfigSync,
+GCS, Vertex pipelines, trained CV models, autonomous operation without
+teleop, FPV as its own game (only as an optional hard-mode switch).
+Video decoding in **attract mode** stays out — the demo clip runs in
+`HowToScene`, a few seconds per visitor instead of six hours in a
+closed cabinet.
 
-## Offene Punkte
+## Open Items
 
-- Welcher Pi (Modell und RAM)
-- **Stromlose Parkpose des Followers** — blockiert die Torque-Abschaltung im Idle
-- Python-Version des Pi-Images, daraus folgt LeRobot-Version
-- Anzahl verfügbarer Arme
-- Messedauer und Standbesetzung
-- ArUco-Erkennungsrate unter Hallenlicht (nicht im Studio testen)
-- Reale Aktionszahl Ungeübter in 60 s — steckt jetzt als `GAP_MOVES = 3` in
-  `config.py`. Der Mechanismus stimmt bei jedem Wert, nur die Konstante ist
-  geraten; sobald jemand es misst, ist es eine Zeile
-- Ob die Zwischenszene eigene, dünnere Musik bekommt statt des Idle-Loops —
-  eine Zeichenkette in `PIECES`, keine Codeänderung
-- `up` läuft in der Namenseingabe rückwärts durchs Alphabet (A → Z). Mit
-  echten Pfeilen statt `^v` fällt das jetzt eher auf; eine Zeile in
-  `LeaderboardScene.handle`, falls es umgedreht werden soll
-- `TRAY_ROI` am aufgebauten Automaten einstellen — hängt an Kamerahöhe und Tablettgröße
-- CRT-Scanline-Stärke unter Hallenlicht: ab wann kostet der Effekt mehr Lesbarkeit als er Optik bringt (`SCANLINE_ALPHA`, `VIGNETTE_ALPHA`)
-- Ob der Pi die 3,3 ms für die Wölbung übrig hat. Falls nicht: `BARREL_K = 0`
-- ~~Ob `cv2` neben `pygame` auf dem Pi sauber lädt~~ — erledigt am 9.9.2026. Auf Ubuntu 24.04 laden OpenCV 5.0.0 und pygame-ce 2.5.8 unter Python 3.13 ohne Symbolkonflikt
-- Audioausgabe am Pi (Klinke, HDMI oder USB) und ob am Stand überhaupt etwas hörbar ist
-- Ob die 60-px-Balken oben/unten hinter der Kabinettblende verschwinden — sonst 1280 × 800 als Entwurfsauflösung erwägen
-- Ob bei 1920 × 1080 nativ gerendert wird statt bei 1200 herunterskaliert. Das Panel kann kein 16:10, die Frage ist also nicht mehr *ob* 16:10 sich lohnt, sondern ob das Layout in `scenes.py` auf 1080 umgezogen wird (`FOOTER_Y = 1120` liegt sonst außerhalb des Bildes)
-- Snap-in vs. Schraubtaster bei 3 mm Sperrholz — Ausrissverhalten testen
-- Zwei Kameras gleichzeitig: Bandbreite am realen Pi verifizieren (Index der Arm-Kamera steht noch nicht fest, `CAM_INDEX` ist einer)
-- FPV-Latenz, falls Hard Mode kommt
+- Which Pi (model and RAM)
+- **Powered-off parking pose for the follower** — blocks torque
+  shutdown in idle
+- Python version of the Pi image, which determines the LeRobot version
+- Number of arms available
+- Trade-show duration and booth staffing
+- ArUco detection rate under hall lighting (don't test in the studio)
+- Real action count for an untrained user in 60 s — currently sits as
+  `GAP_MOVES = 3` in `config.py`. The mechanism works at any value,
+  only the constant is a guess; once someone measures it, it's a
+  one-line change
+- Whether the intermission scene gets its own, thinner music instead of
+  the idle loop — one string in `PIECES`, no code change
+- `up` runs backward through the alphabet in name entry (A → Z). With
+  real arrows instead of `^v` this now stands out more; a one-line
+  change in `LeaderboardScene.handle` if it should be flipped
+- Tune `TRAY_ROI` on the assembled machine — depends on camera height
+  and tray size
+- CRT scanline strength under hall lighting: at what point does the
+  effect cost more readability than it gains in looks
+  (`SCANLINE_ALPHA`, `VIGNETTE_ALPHA`)
+- ~~Whether the Pi has the 3.3 ms to spare for the curvature~~ — done
+  2026-09-10. The curvature now lives in the static darkening map and
+  costs nothing at runtime
+- **Active cooling.** Without a fan, the Pi throttles under double load
+  and skews any measurement by up to 35%. First order, blocks
+  continuous operation at the trade show
+- Whether the GPU shader gets built (curving the image with a sharp
+  font). Optional, not blocking
+- ~~Whether `cv2` loads cleanly next to `pygame` on the Pi~~ — done
+  2026-09-09. On Ubuntu 24.04, OpenCV 5.0.0 and pygame-ce 2.5.8 load
+  under Python 3.13 without a symbol conflict
+- Audio output on the Pi (jack, HDMI, or USB) and whether anything is
+  even audible at the booth
+- ~~Whether the 60 px bars top/bottom disappear behind the cabinet
+  bezel~~ — moot, the panel is 16:9 and rendering is native
+- ~~Whether rendering is native at 1920 × 1080 instead of downscaled
+  from 1200~~ — done 2026-09-10, layout has moved
+- Pi power supply on shutdown: a hard cut broke the git repo on
+  2026-09-09 (five zero-byte objects). At the trade show, that's the
+  machine's SD card
+- Snap-in vs. screw-mount buttons on 3 mm plywood — test tear-out
+  behavior
+- Two cameras at once: verify bandwidth on the real Pi (the arm
+  camera's index isn't fixed yet, `CAM_INDEX` is one)
+- FPV latency, in case hard mode happens
 
-## Arbeitsweise
+## Workflow
 
-Ursprünglich: das MVP bewusst ohne KI-Assistenz. Primärquellen, Versuch vor Nachschlagen, bei Blockade nach zwei Stunden Kollegen fragen statt Werkzeug. Zeitbudget entsprechend zwei- bis dreifach angesetzt.
+Originally: the MVP deliberately built without AI assistance. Primary
+sources, try before you look it up, ask a colleague instead of a tool
+if stuck for two hours. Time budget set two to three times higher
+accordingly.
 
-**Angepasst (August 2026):** Der Assistent wird als Prüfer und Erklärer genutzt — er liest Code, benennt Fehler mit Datei und Zeile, erklärt Entwurfsfragen und pflegt dieses Dokument. Geschrieben wurde zunächst alles von Hand: der Lerneffekt hängt daran, dass die Tastenanschläge selbst passieren.
+**Adjusted (August 2026):** the assistant is used as a reviewer and
+explainer — it reads code, names bugs by file and line, explains design
+questions, and maintains this document. Everything was initially
+hand-written: the learning effect depends on the keystrokes happening
+yourself.
 
-**Angepasst (27. August 2026):** Das Skelett steht und ist verstanden — Szenenmodell, Loop, `Ctx`-Naht, Layout-Koordinaten sind von Hand entstanden und damit durchdrungen. Ab hier schreibt der Assistent den Code, aber erst nach dem Vier-Schritte-Ablauf oben. Das Verständnis wandert damit von „ich habe es getippt" zu „ich habe die Entscheidung getroffen und könnte sie verteidigen" — und Letzteres ist das, was am Messestand um 9 Uhr morgens beim Reparieren zählt. Der Ablauf ist die Bedingung dafür: ohne Schritt 2 und 3 wäre es nur noch Diktat.
+**Adjusted (2026-08-27):** the skeleton is in place and understood —
+scene model, loop, the `Ctx` seam, layout coordinates all came from
+hand and are therefore internalized. From here on the assistant writes
+the code, but only after the four-step process above. Understanding
+thus shifts from "I typed it" to "I made the decision and could defend
+it" — and the latter is what counts at 9 a.m. at the booth when
+something needs fixing. The process is the condition for that: without
+steps 2 and 3 it would just be dictation.
