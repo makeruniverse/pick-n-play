@@ -249,11 +249,22 @@ class Buttons:
         """Actions that have fired since the last frame."""
         # Staff escape hatch: all four held for HOLD_QUIT seconds -> "quit".
         # In expo mode systemd starts the game again, so this is a restart.
-        pressed = [b.is_pressed for b in self.btns.values()]
-        self.held = self.held + dt if all(pressed) else 0.0
+        pressed = [a for a, b in self.btns.items() if b.is_pressed]
+        self.held = self.held + dt if len(pressed) == len(self.btns) else 0.0
         if self.held >= HOLD_QUIT:
             self.held = 0.0
             return ["quit"]
+        # More than one button at a time is nobody playing -- it's the escape
+        # hatch being pressed. Without this the four buttons repeated at
+        # KEY_REPEAT for five seconds, which walked the game through its
+        # scenes and could write a garbage name into the leaderboard.
+        # `inf` never counts down, so the buttons stay consumed until they're
+        # released: letting go of three doesn't hand the fourth a repeat.
+        # The first press still fires -- the frame it happens in, the loop
+        # can't know that three more are on their way.
+        if len(pressed) > 1:
+            self.wait.update(dict.fromkeys(pressed, float("inf")))
+            return []
         out = []
         for a, b in self.btns.items():
             if not b.is_pressed:
@@ -509,7 +520,7 @@ if __name__ == "__main__":
         is_pressed = False
     btn = Buttons.__new__(Buttons)
     btn.delay, btn.rate = 0.5, 0.25
-    btn.btns, btn.wait, btn.held = {"up": _Pin()}, {}, 0.0
+    btn.btns, btn.wait, btn.held = {"up": _Pin(), "down": _Pin()}, {}, 0.0
     assert btn.pump(0.125) == []                        # not pressed
     btn.btns["up"].is_pressed = True
     assert btn.pump(0.125) == ["up"], "edge doesn't fire immediately"
@@ -520,8 +531,15 @@ if __name__ == "__main__":
     assert btn.pump(0.75) == ["up"] * 3, "long frames swallow repeats"
     btn.btns["up"].is_pressed = False
     assert btn.pump(0.125) == [] and btn.wait == {}, "release not forgotten"
+    # A second button silences both, and they stay silent while held --
+    # also after the others are let go again
+    btn.btns["up"].is_pressed = btn.btns["down"].is_pressed = True
+    assert btn.pump(0.125) == [], "chord fires"
+    assert [btn.pump(0.5) for _ in range(3)] == [[], [], []], "chord repeats"
+    btn.btns["down"].is_pressed = False
+    assert [btn.pump(0.5) for _ in range(3)] == [[], [], []], "held button wakes up"
     # All buttons held for HOLD_QUIT -> quit, once
-    btn.btns["up"].is_pressed = True
+    btn.btns["down"].is_pressed = True
     btn.pump(HOLD_QUIT / 2)
     assert btn.pump(HOLD_QUIT / 2) == ["quit"] and btn.held == 0.0
 

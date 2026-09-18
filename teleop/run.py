@@ -8,7 +8,8 @@ the arm stays playable instead of looking broken.
 Runs in the conda env `lerobot` (Python 3.10), not in the game's .venv:
 
   python teleop/run.py          teleop loop (teleop.service)
-  python teleop/run.py --show   live leader values + min/max, to dial in LIMITS
+  python teleop/run.py --show   the same loop, plus live min/max per joint
+                                and a LIMITS block on Ctrl-C (pnp-arm-help)
   python teleop/run.py --test   self-test, no hardware
 """
 import os
@@ -59,39 +60,45 @@ def leader():
     return arm
 
 
-def show():
-    arm, seen = leader(), {}
-    try:
-        while True:
-            for k, v in arm.get_action().items():
-                j = k.split(".")[0]
-                lo, hi = seen.get(j, (v, v))
-                seen[j] = (min(lo, v), max(hi, v))
-            print("  ".join(f"{j} {lo:6.1f}..{hi:6.1f}" for j, (lo, hi) in seen.items()),
-                  end="\r", flush=True)
-            time.sleep(0.05)
-    except KeyboardInterrupt:
-        print("\nLIMITS = {")
-        for j, (lo, hi) in seen.items():
-            print(f'    "{j}": ({lo:.0f}, {hi:.0f}),')
-        print("}")
-    finally:
-        arm.disconnect()
+def main(watch=False):
+    """Teleop loop. `watch` additionally tracks min/max per joint.
 
-
-def main():
+    Watching drives the follower like any other run -- limits are dialed in
+    by watching where the arm actually gets close to the table, not by
+    reading numbers with a dead follower. Recorded are the *leader's* raw
+    values, before the clamp, because that's what belongs in LIMITS. A band
+    that's already in LIMITS stays in effect meanwhile: the printed value
+    keeps rising while the follower has long since stopped.
+    """
     from lerobot.robots.so101_follower import SO101Follower, SO101FollowerConfig
     lead = leader()
     follow = SO101Follower(SO101FollowerConfig(port=FOLLOWER, id="my_follower_arm"))
     follow.connect()
     notify("READY=1")
+    seen, n = {}, 0
     try:
         while True:
             t = time.perf_counter()
-            follow.send_action(clamp(lead.get_action()))
+            action = lead.get_action()
+            follow.send_action(clamp(action))
             # A hung serial bus stops this line -> systemd's watchdog restarts us.
             notify("WATCHDOG=1")
+            if watch:
+                for k, v in action.items():
+                    j = k.split(".")[0]
+                    lo, hi = seen.get(j, (v, v))
+                    seen[j] = (min(lo, v), max(hi, v))
+                n += 1
+                if n % 6 == 0:     # 10 lines a second, nobody reads 60
+                    print("  ".join(f"{j} {lo:6.1f}..{hi:6.1f}"
+                                    for j, (lo, hi) in seen.items()),
+                          end="\r", flush=True)
             time.sleep(max(0.0, 1 / FPS - (time.perf_counter() - t)))
+    except KeyboardInterrupt:
+        print("\nLIMITS = {")
+        for j, (lo, hi) in seen.items():
+            print(f'    "{j}": ({lo:.0f}, {hi:.0f}),')
+        print("}")
     finally:
         lead.disconnect()
         follow.disconnect()
@@ -106,7 +113,5 @@ if __name__ == "__main__":
         assert clamp({"elbow_flex.pos": -21})["elbow_flex.pos"] == -20
         assert clamp({"elbow_flex.pos": 0})["elbow_flex.pos"] == 0
         print("ok")
-    elif "--show" in sys.argv:
-        show()
     else:
-        main()
+        main(watch="--show" in sys.argv)

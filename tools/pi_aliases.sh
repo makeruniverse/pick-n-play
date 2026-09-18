@@ -16,8 +16,13 @@ pnp-start() {
     sleep 1; echo "started for ${1:-900} s, log: pnp-log"
 }
 
-# Stop the game, then switch the strip off (KILL skips Leds.close())
+# Stop the game, then switch the strip off (KILL skips Leds.close()).
+# Stops expo mode as well: otherwise systemd puts the game back after 3 s,
+# and pnp-leds / pnp-buttons keep answering "game is running, pnp-stop first".
+# It stays off until `pnp-expo` or the next boot.
 pnp-stop() {
+    systemctl is-active -q pnp-expo && {
+        sudo systemctl stop pnp-expo; echo "expo mode stopped, back on with pnp-expo"; }
     pkill -f "[g]ame/main.py" && sleep 0.5
     pnp-leds-off
     echo stopped
@@ -83,12 +88,35 @@ alias pnp-expo-on='sudo systemctl enable --now pnp-expo pnp-update.timer'     # 
 alias pnp-expo-off='sudo systemctl disable --now pnp-expo pnp-update.timer'   # back to pnp-start
 alias pnp-update-now='sudo systemctl start pnp-update'
 
-# Geofencing: move the leader to its edges, Ctrl-C prints a LIMITS table
-# for teleop/run.py. Stops teleop meanwhile, both need the leader's port.
+# Geofencing: teleop with a live min/max table, Ctrl-C prints LIMITS.
+# Stops the service meanwhile, both want the same two serial ports.
 pnp-arm-limits() {
     sudo systemctl stop teleop
     (cd $PNP && ~/miniforge3/envs/lerobot/bin/python teleop/run.py --show)
     sudo systemctl start teleop
+}
+
+pnp-arm-help() {
+    cat <<'EOF'
+Geofencing: teleop/run.py clamps every joint of the leader into its band in
+LIMITS before the follower sees it. At the edge only that joint stops, the
+others keep following, so the arm stays playable instead of looking broken.
+
+Dialing the bands in:
+  1. pnp-arm-limits          the arm keeps following, with a live min/max table
+  2. move every joint as far as the follower may go -- not onto the table,
+     not into the cabinet wall, not past the tray. The follower moves along,
+     so you see where it gets close instead of guessing from numbers.
+  3. also try the bad combinations: shoulder_lift and elbow_flex can each be
+     inside their band and still put the gripper on the table. Each band is
+     its own joint, the pair is not a region in space -- when in doubt, tighter.
+  4. Ctrl-C prints a LIMITS block. Paste it into teleop/run.py, commit,
+     push to expo -- the updater restarts teleop by itself.
+
+Careful: the printed numbers are the leader's, before the clamp. Where a
+band is already narrow, the number keeps rising while the arm has stopped.
+Re-measuring from scratch: set that joint back to (-100, 100) first.
+EOF
 }
 
 # Fair wifi: pnp-wifi-add SSID PASS. Replaces the previous fair network,
@@ -109,22 +137,37 @@ EOF
 }
 
 pnp-help() {
+    # Which half of this list applies depends on expo mode, so it says so
+    # first -- with the service running, pnp-start refuses and pnp-stop
+    # stops the service.
+    echo "expo mode: $(systemctl is-active pnp-expo) ($(systemctl is-enabled pnp-expo) at boot)," \
+         "teleop: $(systemctl is-active teleop), auto-update: $(systemctl is-active pnp-update.timer)"
     cat <<'EOF'
-pnp-start [s]    start game (default 900 s), detached
-pnp-stop         stop game, LEDs off
-pnp-log          follow game output
-pnp-status       process, temp, throttling, voltage, errors
-pnp-fps [s]      start with frame rate log
-pnp-fake [s]     start without camera
-pnp-leds [0..1]  LED test, all four states
-pnp-leds-off     strip dark
-pnp-buttons      button test, 15 s
-pnp-update       git pull
-pnp-expo / pnp-expo-stop    expo service start / stop
-pnp-expo-on / pnp-expo-off  expo autostart + auto-update on / off
-pnp-expo-log     follow game, teleop and updater
-pnp-update-now   run the expo updater now
-pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
-pnp-wifi-add SSID PASS      fair wifi, with DHCP
+
+game
+  pnp-start [s]    start game (default 900 s), detached -- not in expo mode
+  pnp-stop         stop game, LEDs off. Stops expo mode too, until pnp-expo
+  pnp-log          follow game output
+  pnp-fps [s]      start with frame rate log
+  pnp-fake [s]     start without camera
+
+expo mode (systemd: game, teleop, auto-update from branch expo)
+  pnp-expo         start the game service    pnp-expo-stop   stop it
+  pnp-expo-on      autostart + auto-update   pnp-expo-off    both off again
+  pnp-expo-log     follow game, teleop and updater
+  pnp-update-now   run the updater now (waits for the round to end)
+  pnp-update       plain git pull, for a Pi without expo mode
+
+hardware
+  pnp-status       process, temp, throttling, voltage, errors
+  pnp-leds [0..1]  LED test, all four states
+  pnp-leds-off     strip dark
+  pnp-buttons      button test, 15 s
+  pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
+  pnp-arm-help     how to dial in the geofence
+  pnp-wifi-add SSID PASS      fair wifi, with DHCP
+
+All four buttons held for 5 s restart the game. In expo mode that's the way
+back from a stuck screen, without a keyboard.
 EOF
 }
