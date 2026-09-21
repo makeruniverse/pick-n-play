@@ -59,15 +59,20 @@ def _reach(on, moves):
     return seen
 
 
-def gap(on):
+def gap(on, up=False):
     """Distance to the target for a tray with the marker IDs `on`.
 
     Sign included: if everything is already on the tray, only negative
     distances come out, because _reach then only knows removal. So that case
     resolves on its own and needs no special branch.
+
+    `up=True`: only targets above what's on the tray. The story has a guest
+    with a budget, and after the practice treat a negative gap could make
+    that budget EUR 0.00 -- a line nobody should have to read out.
     """
     one = _reach(on, 1)
-    band = [g for g in _reach(on, GAP_MOVES) if GAP_MIN <= abs(g) <= GAP_MAX]
+    band = [g for g in _reach(on, GAP_MOVES)
+            if GAP_MIN <= abs(g) <= GAP_MAX and (g > 0 or not up)]
     ok = [g for g in band
           if GAP_ONE_MISS <= min(abs(g - d) for d in one) <= GAP_ONE_MAX]
     # ponytail: fall back to the weaker condition. At the machine this runs
@@ -151,6 +156,9 @@ if __name__ == "__main__":
                    and GAP_ONE_MISS <= min(abs(g - d) for d in one) <= GAP_ONE_MAX)
     assert goals, "no target left over for the empty tray"
     assert all(gap(()) in goals for _ in range(50))
+    # After the practice treat: any single piece on the tray still leaves
+    # a target above it, so the guest's budget is never smaller than the tray.
+    assert all(gap({i}, up=True) > 0 for i in VALUES for _ in range(20))
     # With fewer than ten different targets, the booth's state repeats too visibly.
     # The knob for that is GAP_ONE_MAX, see config.py.
     assert len(goals) >= 10, len(goals)

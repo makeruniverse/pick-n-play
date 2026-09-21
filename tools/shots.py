@@ -28,7 +28,7 @@ import cv2                                                      # noqa: E402
 import pygame                                                   # noqa: E402
 from app import Ctx, crt_gain, px                               # noqa: E402
 from config import (WIDTH, HEIGHT, FONT_PATH, FONT_SIZES, CRT,  # noqa: E402
-                    BARREL_K, CAM_VIEW, GREY, BG, WARN_SECONDS, ROUND_SECONDS)
+                    BARREL_K, CAM_VIEW, GREY, BG, ROUND_SECONDS, FUSE_PULSE)
 import scenes                                                   # noqa: E402
 
 
@@ -42,9 +42,11 @@ class Stub:
     def top(self, n=5):          return [("VAD", 1000), ("MAX", 948), ("ANN", 871),
                                          ("LEO", 795), ("KIM", 640)][:n]
     # Empty, like the cabinet at the start of a round -- only this way does
-    # GameScene get a distance that matches a real round. What's shown on the
-    # tray in the image is set by the plan below via `total`.
-    def fresh(self):             return {}
+    # GameScene start with the practice. The plan below sets `tray`.
+    tray = {}
+    def fresh(self):             return self.tray
+    def rank(self, player):      return 4, 23
+    def new_player(self, name):  return 42
 
 
 class StubView:
@@ -84,33 +86,60 @@ def shots(out):
               views=(StubView("ARM CAM", fonts["tiny"]),
                      StubView("TOP-DOWN CAM", fonts["tiny"])))
 
-    random.seed(0)    # balance.gap() rolls the target, otherwise 3-6 drifts each run
-    game = scenes.GameScene(ctx)
-    # A round that landed just off: EUR 0.30 short at EUR 5.00 distance, time
-    # ran out. Gives a score with three digits instead of a round number that
-    # wouldn't let you judge the count-up.
-    done = scenes.Result(target=67, total=64, dist=50, left=0.0,
+    # The top-down pane gets the overlay, so the marker frames show up.
+    ctx.views[1].det = True
+    random.seed(0)    # balance.gap() rolls the target, otherwise the shots drift each run
+    quad = lambda x: [(x, .5), (x + .06, .5), (x + .06, .6), (x, .6)]
+
+    def typed(d, page=0):
+        """A dialog on `page`, fully typed out -- the state a reader sees."""
+        d.i, d.n, d.t = page, 1e9, 0.4
+        return d
+
+    story = scenes.StoryScene(ctx, 42, "MAX", new=True)
+    tut = scenes.GameScene(ctx, 42, "MAX")
+    typed(tut.dialog)
+    # The practice treat lands: the scene goes through the same update()
+    # as on the cabinet, so pop-up, sprinkles and Bella's line are real.
+    done_tut = scenes.GameScene(ctx, 42, "MAX")
+    stub.tray = {5: quad(.45)}
+    done_tut.update(0.3)
+    typed(done_tut.dialog)
+    game = scenes.GameScene(ctx, 42, "MAX")
+    typed(game.dialog)
+    order = scenes.GameScene(ctx, 42, "MAX")
+    typed(order.dialog, 1)
+    # A round that landed just off: EUR 0.30 short at EUR 6.70, time ran
+    # out. Gives a score with three digits and two stars.
+    done = scenes.Result(target=67, total=64, dist=67, left=0.0,
                          marks={0: 1, 3: 1, 7: 1, 9: 1})
-    board = scenes.LeaderboardScene(ctx, done)
+    score = scenes.DisplayScoreScene(ctx, done, 42)
+    typed(score.dialog)
+    play = dict(phase="play", dialog=None, pop=None, hit=0.0, confirm=0.0)
     # (filename, scene, state). The state gets written into __dict__ -- same
     # technique as in the self-test, so the in-between states that are hard to
-    # hit by hand also make it into the image (final seconds, PERFECT).
+    # hit by hand also make it into the image (hint, PERFECT, over budget).
     plan = [
         ("1-idle",         scenes.IdleScene(ctx),                     {}),
-        ("2-howto",        scenes.HowToScene(ctx),                    {}),
-        ("3-game-add",     game, dict(left=ROUND_SECONDS * 0.7, hit=0.0,
-                                      confirm=0.0, total=game.target - 32)),
-        ("4-game-remove",  game, dict(total=game.target + 17)),
-        ("5-game-warning", game, dict(left=WARN_SECONDS * 0.4)),
-        ("6-game-perfect", game, dict(left=ROUND_SECONDS * 0.7,
-                                      total=game.target, hit=1.0,
-                                      fx=burst(960, 196, 0.25))),
+        ("2-name",         scenes.EntryScene(ctx),       dict(cursor=1, slots=[12, 0, 23])),
+        ("3-story",        story, dict(dialog=typed(story.dialog, 1))),
+        ("4-tutorial",     tut,                                       {}),
+        ("5-tutorial-done", done_tut,                                 {}),
+        ("6-order",        order,                                     {}),
+        ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
+                                      marks={5: quad(.45)}, total=32, target=67,
+                                      pop=["cupcake_lemon", "+3,20", 0.4])),
+        ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
+                                      clock=0.3)),
+        ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,
+                                      marks={5: quad(.35), 9: quad(.55)}, total=84)),
+        ("10-game-perfect", game, dict(left=ROUND_SECONDS * 0.3, total=67, hit=1.0,
+                                       marks={5: quad(.35), 2: quad(.55)},
+                                       fx=burst(960, 196, 0.25))),
         # done=True: the screenshot shows the final state, not the first
         # tenth of a second of the count-up.
-        ("7-score",        scenes.DisplayScoreScene(ctx, done),
-                           dict(shown=done.score, done=True, t=2.5,
-                                fx=burst(960, 300, 2.5))),
-        ("8-name",         board, dict(cursor=2)),
+        ("11-score",       score, dict(shown=done.score, done=True, now=2.5,
+                                       fx=burst(960, 300, 2.5))),
     ]
 
     gain = crt_gain(WIDTH, HEIGHT, BARREL_K) if CRT else None

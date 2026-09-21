@@ -313,6 +313,11 @@ SFX = {
     # and a button-tone-sized sound there would saw the music to pieces.
     "blip":   (300, [
         dict(pat="e6 .", vol=1200, duty=0.125, env="hit")]),
+    # The text box talks: one of four short pitches per letter, picked at
+    # random -- that's the whole Animal Crossing trick. Quieter than "blip",
+    # it fires 15 times a second while a line types.
+    **{f"talk{i}": (480, [dict(pat=f"{n} .", vol=900, duty=0.25, env="hit")])
+       for i, n in enumerate(("g5", "a5", "c6", "d6"))},
     "nope":   (200, [
         dict(pat="a#2^d#2 . .", vol=3400, duty=0.50, env="hit"),
         dict(pat="s . .",       vol=1800, env="hit")]),
@@ -338,7 +343,8 @@ class Music:
     """Silent when there's no audio device -- scenes notice nothing of it."""
 
     REPEAT_MS = 90   # the same SFX firing faster than this gets swallowed
-    NO_DUCK = {"blip"}   # fires on every new marker -- ducking on it made the music pump
+    # fire on every new marker / every typed letter -- ducking on them made the music pump
+    NO_DUCK = {"blip", "talk0", "talk1", "talk2", "talk3"}
 
     def __init__(self):
         self.on = pygame.mixer.get_init() == (SR, -16, 1)

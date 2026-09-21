@@ -15,6 +15,7 @@ class Ctx:
     views: tuple = ()        # camera passthrough, empty = no image
     demo: object = None      # VideoView of the intermission scene, None = text only
     buttons: object = None   # GPIO buttons, None = keyboard only
+    lang: str = LANG         # "en" / "de", switched in the idle screen
 
 class SceneBase:
     MUSIC = "idle"       # None = the scene handles it itself (GameScene)
@@ -26,6 +27,11 @@ class SceneBase:
         self.next = self
         if self.MUSIC:
             ctx.music.play(self.MUSIC, *self.MUSIC_IN)
+
+    def t(self, key, **kw):
+        """Screen text in the current language. Keys live in the theme's TEXT."""
+        s = TEXT[self.ctx.lang][key]
+        return s.format(**kw) if isinstance(s, str) else s
 
     def handle(self, action): pass
     def update(self, dt):     pass

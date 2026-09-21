@@ -1,4 +1,6 @@
+import csv
 import sqlite3
+import sys
 
 from balance import points
 from config import DB_PATH, TOP_N
@@ -28,6 +30,13 @@ class DB:
     The price for that: the leaderboard can no longer be sorted in SQL,
     because the score is a ratio. `top()` therefore reads all rows and
     computes in Python.
+
+    Since 2026-09-21 a round belongs to a *player number*, not to a name.
+    The booth team writes that number into their sign-up form next to the
+    email, so after the show `export` joins them. A number, not a hash of
+    the name: two MAX are two people. Playing again means typing the number
+    in again, and the best round per number counts -- improving is the
+    point, a worse second try never costs anything.
     """
 
     def __init__(self, path=DB_PATH):
@@ -42,11 +51,20 @@ class DB:
                                 total INT,
                                 dist  INT,
                                 secs  REAL)""")
-        # Add columns retroactively if the table dates from before scoring.
-        # ALTER TABLE ADD COLUMN has no IF NOT EXISTS, so this checks against
-        # the existing schema instead of catching an error.
+        # INTEGER PRIMARY KEY is the rowid: 1, 2, 3 ... -- short enough to
+        # read out at the booth and type into a form.
+        self.con.execute("""CREATE TABLE IF NOT EXISTS players (
+                                id   INTEGER PRIMARY KEY,
+                                name TEXT NOT NULL,
+                                ts   TEXT DEFAULT (datetime('now')))""")
+        # Add columns retroactively if the table is older. ALTER TABLE ADD
+        # COLUMN has no IF NOT EXISTS, so this checks the existing schema
+        # instead of catching an error. `first`: seconds until the first
+        # treat landed -- the number that says whether people fail at the
+        # arm or at the puzzle.
         have = {r[1] for r in self.con.execute("PRAGMA table_info(runs)")}
-        for col, typ in (("dist", "INT"), ("secs", "REAL")):
+        for col, typ in (("dist", "INT"), ("secs", "REAL"),
+                         ("player", "INT"), ("first", "REAL")):
             if col not in have:
                 self.con.execute(f"ALTER TABLE runs ADD COLUMN {col} {typ}")
         # Migrate the old table, once. Rename instead of DROP: it's only
@@ -59,54 +77,73 @@ class DB:
             self.con.execute("ALTER TABLE scores RENAME TO scores_v1")
         self.con.commit()
 
-    def add(self, name, off, goal=None, total=None, dist=None, secs=0.0):
+    def new_player(self, name):
+        """Registers a player, returns their number."""
+        cur = self.con.execute("INSERT INTO players (name) VALUES (?)", (name,))
+        self.con.commit()
+        return cur.lastrowid
+
+    def player(self, no):
+        """Name for a player number, or None if there is no such player."""
+        row = self.con.execute("SELECT name FROM players WHERE id = ?",
+                               (no,)).fetchone()
+        return row and row[0]
+
+    def add(self, name, off, goal=None, total=None, dist=None, secs=0.0,
+            player=None, first=None):
         self.con.execute(
-            "INSERT INTO runs (name, off, goal, total, dist, secs) "
-            "VALUES (?, ?, ?, ?, ?, ?)", (name, off, goal, total, dist, secs))
+            "INSERT INTO runs (name, off, goal, total, dist, secs, player, first) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, off, goal, total, dist, secs, player, first))
         self.con.commit()
 
-    def _scored(self):
-        """(name, score) per round, in insertion order.
+    def _best(self):
+        """[(key, name, best score, rounds)], best first.
 
-        Rows without `dist` are from before scoring and have no comparable
-        score. They stay in the table -- the CSV for press/PR should be
-        complete -- but they don't appear in any leaderboard.
-        """
-        return [(name, points(off, dist, secs or 0.0)) for name, off, dist, secs
-                in self.con.execute("SELECT name, off, dist, secs FROM runs "
-                                    "WHERE dist IS NOT NULL ORDER BY rowid")]
-
-    def top(self, n=TOP_N):
-        """Best run per name, descending. High is good.
+        The key is the player number; rounds from before player numbers
+        group by name, like they always did. Rows without `dist` are from
+        before scoring and have no comparable score -- they stay in the
+        table, but in no list.
 
         ponytail: linear scan over all rounds. A show day is a few hundred
         rows; an index is worth it the day the table survives a show day.
         """
         best = {}
-        for name, pts in self._scored():
+        for player, name, off, dist, secs in self.con.execute(
+                "SELECT player, name, off, dist, secs FROM runs "
+                "WHERE dist IS NOT NULL ORDER BY rowid"):
+            key = player if player is not None else name
+            pts = points(off, dist, secs or 0.0)
+            _, _, top, n = best.get(key, (key, name, -1, 0))
             # Strictly greater, and rows arrive in rowid order: on a tie,
-            # the earlier run stays. So on equal scores, whoever got there
-            # first stays in front.
-            if pts > best.get(name, -1):
-                best[name] = pts
-        return sorted(best.items(), key=lambda kv: -kv[1])[:n]
+            # the earlier run stays. So whoever got there first stays in front.
+            best[key] = (key, name, max(top, pts), n + 1)
+        return sorted(best.values(), key=lambda r: -r[2])
 
-    def best(self, name):
-        """This name's best score so far, or None. For the callback."""
-        pts = [p for n, p in self._scored() if n == name]
-        return max(pts) if pts else None
+    def top(self, n=TOP_N):
+        """[(name, best score)] -- one row per player, high is good."""
+        return [(name, pts) for _, name, pts, _ in self._best()[:n]]
 
-    def attempts(self, name):
-        return self.con.execute("SELECT COUNT(*) FROM runs WHERE name = ?",
-                                (name,)).fetchone()[0]
+    def rank(self, player):
+        """(place, number of players) for the score screen."""
+        rows = self._best()
+        place = next((i + 1 for i, r in enumerate(rows) if r[0] == player), len(rows))
+        return place, len(rows)
 
-    def qualifies(self, pts):
-        t = self.top()
-        return len(t) < TOP_N or pts > t[-1][1]
+    def export(self, out):
+        """One CSV row per player: number, name, best score, rounds played.
+        The booth form has the number next to the email -- join on it."""
+        w = csv.writer(out)
+        w.writerow(("player", "name", "best", "rounds"))
+        w.writerows(r for r in self._best() if isinstance(r[0], int))
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[1:] == ["export"]:
+    # After the show, on the Pi:  uv run game/db.py export > players.csv
+    DB().export(sys.stdout)
+elif __name__ == "__main__":
     # uv run game/db.py -> ok
+    import io
     from config import PERFECT_HOLD, ROUND_SECONDS
     span = ROUND_SECONDS - PERFECT_HOLD
 
@@ -117,14 +154,10 @@ if __name__ == "__main__":
     assert [r[0] for r in db.top(3)] == ["BBB", "CCC", "AAA"], db.top(3)
     assert db.top(1)[0][1] == points(5, 50), db.top(1)
 
-    # Same name the next day: the better run counts, the old one stays.
+    # Same name the next day: the better run counts, a worse one doesn't hurt.
     db.add("AAA", 2, goal=180, total=178, dist=50)
-    assert db.top(1) == [("AAA", points(2, 50))], db.top(1)
-    assert db.attempts("AAA") == 2
-    assert db.best("AAA") == points(2, 50) and db.best("ZZZ") is None
-    # ... and a worse run doesn't hurt the name.
     db.add("AAA", 49, dist=50)
-    assert db.best("AAA") == points(2, 50) and db.attempts("AAA") == 3
+    assert db.top(1) == [("AAA", points(2, 50))], db.top(1)
     assert len(db.top()) == 3, "exactly one row per name in the list"
 
     # Tie: whoever got there first stays in front.
@@ -135,19 +168,22 @@ if __name__ == "__main__":
     db.add("FAST", 0, dist=50, secs=span)
     db.add("SLOW", 0, dist=50, secs=0.0)
     assert db.top(1) == [("FAST", 1000)], db.top(1)
-    assert db.best("SLOW") < db.best("FAST")
 
-    # Same distance off, larger starting distance -> more points. That's the
-    # reason ties are rare: what's scored is the fraction.
-    db.add("NAH", 3, dist=30)
-    db.add("WEIT", 3, dist=90)
-    assert db.best("WEIT") > db.best("NAH")
-
-    assert db.qualifies(1000)                     # list not yet full
-    for i in range(TOP_N):
-        db.add(f"X{i:02d}", i, dist=50)
-    assert not db.qualifies(1), "list full, a row with 1 point drops out"
-    assert db.qualifies(1000)
+    # Player numbers: two MAX are two people, and the same number playing
+    # again keeps its best round.
+    p = DB(":memory:")
+    a, b = p.new_player("MAX"), p.new_player("MAX")
+    assert (a, b) == (1, 2) and p.player(2) == "MAX" and p.player(9) is None
+    p.add("MAX", 30, dist=50, player=a, first=12.5)
+    p.add("MAX", 10, dist=50, player=b)
+    p.add("MAX", 0, dist=50, player=a)          # second try, perfect
+    p.add("MAX", 40, dist=50, player=a)         # third try, worse -- doesn't count
+    assert p.top() == [("MAX", 900), ("MAX", points(10, 50))], p.top()
+    assert p.rank(a) == (1, 2) and p.rank(b) == (2, 2)
+    buf = io.StringIO()
+    p.export(buf)
+    assert buf.getvalue().splitlines() == ["player,name,best,rounds",
+                                           "1,MAX,900,3", f"2,MAX,{points(10, 50)},1"]
 
     # Migration: an old scores table migrates over completely. Its rows
     # have no `dist` and thus no comparable score -- they show up in the
@@ -161,16 +197,15 @@ if __name__ == "__main__":
     con.close()
     m = DB(path)
     assert m.top() == [], m.top()
-    assert m.attempts("OLD") == 2, "rows are there, just not scoreable"
-    assert m.best("OLD") is None
     m.add("NEU", 4, dist=40)
     assert [r[0] for r in m.top()] == ["NEU"], m.top()
     m.con.close()
     DB(path).con.close()          # second startup doesn't migrate again
-    assert DB(path).attempts("OLD") == 2, "migration ran twice"
+    count = lambda d: d.con.execute("SELECT COUNT(*) FROM runs WHERE name='OLD'").fetchone()[0]
+    assert count(DB(path)) == 2, "migration ran twice"
 
-    # And a table from before this scoring session gets the columns,
-    # without anyone having to add them by hand.
+    # And a table from before scoring gets all columns, without anyone
+    # having to add them by hand.
     path2 = os.path.join(tempfile.mkdtemp(), "v2.db")
     con = sqlite3.connect(path2)
     con.execute("CREATE TABLE runs (ts TEXT, name TEXT NOT NULL, off INT NOT NULL,"
@@ -179,7 +214,7 @@ if __name__ == "__main__":
     con.commit()
     con.close()
     v = DB(path2)
-    assert v.attempts("ALT") == 1 and v.top() == []
-    v.add("NEU", 1, dist=50)
+    assert v.top() == []
+    v.add("NEU", 1, dist=50, player=v.new_player("NEU"))
     assert v.top() == [("NEU", points(1, 50))], v.top()
     print("ok")

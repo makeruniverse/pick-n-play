@@ -68,7 +68,7 @@ FOOTER_Y    = 1000
 SAFE_BOTTOM = 920
 
 # ── Timing (seconds) ──────────────────────────────────────────────────────
-WARN_SECONDS  = 5     # from here on the screen tints
+WARN_SECONDS  = 5     # from here on the LEDs switch to "hurry" (for the booth team)
 IDLE_TIMEOUT  = 20    # non-idle scenes fall back on their own
 CONFIRM_SECONDS = 3   # window for the double-confirm to abort
 # ROUND_SECONDS and PERFECT_HOLD depend on difficulty and therefore live in
@@ -85,11 +85,16 @@ CHEAT_TAPS = 5
 # and `uv run game/sprites.py` checks that for every file in themes/.
 # New theme: copy sugar_rush.py, the file's header says what to do.
 THEME = os.environ.get("PNP_THEME", "sugar_rush")
-THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "HOWTO",
-              "LED_A", "LED_B", "BASE", "SHAPES", "SPRITES", "SPRITE")
+THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT",
+              "LED_A", "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE")
 _theme = importlib.import_module(f"themes.{THEME}")
-(BG, GREY, WHITE, ACCENT, CANDY, HOWTO,
- LED_A, LED_B, BASE, SHAPES, SPRITES, SPRITE) = (getattr(_theme, k) for k in THEME_KEYS)
+(BG, GREY, WHITE, ACCENT, CANDY, TEXT,
+ LED_A, LED_B, BASE, SHAPES, SPRITES, EXTRAS, SPRITE) = (getattr(_theme, k) for k in THEME_KEYS)
+
+# Language at startup. The idle screen switches it at runtime (▲ twice), and
+# it stays switched until someone switches back -- a school class is one
+# language for an hour, not per visitor.
+LANG = os.environ.get("PNP_LANG", "en")
 
 # ── Colors ────────────────────────────────────────────────────────────────
 # Six colors as a ladder from quiet to loud, each with exactly one job:
@@ -109,9 +114,6 @@ BTN_GREEN  = (0, 208, 96)     # right -- forward, confirm
 BTN_RED    = (255, 72, 72)    # left  -- back, cancel
 BTN_BLUE   = (64, 156, 255)   # up
 BTN_YELLOW = (255, 200, 0)    # down
-# BTN_RED is noticeably lighter than RED, and that's not taste: in the last
-# five seconds the background tints toward RED, and a glyph in the same tone
-# would then disappear exactly where "CANCEL" is most needed.
 
 # ── Font ──────────────────────────────────────────────────────────────────
 # Press Start 2P (SIL OFL, lives in assets/). 8x8 grid: size / 8 is the edge
@@ -243,7 +245,14 @@ SCORE_CURVE = 2    # exponent. 1 = linear, 2 spreads out the range people
 # idle, the music kicking in becomes the signal "it's starting".
 DEMO_VIDEO = None            # path to the clip. None = text only, scene still runs
 DEMO_SIZE  = (1024, 576)     # 16:9 -- a different ratio distorts, like with CAM_VIEW
-# HOWTO lives in the theme.
+# ── Story and feedback ────────────────────────────────────────────────────
+TALK_CPS     = 30     # typewriter speed of the text box, glyphs per second
+POP_SECONDS  = 1.5    # how long "+2,40" stays after a treat is detected
+HINT_SECONDS = 20     # tray unchanged this long -> the best next treat hops
+FUSE_W       = 14     # the timer: a fuse burning around the screen edge
+FUSE_PULSE   = 10     # last seconds, the fuse blinks
+STAR_TWO     = 700    # score for the second star. One star for any treat on
+                      # the tray, three for perfect: nearly everyone wins something.
 
 # ── Persistence ───────────────────────────────────────────────────────────
 DB_PATH = "scores.db"
@@ -313,14 +322,8 @@ DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # drawn into the image, so it's set in the hall while aligning the camera and
 # the result is visible immediately.
 TRAY_ROI      = (0.37, 0.50, 0.30, 0.35)
-MARK_FONT     = "tiny"    # font size of the overlaid prices. Currently read
-                          # by nothing: the overlay has been commented out
-                          # since 2026-09-11, because the prices are meant to
-                          # stay hidden during the round. Kept here so that
-                          # uncommenting it in GameScene.overlay stays a
-                          # one-line change -- when aligning the camera you
-                          # want to see WHICH marker it detects.
-MARK_WIDTH    = 5         # line width of the detection window
+MARK_WIDTH    = 5         # line width of the detection window and of the
+                          # outline around every detected marker
 # ── Buttons ───────────────────────────────────────────────────────────────
 # BCM numbers, not header pins. Wired like this since 2026-09-11: header
 # 22 · 24 · 26 · 28 are GPIO 25 · 8 · 7 · 1, common ground at header 30. One

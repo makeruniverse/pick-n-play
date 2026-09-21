@@ -1,28 +1,32 @@
 """Pixel sprites from text grids -- like the music in music.py.
 
 The grids and palettes belong to the theme (themes/<name>.py, via config).
-This module only handles turning text into a surface: 16 x 16, scaled with
-NEAREST in whole factors, so the pixels stay as hard-edged as the font's.
+This module only handles turning text into a surface: square grids (16 for
+treats, 32 for characters), scaled with NEAREST in whole factors, so the
+pixels stay as hard-edged as the font's.
 """
 
 from functools import lru_cache
 
 import pygame
 
-from config import BASE, SHAPES, SPRITES
+from config import BASE, SHAPES, SPRITES, EXTRAS
+
+ALL = {**SPRITES, **EXTRAS}
 
 
 @lru_cache(maxsize=128)
 def sprite(name, scale):
     """Finished surface, memoized: each size is built exactly once."""
-    shape, colors = SPRITES[name]
+    shape, colors = ALL[name]
     pal = {**BASE, **colors}
-    surf = pygame.Surface((16, 16), pygame.SRCALPHA)
+    n = len(SHAPES[shape])
+    surf = pygame.Surface((n, n), pygame.SRCALPHA)
     for y, row in enumerate(SHAPES[shape]):
         for x, ch in enumerate(row):
             if ch != ".":
                 surf.set_at((x, y), pal[ch])
-    return pygame.transform.scale(surf, (16 * scale, 16 * scale))
+    return pygame.transform.scale(surf, (n * scale, n * scale))
 
 
 if __name__ == "__main__":
@@ -43,8 +47,9 @@ if __name__ == "__main__":
         for key in config.THEME_KEYS:
             assert hasattr(t, key), f"{path}: {key} missing"
         for name, rows in t.SHAPES.items():
-            assert len(rows) == 16 and all(len(r) == 16 for r in rows), (path, name)
-        for name, (shape, colors) in t.SPRITES.items():
+            assert len(rows) in (16, 32) and all(len(r) == len(rows) for r in rows), \
+                (path, name, [len(r) for r in rows])
+        for name, (shape, colors) in {**t.SPRITES, **t.EXTRAS}.items():
             used = set("".join(t.SHAPES[shape])) - {"."}
             missing = used - {**t.BASE, **colors}.keys()
             assert not missing, (path, name, missing)

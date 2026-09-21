@@ -13,5 +13,5 @@ wheels/
 .DS_Store
 
 # Laufzeit-Artefakte
-scores.db
+scores.db*
 result.json

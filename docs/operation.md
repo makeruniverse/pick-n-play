@@ -279,6 +279,23 @@ permanently, the button is stuck to ground, or the pin is wired like a
 normally-closed contact against 3.3 V — then the pull-up is the wrong way
 around.
 
+## Player numbers and the sign-up form
+
+Every new player gets a number on screen (`PLAYER #42`), right after typing
+their name. The team writes that number into the sign-up form next to the
+email. Playing again: ▼ on the idle screen, type the number, and the best
+round per number counts.
+
+After the show, on the Pi:
+
+```sh
+cd ~/picknplay
+.venv/bin/python game/db.py export > players.csv
+```
+
+One row per player: `player,name,best,rounds`. Join it with the form on the
+number. `scores.db` stays as it is, the export only reads it.
+
 ## Maintenance
 
 Once a month, or when something looks off:
@@ -425,6 +442,7 @@ pull` would wipe out local changes.
 | `PNP_VSYNC=0` | without frame sync, costs tearing |
 | `PNP_CV_THREADS=n` | OpenCV threads in the render path, default 3 (the fourth core belongs to Teleop) |
 | `PNP_THEME=name` | theme from `game/themes/name.py`, default `sugar_rush` |
+| `PNP_LANG=de` | start language, default `en`. At the booth: ▲ twice on the idle screen |
 
 To find the ceiling instead of the target rate, set `PNP_IDLE_FPS=999
 PNP_VSYNC=0` — otherwise you're measuring the frame clock, not the render

@@ -1,5 +1,6 @@
 import math
 import random
+import textwrap
 import pygame
 from functools import lru_cache
 from typing import NamedTuple
@@ -44,9 +45,8 @@ def euro(units, sign=True):
     else -- a different unit is thus just this function, not a search
     through six scenes.
 
-    `sign=False` for the price row in the reveal: there are ten cells there
-    in the 168-grid, and six glyphs don't fit side by side. The € then
-    sits in the heading.
+    `sign=False` for the price strip: ten cells of 170 px, and six glyphs
+    don't fit side by side.
 
     German format, decimal comma and the sign after the number: the machine
     stands at a German fair, and "€3.40" reads as a typo there.
@@ -80,7 +80,7 @@ class Result(NamedTuple):
     total: int           # what was there at the end of the round
     dist:  int           # distance at round start, the denominator of the score
     left:  float         # time left. > 0 means perfect, otherwise the clock ran out
-    marks: dict          # id -> quad, for the price reveal
+    marks: dict          # id -> quad, what was on the tray
 
     @property
     def off(self):
@@ -97,6 +97,14 @@ class Result(NamedTuple):
     @property
     def bonus(self):
         return self.score - self.accuracy
+
+    @property
+    def stars(self):
+        """0..3. One for anything on the tray, two from STAR_TWO, three for
+        exact. Nearly everyone walks away with a star -- that was the brief."""
+        if self.off == 0:
+            return 3
+        return 2 if self.accuracy >= STAR_TWO else int(self.total > 0)
 
 
 def stamp(screen, name, scale, x, y):
@@ -185,48 +193,113 @@ class Sprinkles:
             screen.fill(c, (x - w / 2, y - h / 2, w, h))
 
 
-@lru_cache(maxsize=256)
-def pie(steps, text, font, color, cells=21, px=8):
-    """Countdown pie in coarse pixels, with the seconds inside as a negative.
+def draw_left(screen, font, text, x, y, color):
+    """draw(), but x is the left edge. Goes through draw(), so the layout
+    self-test sees it."""
+    text = str(text)
+    draw(screen, font, text, x + font.size(text)[0] / 2, y, color)
 
-    Drawn at cells x cells and scaled up by px: one pie pixel is one glyph
-    pixel of the 168 font, so it reads as the same 8-bit screen. The pie
-    shrinks clockwise from 12 o'clock; `steps` is the remaining share in
-    1/STEPS, quantized so the cache stays small.
 
-    The number is punched out of the pie (the background shows through) and
-    white where the pie is already gone -- so it is there, but never the
-    loudest thing, and an empty pie leaves a plain white number.
+# The timer: a fuse around the screen edge, burning clockwise from 12
+# o'clock. It used to be a pie between the camera panes -- that spot now
+# belongs to the guest, and an edge takes no room from the images the
+# player steers by. Read from the corner of the eye, which is all a timer
+# needs.
+FUSE = [(960, 0), (WIDTH, 0), (WIDTH, HEIGHT), (0, HEIGHT), (0, 0), (960, 0)]
+
+
+def fuse(screen, frac, color, t):
+    """What's left of the fuse, plus a flickering spark where it burns."""
+    burnt = (1 - frac) * 2 * (WIDTH + HEIGHT)
+    edge = screen.get_rect()
+    spark, s = None, 0
+    for (x0, y0), (x1, y1) in zip(FUSE, FUSE[1:]):
+        n = abs(x1 - x0) + abs(y1 - y0)
+        a = min(max(burnt - s, 0), n)
+        if a < n:
+            px, py = x0 + (x1 - x0) * a / n, y0 + (y1 - y0) * a / n
+            spark = spark or (px, py)
+            r = pygame.Rect(min(px, x1), min(py, y1), abs(x1 - px), abs(y1 - py))
+            r.w, r.h = max(r.w, FUSE_W), max(r.h, FUSE_W)
+            screen.fill(color, r.clamp(edge))     # clamp pulls the band inward
+        s += n
+    if spark:
+        r = pygame.Rect(0, 0, 2 * FUSE_W, 2 * FUSE_W)
+        r.center = spark
+        screen.fill(CANDY[int(t * 12) % len(CANDY)], r.clamp(edge))
+
+
+class Dialog:
+    """Pokémon-style text box: a portrait, a name, and text that types itself
+    out with a blip per letter.
+
+    ▶ first completes the page, then turns it -- the same button for
+    "faster" and "next", like every handheld RPG. A blinking green ▶ says
+    when the page is done: the arrow in the color of its button, like the
+    footer.
+
+    The pages are wrapped once, up front, so a word never jumps to the next
+    line halfway through typing.
     """
-    c = cells / 2
-    low = pygame.Surface((cells, cells), pygame.SRCALPHA)
-    if steps >= PIE_STEPS:
-        pygame.draw.circle(low, color, (c, c), c)
-    elif steps > 0:
-        arc = [(c + c * 1.5 * math.sin(a), c - c * 1.5 * math.cos(a))
-               for a in (2 * math.pi * steps / PIE_STEPS * k / 32 for k in range(33))]
-        pygame.draw.polygon(low, color, [(c, c)] + arc)
-        mask = pygame.Surface((cells, cells), pygame.SRCALPHA)
-        pygame.draw.circle(mask, (255, 255, 255, 255), (c, c), c)
-        low.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-    ring = pygame.Surface((cells, cells), pygame.SRCALPHA)
-    pygame.draw.circle(ring, GREY, (c, c), c, 1)
-    size = (cells * px, cells * px)
-    cake = pygame.transform.scale(low, size)
-    num = pygame.Surface(size, pygame.SRCALPHA)
-    t = font.render(text, False, WHITE)
-    num.blit(t, t.get_rect(center=(size[0] // 2, size[1] // 2)))
-    cake_m, num_m = pygame.mask.from_surface(cake), pygame.mask.from_surface(num)
-    out = pygame.transform.scale(ring, size)
-    hole = cake_m.copy()
-    hole.erase(num_m, (0, 0))
-    out.blit(hole.to_surface(setcolor=color, unsetcolor=(0, 0, 0, 0)), (0, 0))
-    num_m.erase(cake_m, (0, 0))
-    out.blit(num_m.to_surface(setcolor=WHITE, unsetcolor=(0, 0, 0, 0)), (0, 0))
-    return out
+
+    BOX = pygame.Rect(108, 726, 1704, 194)
+    TEXT_X, COLS, LINE = 306, 30, 58
+
+    def __init__(self, music, who, name, text):
+        self.music, self.who, self.name = music, who, name
+        self.pages = [textwrap.wrap(p, self.COLS) for p in text.split("|")]
+        self.i, self.n, self.t = 0, 0.0, 0.0
+
+    @property
+    def typing(self):
+        return self.n < sum(map(len, self.pages[self.i]))
+
+    @property
+    def last(self):
+        return self.i == len(self.pages) - 1
+
+    def face(self, who=None):
+        """Sprite name, mouth open on every other beat while typing."""
+        who = who or self.who
+        talk = who + "_talk"
+        return talk if self.typing and talk in EXTRAS and int(self.t * 8) % 2 else who
+
+    def update(self, dt):
+        self.t += dt
+        if self.typing:
+            before = int(self.n)
+            self.n += TALK_CPS * dt
+            if int(self.n) > before:
+                self.music.sfx(f"talk{random.randrange(4)}")
+
+    def next(self):
+        """▶. True once the last page has been read."""
+        if self.typing:
+            self.n = float(sum(map(len, self.pages[self.i])))
+            return False
+        if self.last:
+            return True
+        self.i, self.n = self.i + 1, 0.0
+        return False
+
+    def draw(self, screen, f):
+        r = self.BOX
+        screen.fill(BOX_BG, r)
+        pygame.draw.rect(screen, ACCENT, r, 4)
+        stamp(screen, self.face(), 4, r.x + 90, r.y + 76)
+        draw(screen, f["tiny"], self.name, r.x + 90, r.bottom - 26, ACCENT)
+        left = self.n
+        for k, line in enumerate(self.pages[self.i]):
+            shown = line[:max(0, int(left))]
+            left -= len(line)
+            if shown:
+                draw_left(screen, f["small"], shown, self.TEXT_X,
+                          r.y + 40 + k * self.LINE, WHITE)
+        if not self.typing and int(self.t * 3) % 2:
+            draw_hint(screen, f["small"], "▶", r.right - 34, r.bottom - 36)
 
 
-PIE_STEPS = 120
+BOX_BG = tuple(c // 2 for c in BG)
 
 
 def draw_hint(screen, font, text, x, y, base=GREY):
@@ -278,9 +351,21 @@ def footer(screen, f, left=None, right=None, note=None):
 
 
 class IdleScene(SceneBase):
+    """Attract screen. ▶ new player, ▼ played before, ▲▲ switches language.
+
+    The language asks twice on purpose: a kid mashing buttons shouldn't flip
+    the screen into a language the next kid can't read. The question is in
+    the *other* language, because that's the one the person pressing reads.
+    """
 
     TICK  = IDLE_FPS   # nobody's watching, and the Pi sits in the cabinet
     MUSIC = None       # stays silent, see __init__
+
+    # The leaderboard as a podium: first place big and pink, 2-3 white,
+    # the rest small. Names only -- a 948 next to a 1000 said "you won't get
+    # here" to everyone who hasn't played yet.
+    PODIUM = (("mid", ACCENT, 612), ("small", WHITE, 700), ("small", WHITE, 760),
+              ("tiny", GREY, 816), ("tiny", GREY, 860))
 
     def __init__(self, ctx):
         super().__init__(ctx)
@@ -290,153 +375,243 @@ class IdleScene(SceneBase):
         # clears the deferred idle music that DisplayScoreScene scheduled.
         ctx.music.stop()
         ctx.leds.show("idle")
-        self.t = 0.0
-        self.top = ctx.db.top(5)
+        self.now = 0.0
+        self.ask = 0.0
+        self.top = ctx.db.top(len(self.PODIUM))
 
     def handle(self, action):
         if action == "right":
-            self.switch_to(HowToScene(self.ctx))
-            return "ok"     # the fanfare belongs at the round start, not here
+            self.switch_to(EntryScene(self.ctx))
+        elif action == "down":
+            self.switch_to(EntryScene(self.ctx, digits=True))
+        elif action == "up":
+            if self.ask > 0:
+                self.ctx.lang = "de" if self.ctx.lang == "en" else "en"
+                self.ask = 0.0
+            else:
+                self.ask = CONFIRM_SECONDS
+        else:
+            return None
+        return "ok"
 
     def update(self, dt):
-        self.t += dt
+        self.now += dt
+        self.ask = max(0.0, self.ask - dt)
 
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BG)
-        # The display scrolls by at top and bottom, in opposite directions
-        # -- that's the attract mode. From 8 m you see motion before you read text.
-        parade(screen, self.t, 96, 60)
-        parade(screen, self.t, 984, -60)
+        # The display scrolls by at the top -- that's the attract mode. From
+        # 8 m you see motion before you read text.
+        parade(screen, self.now, 96, 60)
         # Title character by character: every letter in a candy color, as a
         # wave. Monospace, one character width is the step like in draw_hint().
         title = "PICK'N'PLAY"
         w = f["title"].size("A")[0]
         for i, c in enumerate(title):
             draw(screen, f["title"], c, 960 + w * (i + 0.5 - len(title) / 2),
-                 250 + round(14 * math.sin(self.t * 3 - i * 0.6)),
+                 250 + round(14 * math.sin(self.now * 3 - i * 0.6)),
                  CANDY[i % len(CANDY)])
         # The cheapest and the most expensive piece -- from the theme, not named here.
-        stamp(screen, LADDER[0], 8, 330, 430 + hop(self.t, 0, 8))
-        stamp(screen, LADDER[-1], 8, 1590, 430 + hop(self.t, 1, 8))
+        stamp(screen, LADDER[0], 8, 330, 430 + hop(self.now, 0, 8))
+        stamp(screen, LADDER[-1], 8, 1590, 430 + hop(self.now, 1, 8))
         # Mostly on, briefly off: it has to be read, the blink only draws the eye.
-        if self.t % 2 < 1.6:
-            draw_hint(screen, f["mid"], "PRESS ▶", 960, 430, WHITE)
-        # This used to say "THE LOWER THE BETTER" -- mandatory as long as the
-        # list sorted ascending. Since the score is high when it's good, the
-        # list explains itself, and the line now says what it is instead of
-        # how to read it.
-        draw(screen, f["tiny"], "TODAY'S BEST", 960, 556, GREY)
-        for i, (name, pts) in enumerate(self.top):
-            draw(screen, f["small"], f"{i+1}. {name}  {pts}", 960, 640 + i * 64, WHITE)
+        if self.now % 2 < 1.6:
+            draw_hint(screen, f["mid"], self.t("press"), 960, 430, WHITE)
+        if self.top:
+            draw(screen, f["tiny"], self.t("best"), 960, 540, GREY)
+        # Left-aligned on one column, so the rows line up instead of
+        # shrinking toward the middle.
+        x = 960 - f["mid"].size("1. WWW")[0] / 2
+        for i, (name, _) in enumerate(self.top):
+            size, color, y = self.PODIUM[i]
+            draw_left(screen, f[size], f"{i + 1}. {name}", x, y, color)
+        footer(screen, f, self.t("lang"), self.t("again"),
+               note=self.t("lang_ok") if self.ask > 0 else None)
 
 
-class HowToScene(SceneBase):
-    """Explanation and demo clip. This is where the music starts.
+class EntryScene(SceneBase):
+    """Three letters (new player) or three digits (player number).
 
-    The clip runs here and not in idle: in attract mode that would be six
-    hours of decoding in the closed aluminum cabinet for an image nobody
-    watches. Here it's a few seconds per visitor, right before a round,
-    where the Pi is already carrying two cameras and the CRT overlay anyway.
-
-    Without a clip (DEMO_VIDEO = None) the scene runs as a plain text page
-    -- there's no footage yet until there's a setup to film it, and until
-    then the feature must not be blocked.
+    The arrows sit where the button acts: a blue ▲ above the active letter,
+    a yellow ▼ below it. The old screen had big ◀ ▶ arrows at the sides that
+    promised a control the buttons didn't have.
     """
 
     MUSIC_IN = (0.0, 800)   # fades in, instead of hitting hard out of silence
+    COLS = (750, 960, 1170)
+    LETTERS, DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789"
 
-    def __init__(self, ctx):
+    def __init__(self, ctx, digits=False):
         super().__init__(ctx)
-        self.idle = 0.0
-        self.dt = 0.0
-        self.t = 0.0      # keeps running, idle is zeroed on every button press
+        self.digits = digits
+        self.chars = self.DIGITS if digits else self.LETTERS
+        self.slots = [0, 0, 0]
+        self.cursor = 0
+        self.idle = self.error = self.now = 0.0
 
     def handle(self, action):
         self.idle = 0.0
-        if action == "right":
-            self.switch_to(GameScene(self.ctx))
-            return "start"
-        if action == "left":
-            self.switch_to(IdleScene(self.ctx))
+        if action in ("up", "down"):
+            step = 1 if action == "down" else -1
+            self.slots[self.cursor] = (self.slots[self.cursor] + step) % len(self.chars)
+        elif action == "left":
+            if self.cursor:
+                self.cursor -= 1
+            else:
+                self.switch_to(IdleScene(self.ctx))
+        elif action == "right":
+            if self.cursor < len(self.slots) - 1:
+                self.cursor += 1
+            else:
+                return self.submit()
+        else:
+            return None
+        return "ok"
+
+    def submit(self):
+        text = "".join(self.chars[i] for i in self.slots)
+        if not self.digits:
+            no = self.ctx.db.new_player(text)
+            self.switch_to(StoryScene(self.ctx, no, text, new=True))
             return "ok"
+        name = self.ctx.db.player(int(text))
+        if not name:
+            self.error = CONFIRM_SECONDS
+            return None     # "nope", and the footer says why
+        self.switch_to(StoryScene(self.ctx, int(text), name, new=False))
+        return "ok"
 
     def update(self, dt):
         self.idle += dt
-        self.t += dt
-        self.dt = dt        # the clip only needs the time when drawing
+        self.now += dt
+        self.error = max(0.0, self.error - dt)
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BG)
-        draw(screen, f["mid"], "HOW TO PLAY", 960, 150, ACCENT)
-        clip = self.ctx.demo.surface(self.dt) if self.ctx.demo else None
-        if clip:
-            r = clip.get_rect(center=(960, 460))
-            screen.fill(GREY, r.inflate(8, 8))
-            screen.blit(clip, r)
-        else:
-            # The display shows *what* is on the tray before the text says
-            # what to do with it. Without a clip, there'd otherwise be a
-            # hole here. All ten, in the same 168-grid as the price row in
-            # the reveal.
-            for i, name in enumerate(LADDER):
-                stamp(screen, name, 6, 204 + i * 168, 330 + hop(self.t, i, 6))
-        # Without a clip the text moves to the center instead of sitting
-        # under a black hole. DEMO_VIDEO = None is the shipped state, not
-        # the exception -- the page has to look finished that way too.
-        # {secs} instead of a number in the theme: round length lives in
-        # the mode and gets tried out a lot -- it must not live in two places.
-        for i, line in enumerate(HOWTO):
-            draw(screen, f["tiny"], line.format(secs=ROUND_SECONDS),
-                 960, (800 if clip else 476) + i * 50, WHITE)
-        footer(screen, f, "◀ BACK", "▶ START")
+        draw(screen, f["mid"], self.t("ask_no" if self.digits else "ask_name"),
+             960, 150, ACCENT)
+        for i, x in enumerate(self.COLS):
+            on = i == self.cursor
+            draw(screen, f["big"], self.chars[self.slots[i]], x, 470,
+                 ACCENT if on else WHITE)
+            if on:
+                draw_hint(screen, f["mid"], "▲", x, 320 + hop(self.now, 0, 6))
+                draw_hint(screen, f["mid"], "▼", x, 620 - hop(self.now, 0, 6))
+        draw_hint(screen, f["small"], self.t("pick_123" if self.digits else "pick_abc"),
+                  960, 760, GREY)
+        last = self.cursor == len(self.slots) - 1
+        footer(screen, f, self.t("back"), self.t("done" if last else "next"),
+               note=self.t("unknown") if self.error > 0 else None)
+
+
+class StoryScene(SceneBase):
+    """Bella says hello, and gives out the player number.
+
+    The number is the link to the sign-up form, so it gets its own page and
+    stays on screen from then on -- the booth team reads it off here. A
+    returning player gets one line and skips the practice.
+    """
+
+    MUSIC_IN = (0.0, 800)
+
+    def __init__(self, ctx, player, name, new):
+        super().__init__(ctx)
+        self.player, self.name, self.new = player, name, new
+        text = ("|".join((self.t("hello", name=name), self.t("number", no=player),
+                          self.t("help")))
+                if new else self.t("welcome", name=name))
+        self.dialog = Dialog(ctx.music, "baker", self.t("baker"), text)
+        self.idle = self.now = 0.0
+        ctx.leds.show("idle")
+
+    def handle(self, action):
+        self.idle = 0.0
+        if action != "right":
+            return None
+        if self.dialog.next():
+            self.switch_to(GameScene(self.ctx, self.player, self.name, tutorial=self.new))
+        return "ok"
+
+    def update(self, dt):
+        self.idle += dt
+        self.now += dt
+        self.dialog.update(dt)
+        if self.idle > IDLE_TIMEOUT:
+            self.switch_to(IdleScene(self.ctx))
+
+    def render(self, screen):
+        f = self.ctx.fonts
+        screen.fill(BG)
+        parade(screen, self.now, 96, 60)
+        stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.now, 0, 6))
+        if self.dialog.i >= 1 or not self.new:
+            draw(screen, f["mid"], self.t("player", no=self.player), 1360, 450, ACCENT)
+        self.dialog.draw(screen, f)
+        done = self.dialog.last and not self.dialog.typing
+        footer(screen, f, right=self.t("go" if done else "next"))
 
 
 class GameScene(SceneBase):
+    """Practice, order, round -- one scene, because it's one screen.
 
-    MUSIC = None   # the intensity level depends on time left, see update()
+    tutorial  Bella: put any treat on the tray. Waits for the camera.
+    tut_done  Bella: that one costs X. The first success, before any clock.
+    order     Oskar names his budget. The target is rolled here, from what's
+              on the tray now -- the practice treat stays and counts.
+    play      the round: fuse burning, bar, price strip.
 
-    # The bar, absolute coordinates like everything else in this file.
+    The camera panes stay the same through all four, so the player never
+    has to find their way around a new screen.
+    """
+
+    MUSIC = None   # idle music carries on; the round stages start at "play"
+
     # Below the cameras and exactly as wide as both panes together.
-    BAR   = pygame.Rect(108, 770, 1704, 70)
-    # Countdown pie in the gap between the panes, see pie().
-    PIE   = pygame.Rect(0, 0, 168, 168)
-    PIE.center = (960, 510)
-    # Scale of the bar: the largest possible target, not the sum of all ten
-    # cupcakes. As long as the tray was pre-loaded and rearranged, "everything
-    # there is at all" was the right length -- the total could wander there.
-    # Since the tray starts empty and the perfect solution is two pieces,
-    # everything plays out under GAP_MAX: the goal line would then sit in
-    # the left quarter and the bar would have no resolution left in the
-    # range that actually matters.
-    #
-    # GAP_MAX stays the same across all rounds, so the line keeps meaning
-    # the same thing everywhere. Whoever loads on more than the largest
-    # target runs into the stop on the right -- _x() clamps, and "way over"
-    # is exactly the right statement. The exact number stands below it anyway.
-    SCALE = GAP_MAX
-    GOAL_W, GOAL_OVER = 9, 18   # width and overhang of the goal line
-    LEGEND_Y = 892
+    BAR   = pygame.Rect(108, 738, 1704, 56)
+    # Scale of the bar: the largest possible target. The tray starts empty
+    # and the perfect solution is two or three pieces, so everything plays
+    # out under GAP_MAX -- the goal line would otherwise sit in the left
+    # quarter. Whoever loads on more runs into the stop on the right; _x()
+    # clamps, and "way over" is exactly the right statement.
+    SCALE = GAP_MAX + max(VALUES.values())
+    GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
+    STRIP_Y = 848               # price strip: sprites here, prices below
+    GUEST = (960, 440)          # the guest stands between the panes
+    POP = (960, 610)            # ... and "+2,40" pops up under him
 
-    def __init__(self, ctx):
+    def __init__(self, ctx, player, name, tutorial=True):
         super().__init__(ctx)
-        self.marks = ctx.detector.fresh()   # id -> quad, a snapshot
+        self.player, self.name = player, name
+        # A copy: FakeDetector hands out the same dict every time, and a
+        # snapshot that changes under us can't be compared with the next.
+        self.marks = dict(ctx.detector.fresh())
         self.total = tray_sum(self.marks)
-        # The target follows what's actually there -- at the cabinet that's
-        # an empty tray, but a leftover cupcake then adjusts the task
-        # instead of breaking it. Rolled freely, chance would decide
-        # whether someone has to bridge EUR 0.30 or EUR 20.
-        self.dist = gap(self.marks)
-        self.target = self.total + self.dist
         self.left = float(ROUND_SECONDS)
-        self.confirm = 0.0
-        self.hit = 0.0
+        self.confirm = self.hit = self.clock = self.still = 0.0
         self.taps = 0
-        self.fx = None      # sprinkles, only while PERFECT is shown
-        ctx.music.stage(self.left)
+        self.fx = self.pop = self.first = None
+        self.target = self.dist = None
+        ctx.leds.show("idle")
+        # A treat left over from the last round: no practice needed, the
+        # tray already shows what the camera sees.
+        if tutorial and not self.marks:
+            self.phase = "tutorial"
+            self.dialog = Dialog(ctx.music, "baker", self.t("baker"), self.t("tut"))
+        else:
+            self.order()
+
+    def order(self):
+        self.phase = "order"
+        # The target follows what's actually there. Rolled freely, chance
+        # would decide whether someone has to bridge EUR 0.30 or EUR 20.
+        self.dist = gap(self.marks, up=True)
+        self.target = self.total + self.dist
+        self.dialog = Dialog(self.ctx.music, "guest", self.t("guest"),
+                             self.t("order", goal=euro(self.target)))
 
     def handle(self, action):
         if action == "left":
@@ -446,33 +621,68 @@ class GameScene(SceneBase):
             else:
                 self.confirm = CONFIRM_SECONDS
             return "ok"
-        # ponytail: developer shortcut. Doesn't jump into the round, but
-        # into its end -- update() handles sound, music, and scene switch as usual.
-        if action == "right" and CHEAT_TAPS:
+        if action != "right":
+            return None
+        if self.phase == "tutorial":
+            self.order()
+        elif self.phase == "tut_done" and self.dialog.next():
+            self.order()
+        elif self.phase == "order" and self.dialog.next():
+            self.phase, self.dialog = "play", None
+            self.ctx.music.stage(self.left)
+            return "start"
+        elif self.phase == "play" and CHEAT_TAPS:
+            # ponytail: developer shortcut. Doesn't jump into the round, but
+            # into its end -- update() handles sound, music, and switch as usual.
             self.taps += 1
             if self.taps >= CHEAT_TAPS:
                 self.left = 0.0
-            return "ok"
-        self.taps = 0
+        return "ok"
 
     def update(self, dt):
-        self.left -= dt
+        self.clock += dt
         self.confirm = max(0.0, self.confirm - dt)
-        # One look at the detector per frame: total, overlay, and sound
-        # come from the same snapshot and can't contradict each other.
-        marks = self.ctx.detector.fresh()
-        self.total = tray_sum(marks)
-        if marks.keys() - self.marks.keys():
-            # Only on NEWLY detected, otherwise it fires DETECT_HZ times per
-            # second. Five pucks at once give one sound, not five: the set
-            # comparison merges them by itself.
+        # One look at the detector per frame: total, overlay, pop-up and
+        # sound come from the same snapshot and can't contradict each other.
+        marks = dict(self.ctx.detector.fresh())
+        new, gone = marks.keys() - self.marks.keys(), self.marks.keys() - marks.keys()
+        if new or gone:
+            # One pop-up per change, with the net price: two treats at once
+            # show "+5,10", not two boxes on top of each other.
+            v = sum(VALUES[i] for i in new) - sum(VALUES[i] for i in gone)
+            self.pop = [SPRITE[min(new or gone)],
+                        ("+" if v >= 0 else "-") + euro(abs(v), sign=False), 0.0]
+            self.still = 0.0
+        if new:
+            # Only on NEWLY detected, otherwise it fires DETECT_HZ times a second.
             self.ctx.music.sfx("blip")
+            if self.first is None:
+                self.first = self.clock
+            if self.phase == "tutorial":
+                self.phase = "tut_done"
+                self.fx = Sprinkles(*self.POP)
+                self.ctx.music.sfx("ok")
+                self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"),
+                                     self.t("tut_done", price=euro(VALUES[min(new)])))
         self.marks = marks
+        self.total = tray_sum(marks)
+        if self.pop:
+            self.pop[2] += dt
+            if self.pop[2] > POP_SECONDS:
+                self.pop = None
+        if self.dialog:
+            self.dialog.update(dt)
+        if self.phase != "play":
+            if self.fx:
+                self.fx.update(dt)
+            return
+
+        self.left -= dt
+        self.still += dt
         # A hit must hold, not flash: the hysteresis in fresh() catches the
         # flicker, PERFECT_HOLD catches the intent. If fewer than
         # PERFECT_HOLD seconds remain, the counter doesn't fill up and the
-        # round ends via left -- no special case for "right before the end"
-        # is needed.
+        # round ends via left -- no special case for "right before the end".
         self.hit = self.hit + dt if self.total == self.target else 0.0
         if self.hit > 0:
             self.fx = self.fx or Sprinkles(960, 196)    # pops from PERFECT
@@ -480,113 +690,96 @@ class GameScene(SceneBase):
         else:
             self.fx = None
         self.ctx.music.stage(self.left)
-        # Every frame, not just on change: the bar lives off left, and
-        # show() is an assignment. Red from the same threshold as the background.
+        # The LEDs still go red for the last seconds: that's for the booth
+        # team, not the player, so the screen stays calm.
         self.ctx.leds.show("hurry" if self.left <= WARN_SECONDS else "game",
                            max(0.0, self.left) / ROUND_SECONDS)
         if self.left <= 0 or self.hit >= PERFECT_HOLD:
             self.ctx.music.sfx("finish")
-            # One result instead of four arguments. left gets clamped here:
-            # the loop counts past zero, and a negative time left would be
-            # a lie in the database instead of a zero.
-            self.switch_to(DisplayScoreScene(self.ctx, Result(
-                self.target, self.total, self.dist,
-                max(0.0, self.left), self.marks)))
+            # left gets clamped: the loop counts past zero, and a negative
+            # time left would be a lie in the database instead of a zero.
+            res = Result(self.target, self.total, self.dist,
+                         max(0.0, self.left), self.marks)
+            # Everything the round physically was -- the database computes
+            # the score itself, so a later formula also applies to old rounds.
+            self.ctx.db.add(self.name, res.off, goal=res.target, total=res.total,
+                            dist=res.dist, secs=res.left, player=self.player,
+                            first=self.first)
+            self.switch_to(DisplayScoreScene(self.ctx, res, self.player))
+
+    def hint(self):
+        """The treat that gets closest in one move -- once the tray has sat
+        still for HINT_SECONDS. A hop instead of a sentence: it points at the
+        answer without reading it out."""
+        diff = (self.target or 0) - self.total
+        if self.phase != "play" or self.still < HINT_SECONDS or not diff:
+            return None
+        pool = [i for i in VALUES if (i in self.marks) == (diff < 0)]
+        return min(pool, key=lambda i: abs(abs(diff) - VALUES[i]), default=None)
+
+    def mood(self):
+        """Oskar's face: sweating when over budget, beaming when it's exact."""
+        if self.hit > 0:
+            return "guest_joy"
+        return "guest_sweat" if self.target and self.total > self.target else "guest"
 
     def overlay(self, screen, r):
-        """Detection window, drawn into the pane rectangle.
+        """Detection window and a frame around every marker the camera sees.
 
-        The detector delivers fractions from 0..1, here they get multiplied
-        by r once — so the overlay stays correct even when the camera
-        delivers a different resolution than requested.
+        The frame answers "did it count?" right on the image, where the
+        player is looking anyway -- without covering the treat the way a
+        price label did.
         """
         rx, ry, rw, rh = TRAY_ROI
-        # GREY, not ACCENT: the window is chrome, not a game value. It's in
-        # the image so that when aligning the camera you can see where
-        # detection stops — otherwise you'd be setting it blind.
         pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
                                         rw * r.w, rh * r.h), MARK_WIDTH)
-        # The price used to be shown next to every detected cupcake. Removed
-        # on 2026-09-11: it went against the game's basic rule. "EVERY TREAT
-        # HAS A HIDDEN PRICE" — anyone who can read the prices during the
-        # round calculates instead of estimating, and the reveal at the end
-        # loses its learning moment. From 8 m nobody read it anyway; at the
-        # cabinet, where the hands are on the leader arm, they would.
-        #
-        # Stays as a comment because it's useful when setting up the camera:
-        # it's the only display that shows WHICH marker detection currently
-        # sees, not just that it sees one.
-        # MARK_FONT in config.py exists only for these lines now.
-        #
-        # f = self.ctx.fonts[MARK_FONT]
-        # for i, quad in self.marks.items():
-        #     v = render(f, euro(VALUES[i], sign=False), ACCENT)
-        #     screen.blit(v, v.get_rect(center=(
-        #         r.x + sum(x for x, _ in quad) / 4 * r.w,
-        #         r.y + sum(y for _, y in quad) / 4 * r.h)))
-
-    def bg(self):
-        k = min(1.0, max(0.0, (WARN_SECONDS - self.left) / WARN_SECONDS))
-        return tuple(round(b + (r - b) * k) for b, r in zip(BG, RED))
-
-    def acc(self):
-        """ACCENT, except on a red background: pink on RED is 2.7:1, cream is 6:1."""
-        return WHITE if self.left <= WARN_SECONDS else ACCENT
+        for quad in self.marks.values():
+            pygame.draw.polygon(screen, ACCENT, [(r.x + x * r.w, r.y + y * r.h)
+                                                 for x, y in quad], MARK_WIDTH)
 
     def bar(self, screen):
         """Where the total stands and where it needs to go, as one image.
 
-        The bar does what four numbers couldn't: direction and distance
-        without reading. Fill left of the line means load more, right of it
-        means take away, and how far is visible without subtracting.
-
-        Order: fill first, then frame. The other way around, the fill would
-        cover the left frame edge.
-
-        The fill is a candy cane that slowly travels: the bar says the same
-        thing as before, but it's alive. Motion here is decoration, length
-        remains the only statement.
+        Fill left of the line means load more, right of it means take away,
+        and how far is visible without subtracting. The candy cane travels:
+        motion is decoration, length remains the only statement.
         """
         r = self.BAR
-        fill = stripes(r.w, r.h, self.acc())
-        off = round((ROUND_SECONDS - self.left) * 40) % 48
+        fill = stripes(r.w, r.h, ACCENT)
+        off = round(self.clock * 40) % 48
         screen.blit(fill, r.topleft, (48 - off, 0, self._x(self.total) - r.x, r.h))
         pygame.draw.rect(screen, GREY, r, 3)
         # The goal line sticks out at top and bottom. Without the overhang
-        # it disappears exactly when it matters -- namely when the fill has
-        # almost reached it and stands light on light.
+        # it disappears exactly when the fill has almost reached it.
         screen.fill(WHITE, (self._x(self.target) - self.GOAL_W // 2,
                             r.y - self.GOAL_OVER,
                             self.GOAL_W, r.h + 2 * self.GOAL_OVER))
 
-    def legend(self, screen, f):
-        """ON TRAY under the left end of the bar, GOAL under the right end,
-        flush with the bar edges. draw() centers, so the centers are computed
-        from the monospace glyph widths."""
-        y, r = self.LEGEND_Y, self.BAR
-        tw, sw = f["tiny"].size("A")[0], f["small"].size("A")[0]
-        v = euro(self.total)
-        draw(screen, f["tiny"], "ON TRAY", r.x + 7 * tw / 2, y, GREY)
-        draw(screen, f["small"], v, r.x + 8 * tw + len(v) * sw / 2, y, self.acc())
-        v = euro(self.target)
-        draw(screen, f["small"], v, r.right - len(v) * sw / 2, y, WHITE)
-        draw(screen, f["tiny"], "GOAL", r.right - len(v) * sw - 5 * tw / 2 - tw, y, GREY)
+    def strip(self, screen, f):
+        """Every treat with its price, cheap to expensive -- which is also
+        small to big. What's on the tray is pink; the hint hops."""
+        hint = self.hint()
+        blink = int(self.clock * 4) % 2
+        for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
+            x = self.BAR.x + self.BAR.w * (i + 0.5) / len(VALUES)
+            stamp(screen, SPRITE[k], 4, x,
+                  self.STRIP_Y + (hop(self.clock, 0, 8) if k == hint else 0))
+            # The hinted price blinks along with the hop: 8 px alone was too
+            # subtle to catch from the leader arm.
+            color = ACCENT if k in self.marks else WHITE
+            if k == hint and blink:
+                color = BG
+            draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, self.STRIP_Y + 54, color)
 
     def _x(self, value):
-        """Point value -> x in the bar. Clamped so nothing runs out."""
+        """Price -> x in the bar. Clamped so nothing runs out."""
         r = self.BAR
         return r.x + round(r.w * min(max(value, 0), self.SCALE) / self.SCALE)
 
     def render(self, screen):
         # Priority is the camera images: the player steers the arm by them.
-        # Above them the instruction, alone on the full width; below them the
-        # bar, and under its two ends what's on the tray and the goal -- a
-        # legend for the bar, not a headline of their own.
         f = self.ctx.fonts
-        screen.fill(self.bg())
-        # Passthrough only here: in idle, bandwidth stays free and the Pi
-        # stays cool. Frame instead of label — from 8 m nobody reads a
-        # label, and which image is the arm is visible without a word.
+        screen.fill(BG)
         for view, pos in zip(self.ctx.views, CAM_POS):
             cam = view.surface()
             if cam:
@@ -597,245 +790,123 @@ class GameScene(SceneBase):
                     self.overlay(screen, r)
         if self.fx:
             self.fx.draw(screen)    # over the panes, under the numbers
-        # The screen says what to do instead of reporting how things stand.
-        # "OFF BY 60" was a report: correct number, no direction -- and the
-        # visitor first had to realize it even had one. Now there's a verb
-        # there, and the number is its argument.
-        #
-        # PERFECT inherits exactly this spot, so there's no second place
-        # where two messages could compete for the same line.
-        diff = self.target - self.total
-        if self.hit > 0:
-            label, big = f"HOLD {int(PERFECT_HOLD - self.hit) + 1}", "PERFECT"
+        # The top says what to do, with a verb: "ADD 3,20 €", not "OFF BY".
+        # Every phase uses the same two lines, so there's one place to look.
+        big = f["big"]
+        if self.phase in ("tutorial", "tut_done"):
+            label, value, big = self.t("practice"), self.t("tut_head"), f["mid"]
+        elif self.phase == "order":
+            label, value = self.t("order_head"), euro(self.target)
+        elif self.hit > 0:
+            label = self.t("hold", n=int(PERFECT_HOLD - self.hit) + 1)
+            value = self.t("perfect")
         else:
-            # "ADD POINTS 60" used to be a score -- and that doesn't exist
-            # during the round anymore. What's shown here is a price,
-            # because that's the only quantity the visitor is looking at
-            # during the round.
-            label, big = ("ADD" if diff > 0 else "REMOVE"), euro(abs(diff))
+            diff = self.target - self.total
+            label, value = self.t("add" if diff > 0 else "over"), euro(abs(diff))
         draw(screen, f["small"], label, 960, 64, GREY)
-        draw(screen, f["big"], big, 960, 196, self.acc())
-        frac = min(1.0, max(0.0, self.left / ROUND_SECONDS))
-        screen.blit(pie(math.ceil(frac * PIE_STEPS), str(max(0, int(self.left) + 1)),
-                        f["small"], self.acc()), self.PIE)
-        self.bar(screen)
-        self.legend(screen, f)
+        draw(screen, big, value, 960, 196, ACCENT)
+        tag = self.t("player", no=self.player)
+        draw_left(screen, f["tiny"], tag, WIDTH - 30 - f["tiny"].size(tag)[0], 40, GREY)
+        if self.phase in ("order", "play"):
+            stamp(screen, self.mood(), 6, *self.GUEST)
+        if self.pop:
+            name, text, age = self.pop
+            rise = round(age * 20)
+            stamp(screen, name, 4, self.POP[0], self.POP[1] - rise)
+            draw(screen, f["tiny"], text, self.POP[0], self.POP[1] + 58 - rise, ACCENT)
+        if self.dialog:
+            self.dialog.draw(screen, f)
+        else:
+            self.bar(screen)
+            self.strip(screen, f)
+            frac = min(1.0, max(0.0, self.left / ROUND_SECONDS))
+            blink = self.left <= FUSE_PULSE and int(self.clock * 4) % 2
+            fuse(screen, frac, WHITE if blink else ACCENT, self.clock)
         # ◀ is permanently there, not only after the first press: a hidden
-        # control isn't one. The double-confirm catches an accidental
-        # press, not invisibility.
-        footer(screen, f, "◀ QUIT",
-               note="◀ AGAIN TO QUIT" if self.confirm > 0 else None)
+        # control isn't one. The double-confirm catches an accidental press.
+        right = None
+        if self.phase == "tutorial":
+            right = self.t("skip")
+        elif self.dialog:
+            done = self.phase == "order" and self.dialog.last and not self.dialog.typing
+            right = self.t("go" if done else "next")
+        footer(screen, f, self.t("quit"), right,
+               note=self.t("quit_ok") if self.confirm > 0 else None)
 
 
 class DisplayScoreScene(SceneBase):
-    """The spinner: a number counts up toward the score, nothing else.
+    """The score counts up, then the stars, the place, and Oskar says thanks.
 
-    During the round, deliberately no score shows on the screen -- there
-    it's purely about hitting the price. The scoring happens here, and it
-    happens as an event, not a display: first the number counts up, then
-    what it's made of appears, and below that sits the price reveal.
-
-    The order is the whole trick. If the breakdown were there right away,
-    you could calculate the end of the count-up before it starts -- and
-    that would kill the effect it exists for.
+    The order is the trick: while the number counts, nothing else is there
+    to read, so the count-up is an event and not a table. Everyone gets the
+    sprinkles and at least a friendly line -- no failure, just a number.
     """
 
     # The finish sound needs room to breathe. Let it ring out first, then
     # the idle music fades in -- the silence in between is the effect.
     MUSIC_IN = (2.2, 1500)
     # Seconds until the number settles. Shorter reads like a jump, longer
-    # like a loading bar. Stays under MUSIC_IN, otherwise the idle music
-    # kicking in would fall inside the count-up.
+    # like a loading bar. Stays under MUSIC_IN.
     COUNT = 1.8
+    STARS = (800, 960, 1120)
 
-    def __init__(self, ctx, res):
+    def __init__(self, ctx, res, player):
         super().__init__(ctx)
         self.res = res
-        # One marker per cupcake and all-distinct prices, so the set is
-        # lossless -- it says "was on the tray", the price row doesn't
-        # need more than that.
-        self.mine = {VALUES[i] for i in res.marks}
+        self.place, self.count = ctx.db.rank(player)
         self.shown = 0
         self.done = False
-        self.idle = 0.0
-        self.t = 0.0
-        self.fx = Sprinkles(960, 300)   # everyone gets the pop -- no failure, just a number
+        self.idle = self.now = 0.0
+        self.fx = Sprinkles(960, 300)
+        who = ("guest_sweat", "guest", "guest_joy", "guest_joy")[res.stars]
+        self.dialog = Dialog(ctx.music, who, self.t("guest"), self.t("react")[res.stars])
         ctx.leds.show("score")
 
     def handle(self, action):
         self.idle = 0.0
-        if action == "right":
-            self.switch_to(LeaderboardScene(self.ctx, self.res))
-        elif action == "left":
-            self.switch_to(IdleScene(self.ctx))
-        else:
+        if action != "right":
             return None
+        if not self.done or self.dialog.typing:
+            self.now = max(self.now, self.COUNT)     # skip the count-up
+            self.dialog.next()
+        else:
+            self.switch_to(IdleScene(self.ctx))
         return "ok"
 
     def update(self, dt):
         self.idle += dt
-        self.t += dt
+        self.now += dt
         self.fx.update(dt)
         # Fast in, slow out: (1-k)**3 is the curve a boxing machine winds
-        # down with. Counting up linearly looks like a progress bar, not a
-        # result.
-        k = min(1.0, self.t / self.COUNT)
+        # down with. Counting up linearly looks like a progress bar.
+        k = min(1.0, self.now / self.COUNT)
         shown = round(self.res.score * (1 - (1 - k) ** 3))
         if shown // 100 > self.shown // 100:
-            # One tick per hundred. "blip" is thin and quiet and built
-            # exactly for this -- a dedicated sound would be work for the
-            # same effect.
-            self.ctx.music.sfx("blip")
+            self.ctx.music.sfx("blip")     # one tick per hundred
         self.shown = shown
         if not self.done and k >= 1.0:
             self.done = True                    # fires once, even at 0 points
             self.ctx.music.sfx("ok")
+        if self.done:
+            self.dialog.update(dt)
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
     def render(self, screen):
         f = self.ctx.fonts
-        res = self.res
         screen.fill(BG)
         self.fx.draw(screen)
-        draw(screen, f["small"], "SCORE", 960, 130, GREY)
-        draw(screen, f["big"], self.shown, 960, 300, ACCENT)
-        # The breakdown -- only once the number settles. One headline and one
-        # line of context: three equal columns read as three equal numbers,
-        # and at mid size they didn't even fit side by side.
-        #
-        # The headline switches, because otherwise one of the two cases
-        # would show a number twice. Whoever missed wants to know by how
-        # much; whoever hit it already sees that from GOAL and YOURS being
-        # equal -- there the time bonus is the only thing that still says
-        # something. And it says exactly what sets it apart from the other
-        # perfects.
+        draw(screen, f["small"], self.t("score"), 960, 110, GREY)
+        draw(screen, f["big"], self.shown, 960, 270, ACCENT)
         if self.done:
-            label, value = (("TIME BONUS", f"+{res.bonus}") if res.bonus
-                            else ("OFF BY", euro(res.off)))
-            draw(screen, f["small"], label, 960, 450, GREY)
-            draw(screen, f["mid"], value, 960, 530, ACCENT)
-            draw(screen, f["small"], f"GOAL {euro(res.target)}", 620, 620, GREY)
-            draw(screen, f["small"], f"YOURS {euro(res.total)}", 1300, 620, GREY)
-        # The reveal. This used to say "0 = 4, 1 = 7, ..." -- the left
-        # column was the ArUco ID, and that appears as a digit on no
-        # cupcake. Half the table's content demanded a mapping whose key
-        # nobody has.
-        #
-        # Now: every piece as a sprite with its price below, ascending, and
-        # pink and hopping the ones that were actually on the tray at the
-        # end of the round. That makes it no longer a lookup table but a
-        # picture of the round -- the display and what you had of it. And
-        # it's the learning moment: "the chocolate cake was the expensive one".
-        #
-        # The € sits in the heading and not in every cell: ten cells in the
-        # 168-grid, four glyphs fit side by side there, not five.
-        draw(screen, f["tiny"], "PRICES IN €", 960, 690, GREY)
-        for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
-            mine = VALUES[k] in self.mine
-            x = 204 + i * 168
-            stamp(screen, SPRITE[k], 5, x, 768 + (hop(self.t, i, 10) if mine else 0))
-            draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, 850,
-                 ACCENT if mine else WHITE)
-        footer(screen, f, "◀ BACK", "▶ NEXT")
-
-
-class LeaderboardScene(SceneBase):
-
-    LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-    def __init__(self, ctx, res):
-        super().__init__(ctx)
-        self.res = res
-        self.idle = 0.0
-        self.cursor = 0
-        self.slots = [0, 0, 0]
-        self.confirm = 0.0
-        self.top = ctx.db.top(5)
-        self.t = 0.0
-
-    # ◀, three letters, ▶. Saving is its own stop: from the last letter ▶
-    # first moves onto the arrow, and only pressing it again saves -- one
-    # press too many used to store a half-finished name.
-    COLS = (420, 750, 960, 1170, 1500)
-    SAVE = len(COLS) - 1
-    # The cursor bar is a fill(), not a draw() -- without the constant it
-    # wouldn't show up in the layout self-test, and that's exactly the
-    # class of bug it catches.
-    CURSOR_Y, CURSOR_H = 490, 9
-
-    def name(self):
-        return "".join(self.LETTERS[i] for i in self.slots)
-
-    def handle(self, action):
-        self.idle = 0.0
-        if action == "left":
-            if self.cursor == 0:
-                if self.confirm > 0:
-                    self.switch_to(IdleScene(self.ctx))
-                else:
-                    self.confirm = CONFIRM_SECONDS
-            else:
-                self.cursor -= 1
-        elif action == "right":
-            if self.cursor == self.SAVE:
-                # Everything the round physically was -- the database
-                # computes the score itself, so a later formula also
-                # applies to old rounds.
-                self.ctx.db.add(self.name(), self.res.off, goal=self.res.target,
-                                total=self.res.total, dist=self.res.dist,
-                                secs=self.res.left)
-                self.switch_to(IdleScene(self.ctx))
-                return "finish"
-            else:
-                self.cursor += 1
-        elif action in ("up", "down") and 0 < self.cursor < self.SAVE:
-            i = self.cursor - 1
-            step = 1 if action == "down" else - 1
-            self.slots[i] = (self.slots[i] + step) % len(self.LETTERS)
-        else:
-            return None
-        return "ok"
-
-    def update(self, dt):
-        self.idle += dt
-        self.t += dt
-        self.confirm = max(0.0, self.confirm - dt)
-        if self.idle > IDLE_TIMEOUT:
-            self.switch_to(IdleScene(self.ctx))
-
-    def render(self, screen):
-        f = self.ctx.fonts
-        screen.fill(BG)
-        stamp(screen, LADDER[1], 6, 180, 110 + hop(self.t, 0, 6))
-        stamp(screen, LADDER[-2], 6, 1740, 110 + hop(self.t, 1, 6))
-        # Not "TOP 10!": db.qualifies() isn't a gate, everyone lands here --
-        # even with OFF BY 200. The heading promised something the code
-        # doesn't check, and showed five rows instead of ten. The screen is
-        # an input, so it's named like one.
-        draw(screen, f["mid"], "ENTER YOUR NAME", 960, 110, ACCENT)
-        # The arrows take the colour of their physical button when selected:
-        # there they *are* the button, the one exception to the footer rule.
-        cols = [BTN_RED] + [ACCENT] * len(self.slots) + [BTN_GREEN]
-        glyphs = ["◀"] + [self.LETTERS[i] for i in self.slots] + ["▶"]
-        for i, (g, c) in enumerate(zip(glyphs, cols)):
-            draw(screen, f["big"], g, self.COLS[i], 380,
-                 c if self.cursor == i else WHITE)
-        screen.fill(cols[self.cursor], (self.COLS[self.cursor] - 68, self.CURSOR_Y,
-                                        135, self.CURSOR_H))
-        draw(screen, f["tiny"], "TODAY'S BEST", 960, 556, GREY)
-        # The fifth row was the clipping bug from August 28: it sat below
-        # SAFE_BOTTOM and covered the cancel confirmation, only visible once
-        # there were five entries in the DB. At 1080 the list ends at 912.
-        for i, (name, pts) in enumerate(self.top):
-            draw(screen, f["small"], f"{i+1}. {name}  {pts}", 960, 632 + i * 64, WHITE)
-        # The hint says what ▶ does *right now*. That the last field saves
-        # used to be stated nowhere -- you had to discover it.
-        footer(screen, f,
-               left  = ("◀ DISCARD" if self.cursor == 0 else
-                        "◀ BACK" if self.cursor == self.SAVE else "▲▼ LETTER"),
-               right = "▶ SAVE" if self.cursor == self.SAVE else "▶ NEXT",
-               note  = "◀ AGAIN TO DISCARD" if self.confirm > 0 else None)
+            for i, x in enumerate(self.STARS):
+                on = i < self.res.stars
+                stamp(screen, "star_on" if on else "star_off", 6, x,
+                      460 + (hop(self.now, i, 8) if on else 0))
+            draw(screen, f["small"], self.t("rank", place=self.place, count=self.count),
+                 960, 600, WHITE)
+            self.dialog.draw(screen, f)
+        footer(screen, f, right=self.t("next"))
 
 
 if __name__ == "__main__":
@@ -844,33 +915,44 @@ if __name__ == "__main__":
     # visible once the DB has enough rows. The test intercepts every
     # draw() call and checks the rectangles -- no screenshot, no
     # framework, no reference image that would need maintaining.
+    # Runs every scene in both languages: German words are longer.
     import os
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     pygame.init()
     _fonts = {k: pygame.font.Font(FONT_PATH, s) for k, s in FONT_SIZES.items()}
+    _all = {**SPRITES, **EXTRAS}
 
     boxes, _draw = [], draw
     def draw(screen, font, text, x, y, color):          # noqa: F811
         w, h = font.size(str(text))
-        boxes.append((str(text), x - w//2, y - h//2, x + w//2, y + h//2))
+        boxes.append((str(text), x - w/2, y - h/2, x + w/2, y + h/2))
 
-    # Sprites count too, with their full edge: 16 sprite pixels.
+    # Sprites count too, with their full edge.
     def stamp(screen, name, scale, x, y):               # noqa: F811
-        boxes.append((name, x - 8 * scale, y - 8 * scale, x + 8 * scale, y + 8 * scale))
+        n = len(SHAPES[_all[name][0]]) * scale / 2
+        boxes.append((name, x - n, y - n, x + n, y + n))
 
     class _Stub:
         """Covers Music, DB, and Detector -- they all do nothing in the test."""
+        tray = {}
         def __getattr__(self, _): return lambda *a, **k: None
         def top(self, n=5):  return [(f"WW{i}", 999) for i in range(n)]
-        def fresh(self):     return {i: [(.3, .3)] * 4 for i in (0, 3, 7, 9)}
+        def fresh(self):     return self.tray
+        def rank(self, p):   return 999, 999
+        def player(self, n): return "WWW" if n else None
+        def new_player(self, name): return 999
     _s = _Stub()
     ctx = type("C", (), dict(detector=_s, db=_s, fonts=_fonts, music=_s,
-                             leds=_s, views=(), demo=None))()
+                             leds=_s, views=(), lang="en"))()
 
     # Panes aren't a draw(), but they still count toward overlap.
     panes = [("pane", x - CAM_VIEW[0]//2 - 4, y - CAM_VIEW[1]//2 - 4,
                       x + CAM_VIEW[0]//2 + 4, y + CAM_VIEW[1]//2 + 4)
              for x, y in CAM_POS]
+    G = GameScene
+    bar = [("bar", G.BAR.x, G.BAR.y - G.GOAL_OVER, G.BAR.right, G.BAR.bottom + G.GOAL_OVER)]
+    fuse_ = [("fuse", 0, 0, WIDTH, FUSE_W), ("fuse", 0, HEIGHT - FUSE_W, WIDTH, HEIGHT),
+             ("fuse", 0, 0, FUSE_W, HEIGHT), ("fuse", WIDTH - FUSE_W, 0, WIDTH, HEIGHT)]
 
     def check(label, scene, extra=(), **state):
         scene.__dict__.update(state)
@@ -880,58 +962,91 @@ if __name__ == "__main__":
         for t, l, tp, r, b in bs:
             assert 0 <= l and r <= WIDTH,  f"{label}: {t!r} x {l}..{r}"
             assert 0 <= tp and b <= HEIGHT, f"{label}: {t!r} y {tp}..{b}"
-            assert b <= SAFE_BOTTOM or tp >= FOOTER_Y - 40, \
+            assert b <= SAFE_BOTTOM or tp >= FOOTER_Y - 40 or t == "fuse", \
                 f"{label}: {t!r} sticks out below SAFE_BOTTOM (y {tp}..{b})"
         for i in range(len(bs)):
             for j in range(i + 1, len(bs)):
                 a, c = bs[i], bs[j]
-                assert not (a[1] < c[3] and c[1] < a[3]
+                assert a[0] == c[0] == "fuse" or not (a[1] < c[3] and c[1] < a[3]
                             and a[2] < c[4] and c[2] < a[4]), \
                     f"{label}: {a[0]!r} overlaps {c[0]!r}"
 
-    # The bar is a fill(), not a draw() -- without this line it wouldn't
-    # show up in the test, and that's exactly the class of bug it catches.
-    # The goal line sits inside it by construction and is covered by the
-    # rectangle too.
-    bar = [("bar", GameScene.BAR.x, GameScene.BAR.y - GameScene.GOAL_OVER,
-                   GameScene.BAR.right, GameScene.BAR.bottom + GameScene.GOAL_OVER),
-           ("pie", *GameScene.PIE.topleft, *GameScene.PIE.bottomright)]
+    def read(d):
+        """Every page of a dialog, fully typed."""
+        pages = []
+        while True:
+            d.n = 1e9
+            pages.append(d.pages[d.i])
+            if d.last:
+                return pages
+            d.next()
 
-    check("idle",  IdleScene(ctx))
-    check("howto", HowToScene(ctx))
-    g = GameScene(ctx)
-    check("game",         g, panes + bar)
-    check("game confirm", g, panes + bar, confirm=2.0)
-    check("game perfect", g, panes + bar, confirm=0.0, hit=1.0)
-    # Both directions of the instruction. The number below is now a price
-    # and therefore wider than before -- it sits in the middle, where it's
-    # most likely to collide.
-    check("game remove",  g, panes + bar, hit=0.0, total=g.target + 40)
-    # Edge cases of the bar: empty tray (the normal case at the cabinet) and
-    # target at the upper stop. The widest number that can ever appear in
-    # the header is the sum of ALL prices -- the bar clamps there, but the
-    # number next to it doesn't, and that's the one that could collide.
-    check("game empty",   g, panes + bar, total=0, target=GameScene.SCALE)
-    check("game full",    g, panes + bar, total=sum(VALUES.values()), target=0)
+    widest = dict(name="WWW", no=999, goal=euro(88), price=euro(52))
+    for lang in TEXT:
+        ctx.lang = lang
+        T = TEXT[lang]
+        # Every speech line fits the box: at most three lines per page.
+        for key in ("hello", "number", "help", "welcome", "tut", "tut_done", "order"):
+            for page in T[key].format(**widest).split("|"):
+                n = len(textwrap.wrap(page, Dialog.COLS))
+                assert n <= 3, f"{lang}.{key}: {n} lines: {page!r}"
+        for line in T["react"]:
+            assert len(textwrap.wrap(line, Dialog.COLS)) <= 3, (lang, line)
 
-    # The score screen in both states: while the number counts up the
-    # breakdown isn't there yet, afterward it is. The second one needs
-    # checking -- there are three columns there where there used to be two.
-    res = Result(target=67, total=64, dist=50, left=0.0,
-                 marks={0: 1, 3: 1, 7: 1, 9: 1})
-    check("score counting", DisplayScoreScene(ctx, res))
-    check("score done",     DisplayScoreScene(ctx, res),
-          shown=res.score, done=True, t=2.5)
-    # And a perfect round: four-digit score, "+100" instead of "+0".
-    best = Result(target=67, total=67, dist=50,
-                  left=ROUND_SECONDS - PERFECT_HOLD, marks=dict.fromkeys(VALUES, 1))
-    check("score perfect", DisplayScoreScene(ctx, best),
-          shown=best.score, done=True, t=2.5)
-    for cur in range(len(LeaderboardScene.COLS)):
-        for conf in (0.0, 2.0):
-            L = LeaderboardScene
-            bar = [("cursor", L.COLS[cur] - 68, L.CURSOR_Y,
-                              L.COLS[cur] + 67, L.CURSOR_Y + L.CURSOR_H)]
-            check(f"board cursor={cur} confirm={conf}",
-                  L(ctx, res), bar, cursor=cur, confirm=conf)
+        check(f"{lang} idle", IdleScene(ctx))
+        check(f"{lang} idle ask", IdleScene(ctx), ask=2.0)
+        for digits in (False, True):
+            for cur in range(3):
+                check(f"{lang} entry {digits} {cur}", EntryScene(ctx, digits), cursor=cur)
+            check(f"{lang} entry error", EntryScene(ctx, digits), cursor=2, error=2.0)
+
+        for new in (True, False):
+            st = StoryScene(ctx, 999, "WWW", new)
+            for i, _ in enumerate(read(st.dialog)):
+                st.dialog.i, st.dialog.n = i, 1e9
+                check(f"{lang} story new={new} page {i}", st)
+
+        # The phases of a round: empty tray -> practice, a treat lands ->
+        # tut_done, ▶ -> order, ▶▶ -> play.
+        _s.tray = {}
+        g = GameScene(ctx, 999, "WWW")
+        assert g.phase == "tutorial"
+        check(f"{lang} tutorial", g, panes)
+        _s.tray = {9: [(.3, .3)] * 4}
+        g.update(0.05)
+        assert g.phase == "tut_done" and g.pop and g.first is not None
+        check(f"{lang} tut_done", g, panes)
+        read(g.dialog)
+        g.handle("right")
+        assert g.phase == "order" and g.target > g.total
+        check(f"{lang} order", g, panes)
+        read(g.dialog)
+        assert g.handle("right") == "start" and g.phase == "play"
+        _s.tray = {i: [(.3, .3)] * 4 for i in (0, 3, 7, 9)}
+        g.update(0.05)
+        check(f"{lang} play", g, panes + bar + fuse_)
+        check(f"{lang} play confirm", g, panes + bar + fuse_, confirm=2.0)
+        check(f"{lang} play perfect", g, panes + bar + fuse_, confirm=0.0,
+              hit=1.0, total=g.target)
+        check(f"{lang} play over", g, panes + bar + fuse_, hit=0.0, total=g.target + 40)
+        check(f"{lang} play hint", g, panes + bar + fuse_, total=0, still=99.0, clock=0.3)
+        # Edge cases of the bar: nothing on it, and the widest number that
+        # can ever appear in the header (the sum of all prices).
+        check(f"{lang} play full", g, panes + bar + fuse_, total=sum(VALUES.values()))
+        assert g.hint() is not None
+
+        for stars, res in enumerate((
+                Result(target=67, total=0, dist=67, left=0.0, marks={}),
+                Result(target=67, total=40, dist=67, left=0.0, marks={0: 1}),
+                Result(target=67, total=64, dist=67, left=0.0, marks={0: 1, 9: 1}),
+                Result(target=67, total=67, dist=50, left=80.0, marks={0: 1}))):
+            assert res.stars == stars, (res, res.stars)
+            check(f"{lang} score counting {stars}", DisplayScoreScene(ctx, res, 999))
+            check(f"{lang} score done {stars}", DisplayScoreScene(ctx, res, 999),
+                  shown=res.score, done=True, now=2.5)
+
+    # The fuse: full at the start, gone at the end, never outside the screen.
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    for frac in (1.0, 0.5, 0.01, 0.0):
+        fuse(surf, frac, ACCENT, 0.0)
     print("ok")

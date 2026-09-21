@@ -6,6 +6,64 @@
 
 ---
 
+## UX overhaul: story, practice, visible prices (2026-09-21)
+
+The first cabinet test showed that the arm is much harder than expected.
+The game stacked two hard things on top of each other: steering the arm and
+mental arithmetic with hidden prices. Now the arm is the only challenge,
+and everything else is there to help. The players are grades 7 to 12.
+
+**One concept instead of a Frankenstein.** You're helping out in Bella's
+bakery. Oskar has a birthday and exactly X euros, and you put together
+treats for him. Bigger means more expensive, and **the prices are visible
+the whole time** in a strip under the bar. The hidden price (decision from
+2026-09-11) is dropped: it could be computed from the ADD value anyway, so
+it only ever created arithmetic, never a secret.
+
+**Flow:** Idle → name → Bella (player number) → practice → order → round →
+score. The practice waits until the camera sees the first treat. That's the
+first success, before any clock is running. The treat stays on the tray,
+and `gap(on, up=True)` rolls the target from there.
+
+**Feedback where people are looking:**
+- every detected marker gets a frame in the camera image
+- every change gets a pop-up ("+3,20") between the panes
+- Oskar sweats when the tray is over budget and beams when it's exact
+- after 20 s without a change, the treat that gets you closest hops
+
+The red screen is gone. Only the LEDs still show "hurry", as a signal for
+the team.
+
+**Timer as a fuse** around the screen edge. It takes no space from the
+cameras, and the spot between the panes now belongs to Oskar.
+
+**Score:** stars instead of five numbers. One star for any treat on the
+tray, two from 700, three for exact. Plus "#4 of 23" and a line from Oskar.
+The idle leaderboard shows names only, as a podium.
+
+**Player number instead of a hash** for linking to the sign-up form. The
+reason: two MAX are two people. Playing again means entering the number,
+and the best round counts. `db.py export` writes the CSV, see
+`docs/operation.md`.
+
+**German/English** via `TEXT` in the theme, default `en`, ▲▲ in idle
+switches. Press Start 2P draws Ä/Ö/Ü shortened (no room for the dots above
+capitals at 8×8). That's the font, not a bug.
+
+**Characters:** 32×32 grids in the theme (`EXTRAS`), mirrored from left
+halves. Bella and Oskar are fictional on purpose. The text box talks with
+four random blips (`talk0..3`), like Animal Crossing.
+
+**Measured, not guessed:** `runs.first` stores the seconds until the first
+treat. That's the number that shows whether people fail at the arm or at
+the puzzle.
+
+**Not tested:** real camera, real buttons, and the Pi (heat with the
+additional sprites). Everything else, headless: layout self-test in both
+languages, one full run with music and DB.
+
+---
+
 ## Scoring (2026-09-11)
 
 The scoring system had been completely open since 2026-09-10 and no longer is.
