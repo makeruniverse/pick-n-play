@@ -15,8 +15,8 @@ WIDTH, HEIGHT = 1920, 1080
 #
 # 1. 60/30 = 2, so every frame stands for exactly two refreshes and the
 #    cadence is even. At 40 fps, 60/40 = 1.5: alternating one and two
-#    refreshes, visible stutter at a *higher* frame rate. Below 60, 30 is
-#    the only even number on a 60 Hz panel.
+#    refreshes, visible stutter at a *higher* frame rate. 20 (60/20 = 3)
+#    is even too.
 # 2. The cameras deliver 30 frames/s. Anything above that shows the same
 #    camera frame twice during the round.
 #
@@ -24,7 +24,9 @@ WIDTH, HEIGHT = 1920, 1080
 # text, camera image. The arcade look comes from scanlines, barrel
 # distortion, and hard pixel edges, not from the frame rate. Half the render
 # load is also half the heat, and the Pi throttles together with teleop.
-FPS = 30
+# ponytail: 20 until the fan is in (21.9.: 85 °C and crashes even at a
+# 1.5 GHz CPU cap), then back to 30.
+FPS = 20
 IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "15"))
                      # half of FPS, so the cadence stays even.
                      # The idle screen changes twice a second -- anything

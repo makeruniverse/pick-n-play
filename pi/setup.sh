@@ -78,6 +78,21 @@ printf '[Service]\nExecStart=\nExecStart=/lib/systemd/systemd-networkd-wait-onli
 # no snap refresh restarting things mid-day.
 systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service 2>/dev/null || true
 snap refresh --hold >/dev/null 2>&1 || true
+# ponytail: temporary until the fan is in, remove then (and
+# `systemctl disable --now pnp-cpucap`, rm the unit, write 2400000 back).
+# No fan: 86 °C and a crash at 2.4 GHz, 1.8 still hit the soft limit,
+# 1.5 settles below 78 °C (21.9.).
+cat > $U/pnp-cpucap.service <<EOF
+[Unit]
+Description=PICK'N'PLAY CPU cap at 1.5 GHz (no fan yet)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo 1500000 > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq'
+
+[Install]
+WantedBy=multi-user.target
+EOF
 # git: fsync on write, so a pulled plug doesn't leave half-written objects
 sudo -u ubuntu git -C $R config core.fsync committed
 
@@ -107,5 +122,6 @@ EOF
 
 systemctl daemon-reload
 systemctl enable -q pnp-expo.service teleop.service pnp-update.timer
+systemctl enable -q --now pnp-cpucap.service
 systemctl start pnp-update.timer   # a timer only runs once started, not just enabled
 echo "expo setup done"
