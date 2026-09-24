@@ -6,6 +6,38 @@
 
 ---
 
+## The number nobody remembered (2026-09-24)
+
+Coming back meant typing the player number, and the number was handed out
+in Bella's second sentence: "show it to the team, they'll note it." Two
+things wrong with that. The number was homework before the game, for
+everyone -- including the majority who play once and walk on. And a number
+you saw once for five seconds isn't one you can type in an hour later.
+
+Now the number appears where it does something:
+
+- **during the practice round**, small and grey in the bottom right corner,
+  just `#42`. That's the corner the booth team reads; the practice lasts
+  long enough to copy it into the sign-up form, and nobody has to talk
+  about it. Gone once the round starts -- it's the team's number, not
+  something the player steers by.
+- **at the end**, after Oskar's thanks: Bella says "want to play again?
+  remember your number", and `PLAYER #42` takes the place of the ranking
+  line. At that point it answers a question the player actually has.
+
+**Coming back** goes over the name now (`PickScene`): all numbers with that
+name, newest first, with weekday and clock time, pick with ▲▼. No score in
+the row -- that would make the screen a leaderboard you can read without
+playing, and it would point out which of your numbers is the good one.
+`db.players_named()` is the whole query, times converted with SQLite's
+`'localtime'` since `ts` is UTC.
+
+Numbers without a single finished round stay in the list on purpose: the
+team may already have written one into the form during the practice round,
+and handing out a second number for the same person breaks that join.
+
+---
+
 ## UX overhaul: story, practice, visible prices (2026-09-21)
 
 The first cabinet test showed that the arm is much harder than expected.
@@ -20,8 +52,8 @@ the whole time** in a strip under the bar. The hidden price (decision from
 2026-09-11) is dropped: it could be computed from the ADD value anyway, so
 it only ever created arithmetic, never a secret.
 
-**Flow:** Idle → name → Bella (player number) → practice → order → round →
-score. The practice waits until the camera sees the first treat. That's the
+**Flow:** Idle → name → Bella → practice → order → round → score.
+Returning: Idle ▼ → name → pick your number → Bella → order → round → score. The practice waits until the camera sees the first treat. That's the
 first success, before any clock is running. The treat stays on the tray,
 and `gap(on, up=True)` rolls the target from there.
 
@@ -42,9 +74,9 @@ tray, two from 700, three for exact. Plus "#4 of 23" and a line from Oskar.
 The idle leaderboard shows names only, as a podium.
 
 **Player number instead of a hash** for linking to the sign-up form. The
-reason: two MAX are two people. Playing again means entering the number,
-and the best round counts. `db.py export` writes the CSV, see
-`docs/operation.md`.
+reason: two MAX are two people. The best round per number counts.
+`db.py export` writes the CSV, see `docs/operation.md`. Where the number
+appears was reworked on 2026-09-24, see below.
 
 **German/English** via `TEXT` in the theme, default `en`, ▲▲ in idle
 switches. Press Start 2P draws Ä/Ö/Ü shortened (no room for the dots above

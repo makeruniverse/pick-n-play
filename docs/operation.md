@@ -281,10 +281,19 @@ around.
 
 ## Player numbers and the sign-up form
 
-Every new player gets a number on screen (`PLAYER #42`), right after typing
-their name. The team writes that number into the sign-up form next to the
-email. Playing again: ▼ on the idle screen, type the number, and the best
-round per number counts.
+Every new player gets a number. It shows up in two places, and nowhere else:
+small and grey in the bottom right corner during the practice round, which
+is where the team reads it off and writes it into the sign-up form next to
+the email; and at the end, when Bella says "remember your number" and it
+stands under the stars.
+
+Playing again: ▼ on the idle screen, type the *name*, then pick your number
+from the list of all numbers with that name — weekday and time next to each
+one, no score. The best round per number counts.
+
+Nobody remembers their number? Type the name, take the newest entry, that's
+almost always the right one. Worst case they play under a new number: the
+scores don't merge, but nothing breaks.
 
 After the show, on the Pi:
 
