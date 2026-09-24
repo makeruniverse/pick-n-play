@@ -114,13 +114,17 @@ def run_game(scene, width, height, fps, beat=None):
     # there's nothing to scale. vsync without SCALED is backend-dependent --
     # if set_mode fails on that, tearing is better than no image at all, and
     # the switch for re-measuring is in config.py.
-    # Scaled in windowed mode: 1920 x 1080 doesn't fit the MacBook display
-    # (1728 points wide). The cabinet runs fullscreen, so this never kicks in there.
-    flags = pygame.FULLSCREEN if FULLSCREEN else pygame.SCALED | pygame.RESIZABLE
+    # Windowed (Mac): 1920 x 1080 doesn't fit the MacBook display, and SCALED
+    # won't go below 1x. So the scene renders offscreen at design resolution
+    # and gets stretched onto a half-size, resizable window. The cabinet runs
+    # fullscreen, so this never kicks in there.
+    flags = pygame.FULLSCREEN if FULLSCREEN else pygame.RESIZABLE
+    size  = (width, height) if FULLSCREEN else (width // 2, height // 2)
     try:
-        screen = pygame.display.set_mode((width, height), flags, vsync=VSYNC)
+        window = pygame.display.set_mode(size, flags, vsync=VSYNC)
     except pygame.error:
-        screen = pygame.display.set_mode((width, height), flags)
+        window = pygame.display.set_mode(size, flags)
+    screen = window if FULLSCREEN else pygame.Surface((width, height))
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
     pygame.key.set_repeat(*KEY_REPEAT)
@@ -153,13 +157,20 @@ def run_game(scene, width, height, fps, beat=None):
         scene.ctx.music.update()
         if beat:
             beat(scene)    # expo heartbeat, see main.py
-        scene.update(dt)
+        # A scene that handle() already replaced gets no more update: the
+        # next one's __init__ has set music and LEDs, and a stage() from the
+        # old round would start its music right back up over the idle screen.
+        if scene.next is scene:
+            scene.update(dt)
         scene.render(screen)
         if gain is not None:
             # The px() views lock their surface. As arguments directly in the
             # call they die with the line -- otherwise the flip below would
             # fail on a locked surface.
             cv2.multiply(px(screen), gain, px(screen), 1 / 255)
+        if screen is not window:
+            window = pygame.display.get_surface()    # new one after a resize
+            pygame.transform.smoothscale(screen, window.get_size(), window)
         pygame.display.flip()
 
         # Tick rate of the scene that just ran — before the switch, so the
