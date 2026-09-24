@@ -9,8 +9,11 @@ R=/home/ubuntu/picknplay
 U=/etc/systemd/system
 
 # ── Layer 1: game and teleop start on boot and never give up ──────────────
-# Backoff 3 s -> 2 min instead of StartLimitBurst: a broken arm heats the Pi
-# less at one try per 2 min, and it comes back by itself once fixed.
+# Fixed RestartSec, no StartLimitBurst: never give up. No RestartSteps either:
+# its counter (NRestarts) only resets on a manual start, so after 10 restarts
+# in a fair day every restart waited 2 min -- the 4-button reset looked dead
+# and teleop seemed to never come back (24.9.). Teleop gets 10 s as the heat
+# guard: the 153 restarts in 30 min were at 2 s and full clock.
 cat > $U/pnp-expo.service <<EOF
 [Unit]
 Description=PICK'N'PLAY game (expo mode)
@@ -25,8 +28,6 @@ ExecStart=$R/.venv/bin/python game/main.py
 ExecStopPost=$R/.venv/bin/python pi/leds.py
 Restart=always
 RestartSec=3
-RestartSteps=10
-RestartMaxDelaySec=120
 # main.py pings only while every camera delivers: hung loop or dead camera -> restart
 WatchdogSec=15
 TimeoutStartSec=120
@@ -52,9 +53,7 @@ User=ubuntu
 WorkingDirectory=$R
 ExecStart=/home/ubuntu/miniforge3/envs/lerobot/bin/python teleop/run.py
 Restart=always
-RestartSec=2
-RestartSteps=10
-RestartMaxDelaySec=120
+RestartSec=10
 WatchdogSec=10
 TimeoutStartSec=60
 
