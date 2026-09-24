@@ -19,11 +19,24 @@ done on 2026-09-24:
   down (g4–d5) instead of a 25 % pulse on g5–d6. The pulse's odd harmonics
   sat right on the lead, which is what made every letter poke through;
   measured −2.6 dB RMS against the old blip.
-- ● **Less text, more pictures**: the story screen runs a six-frame loop at
-  2 Hz — a treat hops off the table into the tray. A gripper carrying it
-  was tried first and thrown out after four passes: at 160 px a two-jaw
-  claw reads as a crucifix, and the arm is the one part of this machine
-  nobody needs a picture of. `help` and `tut` shrank accordingly.
+- ● **Less text, more pictures**: the story screen runs a loop at 2 Hz
+  instead of a sentence. First version was a treat hopping onto the tray by
+  itself — a gripper carrying it was tried and thrown out after four
+  passes, because at the treats' 16 × 16 a two-jaw claw reads as a
+  crucifix. `help` and `tut` shrank accordingly.
+- ● **The arm, second attempt** (2026-09-24): the gripper is back, on a
+  32 × 32 grid like the faces, and the loop is now eight frames — approach,
+  grip, lift, carry, set down, let go, and the last frame three times over.
+  What the first attempt got wrong was the grid, not the idea. Two things
+  were not free to choose: held means arm y + 176, exactly half of the two
+  boxes together, so their edges touch instead of overlapping and the
+  layout self-test stays quiet; and the arm runs at scale 6, because
+  between the parade (ends at y 136) and the text box (starts at 726)
+  scale 7 leaves 32 px of lift instead of 60, and 32 px reads as sliding.
+  The joints are `STEEL`, not `ACCENT` — pink means "what you are
+  affecting" everywhere else, and the arm only copies.
+  Open: the shoulder block hangs in mid-air. A sprite can't come in from
+  the edge of the screen.
 
 Also on 2026-09-24, on top of the three: the **player number is on screen
 from the name entry onwards**, not only during the practice round.

@@ -427,13 +427,13 @@ SHAPES["guest_joy"] = _swap(SHAPES["guest"],
 # everything else on this screen is round. Now: a blunt 4 px tip, a wider
 # neck, legs that taper over three rows, and the highlight as a 2 x 2 blob
 # instead of a one-pixel diagonal, so it reads as a glint at 6 x scale.
-# The demo on the story screen: the gripper and the tray it drops into.
+# The demo on the story screen: the arm, and the tray it drops into.
 # Not treats, so they live outside SPRITES and never ride the idle belt.
 #
-# Both grids are aligned to their box edges, because scenes place them by
-# box and the layout self-test rejects any overlap: the gripper's fingers
-# end on the last row, the tray's rim starts on the first. A treat box set
-# directly underneath the gripper is then held by it, and one set directly
+# All three grids are aligned to their box edges, because scenes place them
+# by box and the layout self-test rejects any overlap: the claw's jaws end
+# on the last row, the tray's rim starts on the first. A treat box set
+# directly underneath the arm is then held by it, and one set directly
 # above the tray is lying in it -- no pixel nudging in the scene.
 SHAPES["tray"] = (
     "kkkkkkkkkkkkkkkk",
@@ -444,6 +444,91 @@ SHAPES["tray"] = (
     "..kkeeeeeeeekk..",
     "...kkkkkkkkkk...",
 ) + ("................",) * 9
+
+# The arm, 32 x 32 like the faces -- at the treats' 16 there is no room for
+# both an arm and a claw, and what was left over on the first attempt was
+# two thin jaws on a crossbar, which reads as a crucifix. The shoulder sits
+# in the top left corner and is meant to run off the edge: the real arm
+# stands next to the cabinet, so a base on the picture would be a second,
+# wrong machine.
+#
+# No pink. The joints are a darker grey (STEEL) instead of ACCENT, which
+# was tried first: three pink blocks made half the sprite an accent colour,
+# and ACCENT means "what the visitor is affecting right now" everywhere
+# else on the screen. The arm is not that -- it copies, it does not signal.
+#
+# Two poses, and the loop in scenes.py switches between them: that switch
+# is the whole animation of the grip. The jaws splay outwards when open --
+# an open claw pointing straight down reads as a pair of legs.
+SHAPES["arm"] = (
+    "aaaaaaaaak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddakkkkk..................",
+    "aaddddddaaaaakk.................",
+    "aaaaaaabaaaaaakk................",
+    "aaaaaaaabaaaaaakk...............",
+    "kkkkkkkkkbaaaaaakk..............",
+    "........kkbaaaaaak..............",
+    ".........kbaaaaaakkkk...........",
+    ".........kkdddddddddk...........",
+    "..........kdddddddddk...........",
+    "..........kdddddddddkk..........",
+    "..........kdddddddddak..........",
+    "..........kdddddddddkk..........",
+    "..........kdddddddddak..........",
+    "..........kkkkbaaaaaak..........",
+    ".............kbaaaaaak..........",
+    "........kkkkkkbaaaaaakkk........",
+    "........kddddddddddddddk........",
+    "........kddddddddddddddk........",
+    "..kkkkkkkddddddddddddddkkkkkkk..",
+    "..kaaaaaaddddddddddddddaaaaaak..",
+    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
+    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
+    "..kkaaaaaakkkkkkkkkkkkaaaaaakk..",
+    "...kkkaaaaakk......kkaaaaakkk...",
+    ".....kkkaaaakkk..kkkaaaakkk.....",
+    ".......kkkaaaakkkkaaaakkk.......",
+    ".........kkkaaakkaaakkk.........",
+)
+
+SHAPES["arm_open"] = (
+    "aaaaaaaaak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddak......................",
+    "aaddddddakkkkk..................",
+    "aaddddddaaaaakk.................",
+    "aaaaaaabaaaaaakk................",
+    "aaaaaaaabaaaaaakk...............",
+    "kkkkkkkkkbaaaaaakk..............",
+    "........kkbaaaaaak..............",
+    ".........kbaaaaaakkkk...........",
+    ".........kkdddddddddk...........",
+    "..........kdddddddddk...........",
+    "..........kdddddddddkk..........",
+    "..........kdddddddddak..........",
+    "..........kdddddddddkk..........",
+    "..........kdddddddddak..........",
+    "..........kkkkbaaaaaak..........",
+    ".............kbaaaaaak..........",
+    "........kkkkkkbaaaaaakkk........",
+    "........kddddddddddddddk........",
+    "........kddddddddddddddk........",
+    "..kkkkkkkddddddddddddddkkkkkkk..",
+    "..kaaaaaaddddddddddddddaaaaaak..",
+    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
+    ".kkaabbaaaaaaaaaaaaaaaaaaaaaakk.",
+    ".kaaaaaakkkkkkkkkkkkkkkkaaaaaak.",
+    "kkaaaaakk..............kkaaaaakk",
+    "kaaaaakk................kkaaaaak",
+    "kaaaakk..................kkaaaak",
+    "kaaaak....................kaaaak",
+)
 
 SHAPES["star"] = (
     "......kaak......",
@@ -471,6 +556,7 @@ SAKURA, LEMON, ICE = (232, 175, 207), (247, 217, 89), (163, 216, 225)
 APPLE, LILAC, SCARLET = (194, 225, 137), (174, 150, 212), (222, 67, 67)
 IVORY, TAN, LATTE = (255, 255, 255), (232, 219, 183), (211, 183, 167)
 CARAMEL, BONE, MILK = (174, 131, 91), (203, 198, 184), (128, 84, 60)
+STEEL = (86, 74, 92)        # the arm's joints, the only non-sweet colour
 
 # Applies to every sprite, individual palettes override it.
 BASE = dict(k=(18, 6, 14), w=IVORY, y=LEMON, m=ICE, r=SCARLET, e=BONE, b=IVORY)
@@ -504,6 +590,7 @@ SPRITES = {
 SKIN, HAIR = (240, 196, 160), (150, 92, 60)
 _BELLA = dict(s=SKIN, h=HAIR, c=SAKURA, a=(255, 101, 189))
 _OSKAR = dict(s=SKIN, h=CARAMEL, c=SAKURA, a=(255, 101, 189), d=ICE, g=APPLE)
+_ARM = dict(a=BONE, d=STEEL)     # b (the light edge) comes from BASE
 EXTRAS = {
     "baker":       ("baker",       _BELLA),
     "baker_talk":  ("baker_talk",  _BELLA),
@@ -513,6 +600,8 @@ EXTRAS = {
     "star_on":     ("star",        dict(a=LEMON, b=IVORY)),
     "star_off":    ("star",        dict(a=(96, 56, 82), b=(120, 76, 104))),
     "tray":        ("tray",        {}),
+    "arm":         ("arm",         _ARM),
+    "arm_open":    ("arm_open",    _ARM),
 }
 
 # marker_id -> sprite. The screen must show the same thing that's on the

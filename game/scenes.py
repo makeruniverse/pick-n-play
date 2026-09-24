@@ -146,25 +146,39 @@ def parade(screen, t, y, speed, scale=5, gap=160):
 # it replaces did the work for everyone who can already read and none at
 # all for the five-year-olds the practice round exists for.
 #
-# There was a gripper carrying the treat here first, and it went out again
-# after four tries -- at 160 px a two-jaw claw reads as a crucifix, and
-# the arm is the one part of this machine nobody needs a picture of,
-# because it is standing in front of them. What a picture can say is where
-# the treat has to end up, and that is all this one says. The control
-# stays one sentence in the text box.
+# A gripper was tried here on 2026-09-24 and thrown out the same day -- at
+# the treats' 16 x 16 a two-jaw claw reads as a crucifix. It came back on
+# a 32 x 32 grid, which is what it needed all along, and now the picture
+# says both things: where the treat has to end up, and that the robot is
+# what puts it there. The control stays one sentence in the text box.
 DEMO_SCALE = 10             # 160 px a box -- next to Bella at 12x, less vanishes
+ARM_SCALE = 6               # 192 px. See DEMO for why it can't be bigger.
 DEMO_TREAT = LADDER[len(LADDER) // 2]    # not the cheapest: that one is a crumb
-DEMO_TRAY = (1560, 620)
-# The arc, as (x, y) of the treat. Last position three times over: the
-# frame worth reading is the one where it lies on the tray.
-DEMO = ((1180, 460), (1290, 330), (1450, 330),
-        (1560, 460), (1560, 460), (1560, 460))
+DEMO_TRAY = (1560, 640)
+# One frame is (x, arm y, claw shut, treat y) -- the treat is always under
+# the arm, so they share x. The heights are not free: the parade ends at
+# y 136 and the text box starts at 726, and between them the arm's 192 px
+# and the treat's 160 px have to fit twice over, once hanging and once
+# with the treat on the tray. Held means arm y + 176, exactly half of both
+# boxes, so the two edges touch and the layout self-test stays happy.
+#
+# The sequence is approach, grip, lift, carry, set down, let go. The grip
+# and the release are a pose swap in place: the same frame twice with a
+# different claw is what makes it read as gripping rather than sliding.
+# The last frame stands three times over -- the frame worth reading is the
+# one where the treat lies on the tray.
+DEMO = ((1180, 272, 0, 480), (1180, 304, 1, 480),
+        (1290, 244, 1, 420), (1450, 244, 1, 420),
+        (1560, 304, 1, 480), (1560, 272, 0, 480),
+        (1560, 272, 0, 480), (1560, 272, 0, 480))
 
 
 def demo(screen, t):
-    """One frame of the hop onto the tray."""
+    """One frame of the arm putting the treat on the tray."""
+    x, y, shut, ty = DEMO[int(t * 2) % len(DEMO)]
     stamp(screen, "tray", DEMO_SCALE, *DEMO_TRAY)
-    stamp(screen, DEMO_TREAT, DEMO_SCALE, *DEMO[int(t * 2) % len(DEMO)])
+    stamp(screen, "arm" if shut else "arm_open", ARM_SCALE, x, y)
+    stamp(screen, DEMO_TREAT, DEMO_SCALE, x, ty)
 
 
 @lru_cache(maxsize=4)
