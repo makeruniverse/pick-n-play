@@ -34,9 +34,10 @@ class DB:
     Since 2026-09-21 a round belongs to a *player number*, not to a name.
     The booth team writes that number into their sign-up form next to the
     email, so after the show `export` joins them. A number, not a hash of
-    the name: two MAX are two people. Playing again means typing the number
-    in again, and the best round per number counts -- improving is the
-    point, a worse second try never costs anything.
+    the name: two MAX are two people. Playing again means typing the name
+    and picking your number off the list (`players_named`), and the best
+    round per number counts -- improving is the point, a worse second try
+    never costs anything.
     """
 
     def __init__(self, path=DB_PATH):
@@ -83,11 +84,34 @@ class DB:
         self.con.commit()
         return cur.lastrowid
 
-    def player(self, no):
-        """Name for a player number, or None if there is no such player."""
-        row = self.con.execute("SELECT name FROM players WHERE id = ?",
-                               (no,)).fetchone()
-        return row and row[0]
+    def next_player(self):
+        """The number the next new_player() will hand out.
+
+        Not a guess: `players.id` is an INTEGER PRIMARY KEY *without*
+        AUTOINCREMENT, so SQLite assigns max(id) + 1 on the next INSERT --
+        the same rule this query runs. That lets the entry screen show the
+        number while the name is still being typed, instead of registering
+        a player for everyone who walks up and presses a button.
+        """
+        return self.con.execute(
+            "SELECT IFNULL(MAX(id), 0) + 1 FROM players").fetchone()[0]
+
+    def players_named(self, name):
+        """[(number, weekday 0=Sunday, "HH:MM")] for a name, newest first.
+
+        Everything the pick list needs to tell three MAX apart -- and
+        nothing else: a score next to the number would turn picking your
+        own number into reading the others'.
+
+        `ts` is UTC (datetime('now')), the booth reads a wall clock, hence
+        'localtime'. Numbers without a single round stay in the list: the
+        team may already have written one into the form during the practice
+        round, and a second number for the same person breaks that join.
+        """
+        return [(no, int(wd), hhmm) for no, wd, hhmm in self.con.execute(
+            "SELECT id, strftime('%w', ts, 'localtime'), "
+            "       strftime('%H:%M', ts, 'localtime') "
+            "FROM players WHERE name = ? ORDER BY id DESC", (name,))]
 
     def add(self, name, off, goal=None, total=None, dist=None, secs=0.0,
             player=None, first=None):
@@ -172,8 +196,19 @@ elif __name__ == "__main__":
     # Player numbers: two MAX are two people, and the same number playing
     # again keeps its best round.
     p = DB(":memory:")
+    # The entry screen shows next_player() before the name is submitted, so
+    # it has to be exactly what new_player() then hands out -- on an empty
+    # table too.
+    assert p.next_player() == 1
     a, b = p.new_player("MAX"), p.new_player("MAX")
-    assert (a, b) == (1, 2) and p.player(2) == "MAX" and p.player(9) is None
+    assert (a, b) == (1, 2)
+    assert p.next_player() == 3 and p.new_player("ANN") == 3
+    # The pick list: newest first, weekday and clock time, no score. An
+    # unknown name is an empty list, not an error.
+    named = p.players_named("MAX")
+    assert [r[0] for r in named] == [2, 1], named
+    assert all(0 <= wd <= 6 and len(hhmm) == 5 for _, wd, hhmm in named), named
+    assert p.players_named("ZZZ") == []
     p.add("MAX", 30, dist=50, player=a, first=12.5)
     p.add("MAX", 10, dist=50, player=b)
     p.add("MAX", 0, dist=50, player=a)          # second try, perfect

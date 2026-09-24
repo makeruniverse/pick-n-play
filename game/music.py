@@ -316,8 +316,17 @@ SFX = {
     # The text box talks: one of four short pitches per letter, picked at
     # random -- that's the whole Animal Crossing trick. Quieter than "blip",
     # it fires 15 times a second while a line types.
-    **{f"talk{i}": (480, [dict(pat=f"{n} .", vol=900, duty=0.25, env="hit")])
-       for i, n in enumerate(("g5", "a5", "c6", "d6"))},
+    #
+    # Triangle an octave down since 2026-09-24. It was a 25 % pulse on
+    # g5..d6, and against the music it read as pointy: a thin pulse has the
+    # odd harmonics that sit right on top of the lead, so every letter
+    # poked through the melody. The NES triangle is 4-bit stepped and has
+    # almost none of them -- flat, bubbly, and it sinks into the mix. vol
+    # goes up because the triangle is ~3.5 dB quieter per amplitude (see
+    # the mix note above), so net it still talks softer than before:
+    # measured -2.6 dB RMS against the old blip.
+    **{f"talk{i}": (480, [dict(pat=f"{n} .", vol=1100, wave="tri", env="hit")])
+       for i, n in enumerate(("g4", "a4", "c5", "d5"))},
     "nope":   (200, [
         dict(pat="a#2^d#2 . .", vol=3400, duty=0.50, env="hit"),
         dict(pat="s . .",       vol=1800, env="hit")]),

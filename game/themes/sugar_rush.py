@@ -52,17 +52,17 @@ TEXT = {
         press="PRESS ▶", best="TODAY'S BEST",
         lang="▲ DEUTSCH", lang_ok="▲ NOCHMAL: DEUTSCH",
         again="▼ PLAYED BEFORE?",
-        ask_name="WHAT'S YOUR NAME?", ask_no="YOUR PLAYER NUMBER?",
-        pick_abc="▲▼ CHANGE LETTER", pick_123="▲▼ CHANGE DIGIT",
-        back="◀ BACK", next="▶ NEXT", done="▶ DONE", unknown="NUMBER NOT FOUND",
+        ask_name="WHAT'S YOUR NAME?", which="WHICH {name} ARE YOU?",
+        pick_abc="▲▼ CHANGE LETTER", pick_no="▲▼ PICK YOURS",
+        days=("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"),
+        back="◀ BACK", next="▶ NEXT", done="▶ DONE", unknown="NAME NOT FOUND",
         baker="BELLA", guest="OSKAR",
         hello="HI {name}! I'M BELLA, AND THIS IS MY LITTLE BAKERY.",
-        number="YOUR PLAYER NUMBER IS #{no}. SHOW IT TO THE TEAM, THEY'LL NOTE IT.",
-        help="THE BIG ARM IN FRONT OF YOU MOVES THE ROBOT ARM.|"
+        help="MOVE THE BIG ARM -- THE ROBOT COPIES YOU.|"
              "EVERY TREAT HAS A PRICE. BIGGER TREATS COST MORE!",
         welcome="WELCOME BACK, {name}! LET'S BEAT YOUR SCORE.",
         practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
-        tut="GRAB ANY TREAT WITH THE ARM AND PUT IT ON THE TRAY IN THE MIDDLE.",
+        tut="PUT ANY TREAT ON THE TRAY IN THE MIDDLE.",
         tut_done="YUMMY! THAT ONE COSTS {price}. HERE COMES OUR FIRST GUEST!",
         skip="▶ SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="ORDER",
@@ -71,6 +71,7 @@ TEXT = {
         go="▶ GO!", add="ADD", over="TOO MUCH", hold="HOLD {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
+        remember="WANT TO PLAY AGAIN? REMEMBER YOUR NUMBER: #{no}.",
         react=("HM, THE TRAY STAYED EMPTY. NEXT TIME!",
                "THANK YOU! THAT'S A GREAT START.",
                "WOW, ALMOST EXACTLY! THANK YOU SO MUCH!",
@@ -80,18 +81,18 @@ TEXT = {
         press="DRÜCK ▶", best="BESTE HEUTE",
         lang="▲ ENGLISH", lang_ok="▲ AGAIN: ENGLISH",
         again="▼ SCHON GESPIELT?",
-        ask_name="WIE HEISST DU?", ask_no="DEINE SPIELERNUMMER?",
-        pick_abc="▲▼ BUCHSTABE ÄNDERN", pick_123="▲▼ ZIFFER ÄNDERN",
+        ask_name="WIE HEISST DU?", which="WELCHER {name} BIST DU?",
+        pick_abc="▲▼ BUCHSTABE ÄNDERN", pick_no="▲▼ AUSWÄHLEN",
+        days=("SO", "MO", "DI", "MI", "DO", "FR", "SA"),
         back="◀ ZURÜCK", next="▶ WEITER", done="▶ FERTIG",
-        unknown="NUMMER NICHT GEFUNDEN",
+        unknown="NAME NICHT GEFUNDEN",
         baker="BELLA", guest="OSKAR",
         hello="HALLO {name}! ICH BIN BELLA, UND DAS IST MEINE KLEINE BÄCKEREI.",
-        number="DEINE SPIELERNUMMER IST #{no}. ZEIG SIE DEM TEAM, DIE SCHREIBEN SIE AUF.",
-        help="DER GROSSE ARM VOR DIR STEUERT DEN ROBOTERARM.|"
+        help="BEWEG DEN GROSSEN ARM -- DER ROBOTER MACHT DICH NACH.|"
              "JEDER TREAT HAT EINEN PREIS. GRÖSSERE TREATS KOSTEN MEHR!",
         welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! SCHLAG DEINEN REKORD.",
         practice="ÜBUNG", tut_head="1 TREAT AUFS TABLETT",
-        tut="NIMM IRGENDEINEN TREAT MIT DEM ARM UND LEG IHN AUFS TABLETT IN DER MITTE.",
+        tut="LEG IRGENDEINEN TREAT AUFS TABLETT IN DER MITTE.",
         tut_done="LECKER! DER KOSTET {price}. DA KOMMT SCHON UNSER ERSTER GAST!",
         skip="▶ ÜBERSPRINGEN", quit="◀ AUFHÖREN", quit_ok="◀ NOCHMAL = AUFHÖREN",
         order_head="BESTELLUNG",
@@ -100,6 +101,7 @@ TEXT = {
         go="▶ LOS!", add="NOCH DAZU", over="ZU VIEL", hold="HALTEN {n}",
         perfect="PERFEKT", player="SPIELER #{no}",
         score="PUNKTE", rank="PLATZ {place} VON {count} HEUTE",
+        remember="WILLST DU NOCHMAL SPIELEN? MERK DIR DEINE NUMMER: #{no}.",
         react=("HM, DAS TABLETT BLIEB LEER. NÄCHSTES MAL!",
                "DANKE! DAS IST EIN SUPER ANFANG.",
                "WOW, FAST GENAU! VIELEN DANK!",
@@ -310,6 +312,23 @@ def _poke(rows, *pixels):
 # 32 x 32, twice the treats' grid: a face needs eyes, cheeks and a mouth
 # that can change, and at 16 that's three pixels. Letters on top of BASE:
 #   s skin   h hair   c cheek   a hat / apron   d stripe   g shirt
+#
+# Both faces were reworked on 2026-09-24 ("they look like standard
+# sprites"). Three changes, in order of effect:
+#
+#   1. Eyes 3 x 3 instead of 2 x 2, with a white pixel in the top outer
+#      corner. Big eyes with a catchlight are the whole baby schema -- at
+#      2 x 2 there's no room for one, and an eye without a highlight reads
+#      as a printed dot rather than something looking back at you.
+#   2. The skull loses its corners. Both heads were rectangles; the
+#      outline now steps in twice at the top and twice at the chin, so
+#      the silhouette reads round at 3 m.
+#   3. The mouth shrinks from 10 px wide to 6 and moves a row down. The
+#      old one was as wide as both eyes together, which is a grin, not a
+#      face -- small mouth under big eyes is what makes it cute.
+#
+# The cheeks move below the eyes at the same time, because the eye's third
+# row now sits where they used to be.
 SHAPES["baker"] = _sym(
     "............kkkk",
     "......kkkk.kwwww",
@@ -323,17 +342,17 @@ SHAPES["baker"] = _sym(
     ".......kwwwwwwww",
     ".......keeeeeeee",
     ".......kkkkkkkkk",
-    ".....khhhhhhhhhh",
-    "....khhhssssssss",
+    "......khhhhhhhhh",
+    ".....khhssssssss",
     "....khhsssssssss",
-    "....khhssskkssss",
-    "....khhssskkssss",
-    "....khhsccssssss",
-    "....khhsssskssss",
-    "....khhssssskkkk",
-    "....khhhssssssss",
-    "....khhhkkkkkkkk",
-    "....kkkk...kssss",
+    "....khhsswkkssss",
+    "....khhsskkkssss",
+    "....khhsskkkssss",
+    "....khhccsssskss",
+    "....khhssssssskk",
+    ".....khhssssssss",
+    "......khhkkkkkkk",
+    "......kkk..kssss",
     ".....kkwwwwwwwww",
     "....kwwwwwwwwwww",
     "...kwwwwwwkaaaaa",
@@ -346,9 +365,9 @@ SHAPES["baker"] = _sym(
 )
 # Mouth open, for every other beat while the text box types.
 SHAPES["baker_talk"] = _swap(SHAPES["baker"],
-                             r18="....khhssssskkkk",
-                             r19="....khhssssskrrr",
-                             r20="....khhhssssskkk")
+                             r18="....khhccsssskkk",
+                             r19="....khhsssssskrr",
+                             r20=".....khhsssssskk")
 
 SHAPES["guest"] = _sym(
     "..............ky",
@@ -366,11 +385,11 @@ SHAPES["guest"] = _sym(
     "......khhhhhhhhh",
     ".....khhssssssss",
     ".....khsssssssss",
-    "....kkhssskkssss",
-    "....kshssskkssss",
-    "....kkhsccssssss",
-    ".....khsssskssss",
-    ".....khssssskkkk",
+    "....kkhsswkkssss",
+    "....kshsskkkssss",
+    "....kkhsskkkssss",
+    ".....khccsssskss",
+    ".....khssssssskk",
     "......khssssssss",
     ".......kkkkkkkkk",
     "...........kssss",
@@ -387,8 +406,8 @@ SHAPES["guest"] = _sym(
 # Over the target: worried brows, mouth turned down, one sweat drop.
 SHAPES["guest_sweat"] = _poke(_swap(SHAPES["guest"],
                                     r14=".....khsssskksss",
-                                    r18=".....khssssskkkk",
-                                    r19=".....khsssskssss"),
+                                    r18=".....khccssssskk",
+                                    r19=".....khsssssskss"),
                               (10, 28, "k"), (11, 27, "k"), (11, 28, "m"),
                               (11, 29, "k"), (12, 26, "k"), (12, 27, "m"),
                               (12, 28, "w"), (12, 29, "m"), (12, 30, "k"),
@@ -397,27 +416,50 @@ SHAPES["guest_sweat"] = _poke(_swap(SHAPES["guest"],
                               (14, 29, "k"))
 # Perfect: happy ^ ^ eyes and a big open smile.
 SHAPES["guest_joy"] = _swap(SHAPES["guest"],
-                            r15="....kkhssskkssss",
-                            r16="....kshsskssksss",
-                            r18=".....khssskkkkkk",
-                            r19=".....khssskrrrrr",
-                            r20="......khssskkkkk")
+                            r15="....kkhsssksssss",
+                            r16="....kshsskskssss",
+                            r17="....kkhsssssskkk",
+                            r18=".....khccsssskrr",
+                            r19=".....khsssssskkk")
+
+# Reworked on 2026-09-24 along with the faces. The old one had a 2 px
+# needle for a top point and legs that ended in a stump -- pointy where
+# everything else on this screen is round. Now: a blunt 4 px tip, a wider
+# neck, legs that taper over three rows, and the highlight as a 2 x 2 blob
+# instead of a one-pixel diagonal, so it reads as a glint at 6 x scale.
+# The demo on the story screen: the gripper and the tray it drops into.
+# Not treats, so they live outside SPRITES and never ride the idle belt.
+#
+# Both grids are aligned to their box edges, because scenes place them by
+# box and the layout self-test rejects any overlap: the gripper's fingers
+# end on the last row, the tray's rim starts on the first. A treat box set
+# directly underneath the gripper is then held by it, and one set directly
+# above the tray is lying in it -- no pixel nudging in the scene.
+SHAPES["tray"] = (
+    "kkkkkkkkkkkkkkkk",
+    "keeeeeeeeeeeeeek",
+    "keeeeeeeeeeeeeek",
+    "kkeeeeeeeeeeeekk",
+    ".kkeeeeeeeeeekk.",
+    "..kkeeeeeeeekk..",
+    "...kkkkkkkkkk...",
+) + ("................",) * 9
 
 SHAPES["star"] = (
-    ".......kk.......",
     "......kaak......",
-    "......kbak......",
-    ".....kbaaak.....",
-    "kkkkkkaaaakkkkkk",
-    "kaaaaaaaaaaaaaak",
-    ".kaaaaaaaaaaaak.",
+    ".....kaaaak.....",
+    ".....kaaaak.....",
+    "....kaaaaaak....",
+    "kkkkkaaaaaakkkkk",
+    "kaaaabbaaaaaaaak",
+    ".kaaabbaaaaaaak.",
     "..kaaaaaaaaaak..",
     "...kaaaaaaaak...",
     "...kaaaaaaaak...",
     "..kaaaaaaaaaak..",
     "..kaaaakkaaaak..",
     ".kaaaak..kaaaak.",
-    ".kaakk....kkaak.",
+    ".kaaak....kaaak.",
     ".kkk........kkk.",
     "................",
 )
@@ -470,6 +512,7 @@ EXTRAS = {
     "guest_joy":   ("guest_joy",   _OSKAR),
     "star_on":     ("star",        dict(a=LEMON, b=IVORY)),
     "star_off":    ("star",        dict(a=(96, 56, 82), b=(120, 76, 104))),
+    "tray":        ("tray",        {}),
 }
 
 # marker_id -> sprite. The screen must show the same thing that's on the

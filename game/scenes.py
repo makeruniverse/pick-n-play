@@ -138,6 +138,35 @@ def parade(screen, t, y, speed, scale=5, gap=160):
         screen.blit(s, s.get_rect(center=(round(x), y + hop(t, i, scale))))
 
 
+# The demo loop on the story screen: a treat hops off the table onto the
+# tray, six frames at 2 Hz. Discrete steps like hop(), because tweened
+# motion next to 8-bit sprites reads as a different game.
+#
+# This is what the todo meant by "less text, more pictures": the sentence
+# it replaces did the work for everyone who can already read and none at
+# all for the five-year-olds the practice round exists for.
+#
+# There was a gripper carrying the treat here first, and it went out again
+# after four tries -- at 160 px a two-jaw claw reads as a crucifix, and
+# the arm is the one part of this machine nobody needs a picture of,
+# because it is standing in front of them. What a picture can say is where
+# the treat has to end up, and that is all this one says. The control
+# stays one sentence in the text box.
+DEMO_SCALE = 10             # 160 px a box -- next to Bella at 12x, less vanishes
+DEMO_TREAT = LADDER[len(LADDER) // 2]    # not the cheapest: that one is a crumb
+DEMO_TRAY = (1560, 620)
+# The arc, as (x, y) of the treat. Last position three times over: the
+# frame worth reading is the one where it lies on the tray.
+DEMO = ((1180, 460), (1290, 330), (1450, 330),
+        (1560, 460), (1560, 460), (1560, 460))
+
+
+def demo(screen, t):
+    """One frame of the hop onto the tray."""
+    stamp(screen, "tray", DEMO_SCALE, *DEMO_TRAY)
+    stamp(screen, DEMO_TREAT, DEMO_SCALE, *DEMO[int(t * 2) % len(DEMO)])
+
+
 @lru_cache(maxsize=4)
 def stripes(w, h, color, period=48):
     """Diagonal stripes for the bar (a candy cane in Sugar Rush), built once. One
@@ -324,6 +353,24 @@ def draw_hint(screen, font, text, x, y, base=GREY):
              BUTTON_COLORS.get(ARROWS.get(c), base))
 
 
+def tag(screen, f, no):
+    """The player number, bare and small, in the bottom right corner.
+
+    Shown from the entry screen onwards (2026-09-24). It used to appear
+    only during the practice round, which was enough for the booth team but
+    made it a surprise for the player -- a number you're handed once at the
+    end is a number nobody writes down. On screen the whole time, it turns
+    into something you've already read three times by then.
+
+    Bare "#42", no label: the word PLAYER next to it would compete with the
+    footer hints, and every other screen that shows a number (the pick
+    list) writes it the same way.
+    """
+    text = f"#{no}"
+    draw_left(screen, f["tiny"], text, WIDTH - 30 - f["tiny"].size(text)[0],
+              FOOTER_Y, GREY)
+
+
 def footer(screen, f, left=None, right=None, note=None):
     """The bottom row: what the four buttons currently do.
 
@@ -383,7 +430,7 @@ class IdleScene(SceneBase):
         if action == "right":
             self.switch_to(EntryScene(self.ctx))
         elif action == "down":
-            self.switch_to(EntryScene(self.ctx, digits=True))
+            self.switch_to(EntryScene(self.ctx, again=True))
         elif action == "up":
             if self.ask > 0:
                 self.ctx.lang = "de" if self.ctx.lang == "en" else "en"
@@ -431,7 +478,11 @@ class IdleScene(SceneBase):
 
 
 class EntryScene(SceneBase):
-    """Three letters (new player) or three digits (player number).
+    """Three letters -- the name, for a new player and a returning one alike.
+
+    Until 2026-09-24 coming back meant typing the player number. Nobody
+    remembers a number they were shown once, so it's the name again, and
+    PickScene sorts out which MAX this is.
 
     The arrows sit where the button acts: a blue ▲ above the active letter,
     a yellow ▼ below it. The old screen had big ◀ ▶ arrows at the sides that
@@ -440,12 +491,17 @@ class EntryScene(SceneBase):
 
     MUSIC_IN = (0.0, 800)   # fades in, instead of hitting hard out of silence
     COLS = (750, 960, 1170)
-    LETTERS, DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789"
+    LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-    def __init__(self, ctx, digits=False):
+    def __init__(self, ctx, again=False):
         super().__init__(ctx)
-        self.digits = digits
-        self.chars = self.DIGITS if digits else self.LETTERS
+        self.again = again
+        # A new player sees their number here already -- db.next_player()
+        # is what the INSERT on submit will hand out. Coming back, the
+        # number isn't picked yet: PickScene lists them, and from the story
+        # screen on it's in the corner like everywhere else.
+        self.no = None if again else ctx.db.next_player()
+        self.chars = self.LETTERS
         self.slots = [0, 0, 0]
         self.cursor = 0
         self.idle = self.error = self.now = 0.0
@@ -471,15 +527,15 @@ class EntryScene(SceneBase):
 
     def submit(self):
         text = "".join(self.chars[i] for i in self.slots)
-        if not self.digits:
+        if not self.again:
             no = self.ctx.db.new_player(text)
             self.switch_to(StoryScene(self.ctx, no, text, new=True))
             return "ok"
-        name = self.ctx.db.player(int(text))
-        if not name:
+        rows = self.ctx.db.players_named(text)
+        if not rows:
             self.error = CONFIRM_SECONDS
             return None     # "nope", and the footer says why
-        self.switch_to(StoryScene(self.ctx, int(text), name, new=False))
+        self.switch_to(PickScene(self.ctx, text, rows))
         return "ok"
 
     def update(self, dt):
@@ -492,8 +548,7 @@ class EntryScene(SceneBase):
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BG)
-        draw(screen, f["mid"], self.t("ask_no" if self.digits else "ask_name"),
-             960, 150, ACCENT)
+        draw(screen, f["mid"], self.t("ask_name"), 960, 150, ACCENT)
         for i, x in enumerate(self.COLS):
             on = i == self.cursor
             draw(screen, f["big"], self.chars[self.slots[i]], x, 470,
@@ -501,19 +556,89 @@ class EntryScene(SceneBase):
             if on:
                 draw_hint(screen, f["mid"], "▲", x, 320 + hop(self.now, 0, 6))
                 draw_hint(screen, f["mid"], "▼", x, 620 - hop(self.now, 0, 6))
-        draw_hint(screen, f["small"], self.t("pick_123" if self.digits else "pick_abc"),
-                  960, 760, GREY)
+        draw_hint(screen, f["small"], self.t("pick_abc"), 960, 760, GREY)
+        if self.no:
+            tag(screen, f, self.no)
         last = self.cursor == len(self.slots) - 1
         footer(screen, f, self.t("back"), self.t("done" if last else "next"),
                note=self.t("unknown") if self.error > 0 else None)
 
 
-class StoryScene(SceneBase):
-    """Bella says hello, and gives out the player number.
+class PickScene(SceneBase):
+    """Which of the MAXes are you? The numbers behind one name, no scores.
 
-    The number is the link to the sign-up form, so it gets its own page and
-    stays on screen from then on -- the booth team reads it off here. A
-    returning player gets one line and skips the practice.
+    Weekday and time are the only thing separating two rows, and they're
+    enough: "I played yesterday evening". A score in the row would make
+    this screen a leaderboard you can read without playing -- and it would
+    tell the person which number is the good one, which is not the
+    question being asked.
+
+    Newest first: whoever comes back is most often the one from ten
+    minutes ago, so the cursor already sits on the right row.
+    """
+
+    MUSIC_IN = (0.0, 800)
+    ROWS = 5            # more would run into the hint line at 760
+    TOP, STEP = 330, 78
+
+    def __init__(self, ctx, name, rows):
+        super().__init__(ctx)
+        self.name, self.rows = name, rows
+        self.cursor = 0
+        self.idle = self.now = 0.0
+
+    @property
+    def start(self):
+        """First visible row: the cursor stays in the middle while it can."""
+        return max(0, min(self.cursor - self.ROWS // 2, len(self.rows) - self.ROWS))
+
+    def handle(self, action):
+        self.idle = 0.0
+        if action in ("up", "down"):
+            step = 1 if action == "down" else -1
+            self.cursor = (self.cursor + step) % len(self.rows)
+        elif action == "left":
+            self.switch_to(EntryScene(self.ctx, again=True))
+        elif action == "right":
+            no = self.rows[self.cursor][0]
+            self.switch_to(StoryScene(self.ctx, no, self.name, new=False))
+        else:
+            return None
+        return "ok"
+
+    def update(self, dt):
+        self.idle += dt
+        self.now += dt
+        if self.idle > IDLE_TIMEOUT:
+            self.switch_to(IdleScene(self.ctx))
+
+    def render(self, screen):
+        f = self.ctx.fonts
+        screen.fill(BG)
+        draw(screen, f["mid"], self.t("which", name=self.name), 960, 150, ACCENT)
+        days = self.t("days")
+        for i in range(self.start, min(self.start + self.ROWS, len(self.rows))):
+            no, wd, hhmm = self.rows[i]
+            on = i == self.cursor
+            # The ▶ marker is drawn through draw_hint, so it carries the
+            # color of the button that confirms it, like everywhere else.
+            draw_hint(screen, f["small"], f"{'▶' if on else ' '} #{no}  "
+                      f"{days[wd]} {hhmm}", 960,
+                      self.TOP + (i - self.start) * self.STEP,
+                      ACCENT if on else GREY)
+        draw_hint(screen, f["small"], self.t("pick_no"), 960, 760, GREY)
+        footer(screen, f, self.t("back"), self.t("done"))
+
+
+class StoryScene(SceneBase):
+    """Bella says hello. A returning player gets one line and skips practice.
+
+    No player number here any more (2026-09-24): not everyone wants to come
+    back a second time, and a number plus "show it to the team" as the
+    first thing after your name is homework before the game. It's shown
+    where it's needed instead -- small during the practice round, so the
+    team can copy it into the sign-up form, and once at the end, when
+    playing again is actually the question.
     """
 
     MUSIC_IN = (0.0, 800)
@@ -521,8 +646,7 @@ class StoryScene(SceneBase):
     def __init__(self, ctx, player, name, new):
         super().__init__(ctx)
         self.player, self.name, self.new = player, name, new
-        text = ("|".join((self.t("hello", name=name), self.t("number", no=player),
-                          self.t("help")))
+        text = ("|".join((self.t("hello", name=name), self.t("help")))
                 if new else self.t("welcome", name=name))
         self.dialog = Dialog(ctx.music, "baker", self.t("baker"), text)
         self.idle = self.now = 0.0
@@ -548,10 +672,10 @@ class StoryScene(SceneBase):
         screen.fill(BG)
         parade(screen, self.now, 96, 60)
         stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.now, 0, 6))
-        if self.dialog.i >= 1 or not self.new:
-            draw(screen, f["mid"], self.t("player", no=self.player), 1360, 450, ACCENT)
+        demo(screen, self.now)
         self.dialog.draw(screen, f)
         done = self.dialog.last and not self.dialog.typing
+        tag(screen, f, self.player)
         footer(screen, f, right=self.t("go" if done else "next"))
 
 
@@ -805,8 +929,7 @@ class GameScene(SceneBase):
             label, value = self.t("add" if diff > 0 else "over"), euro(abs(diff))
         draw(screen, f["small"], label, 960, 64, GREY)
         draw(screen, big, value, 960, 196, ACCENT)
-        tag = self.t("player", no=self.player)
-        draw_left(screen, f["tiny"], tag, WIDTH - 30 - f["tiny"].size(tag)[0], 40, GREY)
+        tag(screen, f, self.player)
         if self.phase in ("order", "play"):
             stamp(screen, self.mood(), 6, *self.GUEST)
         if self.pop:
@@ -853,9 +976,10 @@ class DisplayScoreScene(SceneBase):
     def __init__(self, ctx, res, player):
         super().__init__(ctx)
         self.res = res
+        self.player = player
         self.place, self.count = ctx.db.rank(player)
         self.shown = 0
-        self.done = False
+        self.done = self.bye = False
         self.idle = self.now = 0.0
         self.fx = Sprinkles(960, 300)
         who = ("guest_sweat", "guest", "guest_joy", "guest_joy")[res.stars]
@@ -869,6 +993,13 @@ class DisplayScoreScene(SceneBase):
         if not self.done or self.dialog.typing:
             self.now = max(self.now, self.COUNT)     # skip the count-up
             self.dialog.next()
+        elif not self.bye:
+            # Oskar has said his thanks; now Bella hands over the number.
+            # Last page of the evening, and the only place it's spoken --
+            # here it answers a question the player actually has.
+            self.bye = True
+            self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"),
+                                 self.t("remember", no=self.player))
         else:
             self.switch_to(IdleScene(self.ctx))
         return "ok"
@@ -903,9 +1034,20 @@ class DisplayScoreScene(SceneBase):
                 on = i < self.res.stars
                 stamp(screen, "star_on" if on else "star_off", 6, x,
                       460 + (hop(self.now, i, 8) if on else 0))
-            draw(screen, f["small"], self.t("rank", place=self.place, count=self.count),
-                 960, 600, WHITE)
+            # The place has been read by the time Bella speaks; the number
+            # takes its line, bigger and pink -- it's the one thing worth
+            # taking home from this screen.
+            if self.bye:
+                draw(screen, f["mid"], self.t("player", no=self.player), 960, 600, ACCENT)
+            else:
+                draw(screen, f["small"],
+                     self.t("rank", place=self.place, count=self.count), 960, 600, WHITE)
             self.dialog.draw(screen, f)
+        # Also in the corner, even on the page where Bella says it out loud:
+        # the corner is where it has stood since the entry screen, and
+        # "remember your number" lands better pointing at a spot the player
+        # has already seen it in.
+        tag(screen, f, self.player)
         footer(screen, f, right=self.t("next"))
 
 
@@ -939,8 +1081,9 @@ if __name__ == "__main__":
         def top(self, n=5):  return [(f"WW{i}", 999) for i in range(n)]
         def fresh(self):     return self.tray
         def rank(self, p):   return 999, 999
-        def player(self, n): return "WWW" if n else None
         def new_player(self, name): return 999
+        def next_player(self): return 999
+        def players_named(self, name): return [(999, 3, "14:20")]
     _s = _Stub()
     ctx = type("C", (), dict(detector=_s, db=_s, fonts=_fonts, music=_s,
                              leds=_s, views=(), lang="en"))()
@@ -986,7 +1129,8 @@ if __name__ == "__main__":
         ctx.lang = lang
         T = TEXT[lang]
         # Every speech line fits the box: at most three lines per page.
-        for key in ("hello", "number", "help", "welcome", "tut", "tut_done", "order"):
+        for key in ("hello", "help", "welcome", "tut", "tut_done", "order",
+                    "remember"):
             for page in T[key].format(**widest).split("|"):
                 n = len(textwrap.wrap(page, Dialog.COLS))
                 assert n <= 3, f"{lang}.{key}: {n} lines: {page!r}"
@@ -995,16 +1139,28 @@ if __name__ == "__main__":
 
         check(f"{lang} idle", IdleScene(ctx))
         check(f"{lang} idle ask", IdleScene(ctx), ask=2.0)
-        for digits in (False, True):
+        for again in (False, True):
             for cur in range(3):
-                check(f"{lang} entry {digits} {cur}", EntryScene(ctx, digits), cursor=cur)
-            check(f"{lang} entry error", EntryScene(ctx, digits), cursor=2, error=2.0)
+                check(f"{lang} entry {again} {cur}", EntryScene(ctx, again), cursor=cur)
+            check(f"{lang} entry error", EntryScene(ctx, again), cursor=2, error=2.0)
+
+        # The pick list: one row, and more rows than fit -- the window has
+        # to scroll with the cursor instead of drawing past the hint line.
+        rows = [(n, n % 7, "14:20") for n in range(999, 989, -1)]
+        check(f"{lang} pick one", PickScene(ctx, "WWW", rows[:1]))
+        for cur in (0, 4, 9):
+            check(f"{lang} pick {cur}", PickScene(ctx, "WWW", rows), cursor=cur)
 
         for new in (True, False):
             st = StoryScene(ctx, 999, "WWW", new)
             for i, _ in enumerate(read(st.dialog)):
                 st.dialog.i, st.dialog.n = i, 1e9
-                check(f"{lang} story new={new} page {i}", st)
+                # Every pose of the demo loop, not just the one at t = 0.
+                # The gripper moves and the treat moves with it, so a
+                # single frame proves nothing -- the pose that overlaps is
+                # the one nobody looked at.
+                for k in range(len(DEMO)):
+                    check(f"{lang} story new={new} page {i} demo {k}", st, now=k / 2)
 
         # The phases of a round: empty tray -> practice, a treat lands ->
         # tut_done, ▶ -> order, ▶▶ -> play.
@@ -1042,8 +1198,12 @@ if __name__ == "__main__":
                 Result(target=67, total=67, dist=50, left=80.0, marks={0: 1}))):
             assert res.stars == stars, (res, res.stars)
             check(f"{lang} score counting {stars}", DisplayScoreScene(ctx, res, 999))
-            check(f"{lang} score done {stars}", DisplayScoreScene(ctx, res, 999),
-                  shown=res.score, done=True, now=2.5)
+            sc = DisplayScoreScene(ctx, res, 999)
+            check(f"{lang} score done {stars}", sc, shown=res.score, done=True, now=2.5)
+            read(sc.dialog)
+            sc.handle("right")                  # Oskar done -> Bella, the number
+            assert sc.bye, "the last ▶ hands over to Bella, not to idle"
+            check(f"{lang} score bye {stars}", sc, shown=res.score, done=True, now=2.5)
 
     # The fuse: full at the start, gone at the end, never outside the screen.
     surf = pygame.Surface((WIDTH, HEIGHT))

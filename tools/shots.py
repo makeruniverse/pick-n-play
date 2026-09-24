@@ -47,6 +47,10 @@ class Stub:
     def fresh(self):             return self.tray
     def rank(self, player):      return 4, 23
     def new_player(self, name):  return 42
+    def next_player(self):       return 42
+    # Three MAXes on two days -- the case the pick list exists for.
+    def players_named(self, name): return [(42, 2, "17:40"), (31, 2, "11:05"),
+                                           (12, 1, "16:48")]
 
 
 class StubView:
@@ -115,6 +119,11 @@ def shots(out):
                          marks={0: 1, 3: 1, 7: 1, 9: 1})
     score = scenes.DisplayScoreScene(ctx, done, 42)
     typed(score.dialog)
+    # The last page: Oskar has said thanks, Bella hands over the number.
+    again = scenes.DisplayScoreScene(ctx, done, 42)
+    again.done = True
+    again.handle(typed(again.dialog) and "right")   # Oskar read, ▶ -> Bella
+    typed(again.dialog)
     play = dict(phase="play", dialog=None, pop=None, hit=0.0, confirm=0.0)
     # (filename, scene, state). The state gets written into __dict__ -- same
     # technique as in the self-test, so the in-between states that are hard to
@@ -122,6 +131,8 @@ def shots(out):
     plan = [
         ("1-idle",         scenes.IdleScene(ctx),                     {}),
         ("2-name",         scenes.EntryScene(ctx),       dict(cursor=1, slots=[12, 0, 23])),
+        ("2b-pick",        scenes.PickScene(ctx, "MAX", stub.players_named("MAX")),
+                           dict(cursor=1)),
         ("3-story",        story, dict(dialog=typed(story.dialog, 1))),
         ("4-tutorial",     tut,                                       {}),
         ("5-tutorial-done", done_tut,                                 {}),
@@ -140,6 +151,8 @@ def shots(out):
         # tenth of a second of the count-up.
         ("11-score",       score, dict(shown=done.score, done=True, now=2.5,
                                        fx=burst(960, 300, 2.5))),
+        ("12-score-number", again, dict(shown=done.score, done=True, now=2.5,
+                                        fx=burst(960, 300, 2.5))),
     ]
 
     gain = crt_gain(WIDTH, HEIGHT, BARREL_K) if CRT else None

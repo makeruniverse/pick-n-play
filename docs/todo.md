@@ -1,7 +1,37 @@
-# To-dos — As of 2026-09-17
+# To-dos — As of 2026-09-21
 
 Order follows the project's principle: something runs after every step.
 Legend: ● done · ◐ started · ○ open · ✱ waiting on a decision
+
+---
+
+## 00 · Feedback on the UX overhaul (2026-09-21)
+
+Tested by Vadim: "really cute and well done overall". Three points, all
+done on 2026-09-24:
+
+- ● **Sprites cuter**: eyes 3 × 3 with a white catchlight instead of 2 × 2
+  black dots, both skulls stepped in at the top and the chin so the
+  silhouette reads round, mouth down from 10 px wide to 6. The star lost
+  its needle tip and got a 2 × 2 glint. Cheeks moved below the eyes,
+  because the third eye row took their place.
+- ● **Softer talk blips**: `talk0..3` are now the NES triangle an octave
+  down (g4–d5) instead of a 25 % pulse on g5–d6. The pulse's odd harmonics
+  sat right on the lead, which is what made every letter poke through;
+  measured −2.6 dB RMS against the old blip.
+- ● **Less text, more pictures**: the story screen runs a six-frame loop at
+  2 Hz — a treat hops off the table into the tray. A gripper carrying it
+  was tried first and thrown out after four passes: at 160 px a two-jaw
+  claw reads as a crucifix, and the arm is the one part of this machine
+  nobody needs a picture of. `help` and `tut` shrank accordingly.
+
+Also on 2026-09-24, on top of the three: the **player number is on screen
+from the name entry onwards**, not only during the practice round.
+`db.next_player()` predicts it before the row exists — `players.id` is an
+INTEGER PRIMARY KEY without AUTOINCREMENT, so max(id) + 1 is exactly what
+the INSERT will hand out. It now also stands during the round, which the
+earlier note deliberately avoided; the trade is that a number nobody saw
+before the end is a number nobody writes down.
 
 ---
 
