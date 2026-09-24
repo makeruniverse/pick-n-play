@@ -33,6 +33,22 @@ LIMITS = {
 }
 
 
+# Servo firmware overload guard: above Overload_Torque (80 %) for longer
+# than Protection_Time, the servo drops to Protective_Torque (20 %). Factory
+# time is 2 s -- long enough to grind into the table. Normal play peaks at
+# 77 % only for short bursts (21.9.), pressing into the table holds 100 %.
+# Gripper keeps LeRobot's own settings, wrist_roll is left alone for now.
+GUARD      = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex")
+GUARD_TIME = 50   # x 10 ms = 0.5 s
+
+
+def guard(follow):
+    """Written on every start, so a swapped servo gets it too (EEPROM)."""
+    with follow.bus.torque_disabled():
+        for m in GUARD:
+            follow.bus.write("Protection_Time", m, GUARD_TIME)
+
+
 def clamp(action):
     """{"elbow_flex.pos": v, ...} -> same dict, every known joint inside its band."""
     out = {}
@@ -74,6 +90,7 @@ def main(watch=False):
     lead = leader()
     follow = SO101Follower(SO101FollowerConfig(port=FOLLOWER, id="my_follower_arm"))
     follow.connect()
+    guard(follow)
     notify("READY=1")
     seen, n = {}, 0
     try:
