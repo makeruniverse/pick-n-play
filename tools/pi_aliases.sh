@@ -216,7 +216,7 @@ hardware
 All four buttons held for 5 s restart the game. In expo mode that's the way
 back from a stuck screen, without a keyboard.
 
-MLG mode: blue + yellow held for 2 s, from any scene (a running round is
+MLG mode: blue + yellow held for 4 s, from any scene (a running round is
 dropped). Red ends it. Green = air horn, blue/yellow = more text.
   pnp-mlg-video URL   clip for it (yt-dlp + ffmpeg), otherwise synth only
 EOF

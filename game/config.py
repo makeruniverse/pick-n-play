@@ -358,7 +358,7 @@ MARK_WIDTH    = 5         # line width of the detection window and of the
 BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blue, yellow, red, green
 HOLD_QUIT     = 5.0    # all four buttons held this long -> game exits (expo: systemd restarts it)
 MLG_CHORD     = {"up", "down"}   # blue + yellow held MLG_HOLD s -> MLG mode (mlg.py), red ends it
-MLG_HOLD      = 2.0
+MLG_HOLD      = 4.0
 CAM_STALE     = 5.0    # no new camera frame for this long -> stop the watchdog, systemd restarts
 # Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
 BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
