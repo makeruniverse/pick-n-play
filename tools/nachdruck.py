@@ -1,6 +1,6 @@
 """Reprint plate 2026-09-28: six treats, one filament each plus marker cells.
 
-    uv run tools/nachdruck.py build/voxel/nachdruck_h2c.3mf h2c      # or x1c_1, x1c_2
+    uv run tools/nachdruck.py build/voxel/nachdruck_h2c.3mf h2c      # or x1c_pink, x1c_red
 
 One 3MF per printer, extruders by AMS slot (PRINTERS). Writes a preview PNG next to it."""
 import json, sys, zipfile
@@ -34,23 +34,23 @@ def cake_big(frost, sponge, jam):
                  (disc(5.2), np.where(drip, frost, sponge)), (disc(5.2), frost),
                  *[(disc(3.6), f) for f in (sponge, jam, sponge, frost)])
 
-# name -> (plan, body, marker cells, id, printer). One body colour each. A
-# spool can only sit in one printer and there is one black spool, so black
-# lives on one X1C and the other two mark in white (there are two whites).
-# Macaron and torte share Hot Pink: one colour less, and together they fill
-# the H2C about as long as each X1C runs.
+# name -> (plan, body, marker cells, id, plate). One body colour each. A
+# spool can only sit in one printer and there is one black spool. Plates with
+# two colours go to the X1Cs; the one with more goes to the H2C, whose tool
+# changer swaps without purging. Macaron and torte share Hot Pink: one plate,
+# two colours.
 SET = {
-    "macaron":      (lambda: macaron("a", "a"), "hot_pink", "ivory", 0, "h2c"),
-    "torte_gross":  (lambda: cake_big("a", "a", "a"), "hot_pink", "ivory", 8, "h2c"),
-    "cup_mini":     (v.TREATS["cup_mini"], "yellow", "charcoal", 10, "x1c_1"),
-    "riegel_gross": (lambda: bar_big("a", "a"), "blue", "charcoal", 7, "x1c_1"),
-    "cup_vanille":  (v.TREATS["cup_vanille"], "scarlet", "ivory", 5, "x1c_2"),
-    "bonbon":       (lambda: bonbon("a"), "grass_green", "ivory", 4, "x1c_2"),
+    "macaron":      (lambda: macaron("a", "a"), "hot_pink", "ivory", 0, "x1c_pink"),
+    "torte_gross":  (lambda: cake_big("a", "a", "a"), "hot_pink", "ivory", 8, "x1c_pink"),
+    "cup_vanille":  (v.TREATS["cup_vanille"], "scarlet", "ivory", 5, "x1c_red"),
+    "cup_mini":     (v.TREATS["cup_mini"], "yellow", "charcoal", 10, "h2c"),
+    "riegel_gross": (lambda: bar_big("a", "a"), "blue", "charcoal", 7, "h2c"),
+    "bonbon":       (lambda: bonbon("a"), "grass_green", "charcoal", 4, "h2c"),
 }
-# AMS slot order per printer
-PRINTERS = {"h2c": ["hot_pink", "ivory"],
-            "x1c_1": ["charcoal", "yellow", "blue"],
-            "x1c_2": ["ivory", "scarlet", "grass_green"]}
+# AMS slot order per plate
+PRINTERS = {"x1c_pink": ["hot_pink", "ivory"],
+            "x1c_red": ["scarlet", "ivory"],
+            "h2c": ["charcoal", "yellow", "blue", "grass_green"]}
 
 out, printer = sys.argv[1], sys.argv[2]
 EXT = PRINTERS[printer]
@@ -136,3 +136,12 @@ pygame.image.save(sheet, out.replace(".3mf", ".png"))
 for name, g in grids.items():
     z = np.argwhere(g == plate[name][2])[:, 2] * FINE
     print(f"{name:12} marker cells span {z.max() - z.min():.0f} mm in height")
+
+# Colour changes: layers (0.2 mm) that need more than one filament, and how
+# many filaments each of those has. The slicer changes k-1 times per layer.
+layers = {}
+for g in grids.values():
+    for z in range(g.shape[2]):
+        layers.setdefault(z, set()).update(set(g[:, :, z][g[:, :, z] != ""]))
+changes = sum(max(len(f) - 1, 0) for f in layers.values()) * round(FINE / 0.2)
+print(f"{printer}: {changes} filament changes at 0.2 mm layers")
