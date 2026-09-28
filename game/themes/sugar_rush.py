@@ -520,13 +520,12 @@ SPRITES = {
     "petitfour_yellow": ("petitfour", _solid(YELLOW)),
     "cupcake_green":    ("cupcake",   _solid(GRASS)),
     "cake_blue":        ("cake",      _solid(BLUE)),
-    # The reprint of 2026-09-28, same rule. Black is drawn a few steps lighter
-    # than the spool, or the bar would vanish into BG.
+    # The reprint of 2026-09-28 (tools/nachdruck.py), same rule.
     "bonbon_green":     ("bonbon",    _solid(GRASS)),
     "cupcake_yellow":   ("cupcake",   _solid(YELLOW)),
-    "bar_black":        ("bar",       _solid((72, 72, 80))),
-    "cupcake_white":    ("cupcake",   _solid(IVORY)),
-    "cake_pink":        ("cake",      _solid(SAKURA)),
+    "bar_blue":         ("bar",       _solid(BLUE)),
+    "cupcake_red":      ("cupcake",   _solid(SCARLET)),
+    "cake_hot":         ("cake",      _solid(HOT_PINK)),
     "cupcake_pink":   ("cupcake",   dict(a=SAKURA, c=ICE, d=(118, 176, 190))),
     "cupcake_lemon":  ("cupcake",   dict(a=LEMON, c=SAKURA, d=(196, 130, 168))),
     "cupcake_mint":   ("cupcake",   dict(a=APPLE, c=LILAC, d=(132, 108, 176))),
@@ -571,9 +570,9 @@ EXTRAS = {
 # Everything printed solid (one filament plus marker cells), in the same
 # order as VALUES, cheap and light first. Shape and colour together tell the
 # treats apart: a solid object has no icing or filling left to do it. Where a
-# colour repeats (yellow, green) the shape differs. Donuts stay missing on
+# colour repeats (yellow, green, red, blue, hot pink) the shape differs. Donuts stay missing on
 # purpose: the hole cuts through the marker.
 SPRITE = {4: "bonbon_green",     1: "bar_red",        0: "macaron_hot",
           10: "cupcake_yellow",  6: "slice_purple",   2: "petitfour_yellow",
-          11: "cupcake_green",   7: "bar_black",      5: "cupcake_white",
-          9: "cake_blue",        8: "cake_pink"}
+          11: "cupcake_green",   7: "bar_blue",       5: "cupcake_red",
+          9: "cake_blue",        8: "cake_hot"}

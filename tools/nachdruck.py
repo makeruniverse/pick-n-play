@@ -1,8 +1,8 @@
 """Reprint plate 2026-09-28: six treats, one filament each plus marker cells.
 
-    uv run tools/nachdruck.py build/voxel/nachdruck_2026-09-28.3mf
+    uv run tools/nachdruck.py build/voxel/nachdruck_h2c.3mf h2c      # or x1c_1, x1c_2
 
-One 3MF, one plate, extruders by AMS slot (EXT). Writes a preview PNG next to it."""
+One 3MF per printer, extruders by AMS slot (PRINTERS). Writes a preview PNG next to it."""
 import json, sys, zipfile
 import numpy as np
 sys.path.insert(0, "tools")
@@ -34,19 +34,30 @@ def cake_big(frost, sponge, jam):
                  (disc(5.2), np.where(drip, frost, sponge)), (disc(5.2), frost),
                  *[(disc(3.6), f) for f in (sponge, jam, sponge, frost)])
 
-# name -> (base plan, body, marker cells, marker id, plate xy)
-SET = {   # name -> (plan, body, marker cells, id, plate xy); one body colour each
-    "macaron":      (lambda: macaron("a", "a"), "hot_pink", "ivory", 0, (50, 60)),
-    "cup_mini":     (v.TREATS["cup_mini"], "yellow", "charcoal", 10, (115, 60)),
-    "bonbon":       (lambda: bonbon("a"), "grass_green", "charcoal", 4, (195, 60)),
-    "cup_vanille":  (v.TREATS["cup_vanille"], "ivory", "charcoal", 5, (50, 140)),
-    "torte_gross":  (lambda: cake_big("a", "a", "a"), "sakura", "charcoal", 8, (125, 140)),
-    "riegel_gross": (lambda: bar_big("a", "a"), "charcoal", "ivory", 7, (125, 215)),
+# name -> (plan, body, marker cells, id, printer). One body colour each. A
+# spool can only sit in one printer and there is one black spool, so black
+# lives on one X1C and the other two mark in white (there are two whites).
+# Macaron and torte share Hot Pink: one colour less, and together they fill
+# the H2C about as long as each X1C runs.
+SET = {
+    "macaron":      (lambda: macaron("a", "a"), "hot_pink", "ivory", 0, "h2c"),
+    "torte_gross":  (lambda: cake_big("a", "a", "a"), "hot_pink", "ivory", 8, "h2c"),
+    "cup_mini":     (v.TREATS["cup_mini"], "yellow", "charcoal", 10, "x1c_1"),
+    "riegel_gross": (lambda: bar_big("a", "a"), "blue", "charcoal", 7, "x1c_1"),
+    "cup_vanille":  (v.TREATS["cup_vanille"], "scarlet", "ivory", 5, "x1c_2"),
+    "bonbon":       (lambda: bonbon("a"), "grass_green", "ivory", 4, "x1c_2"),
 }
-EXT = ["hot_pink", "sakura", "ivory", "charcoal", "yellow", "grass_green"]      # AMS slot order
+# AMS slot order per printer
+PRINTERS = {"h2c": ["hot_pink", "ivory"],
+            "x1c_1": ["charcoal", "yellow", "blue"],
+            "x1c_2": ["ivory", "scarlet", "grass_green"]}
 
+out, printer = sys.argv[1], sys.argv[2]
+EXT = PRINTERS[printer]
+plate = {k: t for k, t in SET.items() if t[4] == printer}
 objs, items, cfg, oid, grids = [], [], [], 0, {}
-for name, (plan, body, cell, mid, (px, py)) in SET.items():
+for i, (name, (plan, body, cell, mid, _)) in enumerate(plate.items()):
+    px, py = 128 + (i - (len(plate) - 1) / 2) * 90, 128     # one row, 90 mm apart
     v.TREATS[name] = lambda plan=plan, body=body: solid(plan(), body)
     # Search region: the marker must stay on one level, not spill down a cone or
     # off the top tier onto the ledge 20 mm below.
@@ -96,7 +107,6 @@ settings = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n' + "".join(cfg)
 project = json.dumps({"filament_colour": [hexcol(f) for f in EXT],
                       "filament_settings_id": ["Bambu PLA Matte @BBL X1C"] * len(EXT),
                       "filament_type": ["PLA"] * len(EXT), "version": "02.07.01.62"}, indent=4)
-out = sys.argv[1]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
     z.writestr("[Content_Types].xml",
                '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -124,5 +134,5 @@ pygame.image.save(sheet, out.replace(".3mf", ".png"))
 # Height spread of the marker cells. The cupcake cones reach 10-15 mm, which
 # the 2026-09-11 simulation allows in the tray's middle (todo.md, cone limit).
 for name, g in grids.items():
-    z = np.argwhere(g == SET[name][2])[:, 2] * FINE
+    z = np.argwhere(g == plate[name][2])[:, 2] * FINE
     print(f"{name:12} marker cells span {z.max() - z.min():.0f} mm in height")
