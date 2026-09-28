@@ -25,12 +25,12 @@ healthy() {
 }
 
 main() {
-    # Corrupt repo (plug pulled mid-write): fresh clone, keep venv and scores
+    # Corrupt repo (plug pulled mid-write): fresh clone, keep venv, scores, LED zones
     if ! g fsck --connectivity-only --no-progress >/dev/null 2>&1; then
         echo "repo broken, re-cloning"
         rm -rf $R.new
         as_ubuntu timeout 300 git clone -q -b expo $URL $R.new || return 0
-        mv $R/.venv $R/scores.db* $R.new/ 2>/dev/null
+        mv $R/.venv $R/scores.db* $R/led_zones.json $R.new/ 2>/dev/null
         mv $R $R.broken.$(date +%s) && mv $R.new $R
         systemctl restart pnp-expo teleop
         return 0

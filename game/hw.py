@@ -458,13 +458,16 @@ class Leds:
         self.th.start()
 
     def show(self, state, k=1.0):
+        """state: a game state, or an (n, 3) RGB array shown as is
+        (tools/led_zones.py)."""
         self.slot = (state, k)    # assigning a tuple is atomic, no lock needed
 
     def _loop(self):
         t0 = time.monotonic()
         while self.run:
             state, k = self.slot
-            self._write(led_frame(state, k, time.monotonic() - t0, self.n))
+            self._write(state if isinstance(state, np.ndarray)
+                        else led_frame(state, k, time.monotonic() - t0, self.n))
             time.sleep(1 / LED_FPS)   # ponytail: plus write time (~15 ms), so ~20 frames/s
 
     def _write(self, rgb):

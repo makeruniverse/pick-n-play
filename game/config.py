@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 import pygame
@@ -381,11 +382,18 @@ LED_STRIPES = 24      # candy-cane stripes across the full length, density-indep
 LED_RED     = (255, 0, 20)
 LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarting it
 # Zones: where on the one long strip the side walls / top edges and the top
-# center sit. Spans are (first, last) LED indices, inclusive, either
+# center sit. Spans are [first, last] LED indices, inclusive, either
 # direction. During a round every side span is its own time bar, draining
 # toward `first` (a wall from the floor up: first = bottom LED). The center
 # plays the candy cane instead. LEDs in no span show the old whole-strip
-# pattern -- both lists empty = the strip as before. Measured on the
-# cabinet with pnp-led FIRST LAST, checked with pnp-leds.
-LED_SIDES   = []
-LED_CENTER  = []
+# pattern -- no file = the strip as before.
+# Measured on the cabinet with pnp-led, which writes led_zones.json. That
+# file belongs to the machine like scores.db: untracked, so the auto-update
+# never overwrites it. Read at game start.
+LED_ZONES   = os.path.join(os.path.dirname(__file__), "..", "led_zones.json")
+try:
+    with open(LED_ZONES) as _f:
+        _z = json.load(_f)
+    LED_SIDES, LED_CENTER = _z["side"], _z["center"]
+except FileNotFoundError:
+    LED_SIDES, LED_CENTER = [], []

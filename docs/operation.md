@@ -262,12 +262,11 @@ noise, not a defect. Colors wrong (red and green swapped)? `LED_ORDER` in
 `config.py` — WS2812B is `GRB`, WS2811 strips (12/24 V) are often `RGB`. Only
 part of it lights up? `LED_COUNT` or `PNP_LED_COUNT`.
 
-Which LEDs are side walls / top edges and which are the top center
-(game stopped): `pnp-led` lights a ruler (blue every 100, red every 50),
-`pnp-led 300 450` lights exactly that span (first green, last red). Write
-the spans into `LED_SIDES` / `LED_CENTER` in `game/config.py`, commit to
-`expo` (the auto-update overwrites edits made on the Pi), check with
-`pnp-leds`.
+Which LEDs are side walls / top edges and which are the top center:
+`pnp-led` (game stopped), keys are listed on screen. Every change is saved
+to `led_zones.json` in the repo root right away -- untracked like
+`scores.db`, so the auto-update leaves it alone. The game reads it at start:
+`pnp-expo` afterwards.
 
 Check whether a button registers, without starting the game:
 
