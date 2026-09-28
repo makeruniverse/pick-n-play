@@ -1,18 +1,24 @@
 """pnp-led: mark which LED is side and which is top center, saved right away.
 
-  s ... s     side span: s on its first LED, walk, s on its last LED.
-              The time bar drains toward the first one: start a wall at the floor
+  s ... s     side span: s on its first LED, walk, s on its last LED
   c ... c     top-center span, same way
-  Esc         drop the span you started      u   undo the last saved span
+  Esc         drop the span you started
 
   <- ->  1 LED    up down  10 LEDs    PgUp PgDn  100 LEDs    g  go to LED number
-  t      preview idle / game / hurry / score with these zones      q  quit
 
-  On the strip: white = cursor, green = side, blue = center, faint red = every
-  50th LED. The span you're marking right now is lit brighter.
+  Cursor on a saved span:   r  flip its direction    x  delete it
+  u  undo the last saved span      q  quit (everything is saved already)
+
+On the strip, live:
+  white          the cursor              faint red   every 50th LED
+  marching dash  the span you're marking, running from its first LED to the cursor
+  pink bar       a side span as in a round: it drains toward its first LED,
+                 every 4 s. Draining the wrong way? Cursor on it, r
+  pink/white     a center span, candy cane as in a round
 """
 import json
 import os
+import select
 import sys
 import termios
 import time
@@ -26,7 +32,8 @@ from hw import Leds, led_frame, led_span                                  # noqa
 
 MOVES = {"\x1b[C": 1, "\x1b[D": -1, "\x1b[A": 10, "\x1b[B": -10,
          "\x1b[5~": 100, "\x1b[6~": -100}
-COLORS = {"side": (0, 90, 0), "center": (0, 0, 120)}
+COLORS = {"side": (0, 255, 0), "center": (0, 80, 255)}   # span being marked
+DRAIN = 4.0     # s for one side bar to run empty in the live view
 
 
 def tokens(data):
@@ -40,29 +47,28 @@ def tokens(data):
     return out
 
 
-def picture(n, zones, cur, open_):
-    rgb = np.full((n, 3), 6)
+def picture(n, zones, cur, open_, t):
+    """The strip while marking: saved spans play what they'll show in a round."""
+    rgb = np.full((n, 3), 6.0)
     rgb[::50] = (70, 0, 0)
-    for name, spans in zones.items():
+    live = led_frame("game", 1 - t % DRAIN / DRAIN, t, n, zones["side"], zones["center"])
+    for spans in zones.values():
         for a, b in spans:
-            rgb[led_span(a, b, n)] = COLORS[name]
+            idx = led_span(a, b, n)
+            rgb[idx] = live[idx]
     if open_:
         name, start = open_
-        rgb[led_span(start, cur, n)] = np.multiply(COLORS[name], 2.5)
+        idx = led_span(start, cur, n)
+        on = ((np.arange(len(idx)) - int(t * 15)) // 3) % 2 == 0    # dashes march start -> cursor
+        rgb[idx] = np.where(on[:, None], COLORS[name], np.multiply(COLORS[name], 0.15))
     rgb[cur] = 255
     return rgb
 
 
-def preview(leds, n, zones):
-    t0 = time.monotonic()
-    for state in ("idle", "game", "hurry", "score"):
-        print(f"\r\x1b[K  preview: {state}", end="", flush=True)
-        end = time.monotonic() + 4
-        while (now := time.monotonic()) < end:
-            # game: the whole round squeezed into 4 s, so the bars visibly drain
-            leds.show(led_frame(state, (end - now) / 4, now - t0, n,
-                                zones["side"], zones["center"]))
-            time.sleep(1 / LED_FPS)
+def under(zones, cur):
+    """(zone, index) of the saved span the cursor sits on, or None."""
+    return next(((name, i) for name, spans in zones.items()
+                 for i, (a, b) in enumerate(spans) if min(a, b) <= cur <= max(a, b)), None)
 
 
 def save(zones):
@@ -70,6 +76,18 @@ def save(zones):
     with open(LED_ZONES + ".tmp", "w") as f:
         json.dump(zones, f)
     os.replace(LED_ZONES + ".tmp", LED_ZONES)
+
+
+def status(zones, cur, open_):
+    if open_:
+        name, start = open_
+        return (f"marking {name} {start} -> {cur}   {name[0]} = ends here, "
+                f"{'c' if name == 'side' else 's'} = make it {'center' if name == 'side' else 'side'}, Esc = drop")
+    on = under(zones, cur)
+    if on:
+        a, b = zones[on[0]][on[1]]
+        return f"on {on[0]} {a} -> {b}   r = flip, x = delete   (s / c starts a new span here)"
+    return "s = side starts here   c = center starts here"
 
 
 def main():
@@ -82,15 +100,20 @@ def main():
     leds = Leds()
     print(__doc__)
     say = lambda msg: print(f"\r\x1b[K  {msg}")   # a line that stays
+    shown, t0 = None, time.monotonic()
     try:
         tty.setcbreak(fd)     # keys without Enter; Ctrl-C still works
         while True:
-            leds.show(picture(n, zones, cur, open_))
+            leds.show(picture(n, zones, cur, open_, time.monotonic() - t0))
             # One short line, rewritten in place -- if it wrapped, \r would
             # only go back to the start of the last row.
-            nxt = (f"{open_[0]} from {open_[1]}: {open_[0][0]} = ends here, Esc = drop"
-                   if open_ else "s = side starts here, c = center starts here")
-            print(f"\r\x1b[K  LED {cur:>4}   {nxt}", end="", flush=True)
+            line = f"LED {cur:>4}   {status(zones, cur, open_)}"
+            if line != shown:
+                print(f"\r\x1b[K  {line}", end="", flush=True)
+                shown = line
+            if not select.select([fd], [], [], 1 / LED_FPS)[0]:
+                continue      # no key: next frame of the animation
+            shown = None
             for k in tokens(os.read(fd, 64).decode(errors="ignore")):
                 if isinstance(k, int):
                     cur = min(max(cur + k, 0), n - 1)
@@ -100,13 +123,23 @@ def main():
                         zones[name].append([open_[1], cur])
                         done.append(name)
                         save(zones)
-                        say(f"saved: {name} {open_[1]} -> {cur}   "
-                            f"({len(zones['side'])} side, {len(zones['center'])} center)")
+                        say(f"saved: {name} {open_[1]} -> {cur}")
                         open_ = None
                     else:     # new span, or the other key: switch type, keep the start
                         open_ = (name, open_[1] if open_ else cur)
                 elif k == "\x1b":
                     open_ = None
+                elif k in ("r", "x") and under(zones, cur):
+                    name, i = under(zones, cur)
+                    a, b = zones[name][i]
+                    if k == "r":
+                        zones[name][i] = [b, a]
+                        say(f"flipped: {name} {b} -> {a}")
+                    else:
+                        del zones[name][i]
+                        done.remove(name)
+                        say(f"deleted: {name} {a} -> {b}")
+                    save(zones)
                 elif k == "u":
                     if done:
                         name = done.pop()
@@ -122,9 +155,6 @@ def main():
                     except ValueError:
                         pass
                     tty.setcbreak(fd)
-                elif k == "t":
-                    preview(leds, n, zones)
-                    say("preview done")
                 elif k == "q":
                     return
     except KeyboardInterrupt:
