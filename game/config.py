@@ -341,6 +341,10 @@ CAM_SIZE      = (1280, 720)
 # twice the pixels it had at 0. Set on every start, because the camera keeps
 # whatever value the last program left behind.
 CAM_ZOOM      = 40
+# The top-down camera hangs upside down since the arm repair (2026-09-28),
+# the camera has no V4L2 flip, so the grabber turns the frame. TRAY_ROI is
+# in the turned (upright) image, as it was picked.
+CAM_FLIP      = not MAC
 # 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
 # 1.8 times the area of the earlier 544 x 306: the player steers the arm by
 # these images, so they get priority. The instruction sits above, the bar

@@ -82,7 +82,7 @@ class Camera:
     detection visibly lags behind.
     """
 
-    def __init__(self, index, size=CAM_SIZE, warmup=3.0, zoom=None):
+    def __init__(self, index, size=CAM_SIZE, warmup=3.0, zoom=None, flip=False):
         self.cap = cv2.VideoCapture(index)
         if not self.cap.isOpened():
             # Fail loudly, don't silently fall back to a stand-in: made-up
@@ -100,6 +100,7 @@ class Camera:
         self.frame = None
         self.seq = 0          # counts new frames so CameraView can cache
         self.t = time.monotonic()   # last new frame, see age()
+        self.flip = flip      # upside-down mount: turned here, so pane and detector agree
         self.running = True
         threading.Thread(target=self._loop, daemon=True).start()
         # isOpened() only says the device let itself be opened -- whether
@@ -125,6 +126,8 @@ class Camera:
                 # stays as-is, hysteresis runs out, tray_sum() goes to 0.
                 time.sleep(0.1)
                 continue
+            if self.flip:    # ~1 ms at 720p, in this thread, outside the GIL
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
             with self.lock:
                 self.frame = frame
                 self.seq += 1
