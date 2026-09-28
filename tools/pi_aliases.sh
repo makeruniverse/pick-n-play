@@ -96,40 +96,53 @@ alias pnp-expo-stop='sudo systemctl stop pnp-expo'
 alias pnp-expo-log='journalctl -u pnp-expo -u teleop -u pnp-update -f'
 alias pnp-expo-on='sudo systemctl enable --now pnp-expo pnp-update.timer'     # autostart
 alias pnp-expo-off='sudo systemctl disable --now pnp-expo pnp-update.timer'   # back to pnp-start
-alias pnp-update-now='sudo systemctl start pnp-update'
+# --no-block: a plain start waits for idle + the 2 min health check (Ctrl-C
+# every time, 28.9.). Shows up to 15 s of the updater, the rest is in pnp-expo-log.
+unalias pnp-update-now 2>/dev/null
+pnp-update-now() {
+    local t=$(date '+%F %T')
+    sudo systemctl start --no-block pnp-update
+    for _ in $(seq 15); do sleep 1; [ "$(systemctl is-active pnp-update)" = activating ] || break; done
+    journalctl -u pnp-update --since "$t" -o cat
+    echo "HEAD $(git -C $PNP log --oneline -1) -- updater: $(systemctl is-active pnp-update)"
+}
 
 # Teleop by hand instead of the service, e.g. with the geofence on. Stops the
 # service meanwhile, both want the same two serial ports.
-pnp-arm() {
+# The pnp-arm* bodies are ( subshells ) with an EXIT trap: a second Ctrl-C
+# kills python by SIGINT, bash then drops the rest of the function, and a
+# trailing `systemctl start teleop` never ran -- the arm stayed dead (28.9.).
+pnp-arm() (
+    trap 'sudo systemctl start teleop' EXIT
     sudo systemctl stop teleop
-    (cd $PNP && ~/miniforge3/envs/lerobot/bin/python teleop/run.py "$@")
-    sudo systemctl start teleop
-}
+    cd $PNP && ~/miniforge3/envs/lerobot/bin/python teleop/run.py "$@"
+)
 alias pnp-arm-test='pnp-arm --fence'            # play with the geofence on
 alias pnp-arm-limits='pnp-arm --fence --show'   # plus live min/max, table points
 
 # Live bus check: voltage per motor on both buses, DROP when one goes missing.
 # Move the leader and wiggle cables meanwhile. pnp-arm-bus [s], default 60.
-pnp-arm-bus() {
+pnp-arm-bus() (
+    trap 'sudo systemctl start teleop' EXIT
     sudo systemctl stop teleop
     ~/miniforge3/envs/lerobot/bin/python $PNP/tools/scan_motors.py --watch ${1:-60}
-    sudo systemctl start teleop
-}
+)
 
 # LeRobot calibration: pnp-arm-calibrate [follower|leader], default both.
 # Teleop has to be off meanwhile -- a tty opens twice without complaint, and
 # two processes on one bus garble each other's packets (28.9.). Asks on
-# stdin: type c + ENTER to recalibrate over the existing file.
-pnp-arm-calibrate() {
+# stdin: type c + ENTER to recalibrate over the existing file. The leader's
+# gripper direction is set in teleop/run.py, don't edit drive_mode in the json.
+pnp-arm-calibrate() (
     local py=~/miniforge3/envs/lerobot/bin s=/dev/serial/by-id/usb-1a86_USB_Single_Serial_
+    trap 'sudo systemctl start teleop' EXIT
     sudo systemctl stop teleop
     cp -a ~/.cache/huggingface/lerobot/calibration ~/calibration.bak-$(date +%Y%m%d-%H%M)
     [ "${1:-follower}" = leader ] || $py/lerobot-calibrate --robot.type=so101_follower \
         --robot.port=${s}5970073917-if00 --robot.id=my_follower_arm
     [ "${1:-leader}" = follower ] || $py/lerobot-calibrate --teleop.type=so101_leader \
         --teleop.port=${s}5970072402-if00 --teleop.id=my_leader_arm
-    sudo systemctl start teleop
-}
+)
 
 pnp-arm-help() {
     cat <<'EOF'
@@ -208,7 +221,7 @@ expo mode (systemd: game, teleop, auto-update from branch expo)
   pnp-expo         start the game service    pnp-expo-stop   stop it
   pnp-expo-on      autostart + auto-update   pnp-expo-off    both off again
   pnp-expo-log     follow game, teleop and updater
-  pnp-update-now   run the updater now (waits for the round to end)
+  pnp-update-now   run the updater in the background, 15 s of its log
   pnp-update       plain git pull, for a Pi without expo mode
 
 hardware

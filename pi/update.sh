@@ -19,6 +19,9 @@ changed() { ! g diff --quiet "$old" "$new" -- "$@"; }
 uv_sync() { as_ubuntu timeout 600 /home/ubuntu/.local/bin/uv --directory $R sync --extra pi; }
 healthy() {
     for u in $units; do
+        # pnp-arm* stops teleop on purpose and runs run.py by hand (28.9.):
+        # not the update's fault, and counting it would mark a good commit bad
+        [ $u = teleop ] && pgrep -f "[t]eleop/run.py" > /dev/null && continue
         systemctl is-active -q $u || return 1
         [ "$(systemctl show -p NRestarts --value $u)" = "${n0[$u]}" ] || return 1
     done
