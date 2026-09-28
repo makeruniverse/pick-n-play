@@ -313,9 +313,10 @@ CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
 # which one the kernel finds first at boot (happened 2026-09-16). Unplugging
 # a camera into another socket swaps the panes. index0 is the image node,
 # index1 is metadata and delivers no image. OpenCV 5 can't open V4L2 by
-# path, hence the symlink resolved to the index.
-CAM_PORTS     = ("platform-xhci-hcd.0-usb-0:1:1.0",   # arm
-                 "platform-xhci-hcd.1-usb-0:1:1.0")   # top-down
+# path, hence the symlink resolved to the index. Sockets swapped with the
+# arm repair (2026-09-28), cables stay that way.
+CAM_PORTS     = ("platform-xhci-hcd.1-usb-0:1:1.0",   # arm
+                 "platform-xhci-hcd.0-usb-0:1:1.0")   # top-down
 # A camera not in its socket (reassembly, 2026-09-28) takes whichever camera
 # is left over instead of crashing the import: panes may swap, the game runs.
 def _cam_indexes(by="/dev/v4l/by-path/"):
