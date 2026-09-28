@@ -14,7 +14,7 @@ from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ,
                     TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
                     LED_STRIPES, LED_A, LED_B, LED_RED, LED_SIDES,
-                    LED_CENTER)
+                    LED_CENTER, LED_ROPE, LED_SPARK, LED_EMBER, LED_WORK)
 
 
 def notify(msg):
@@ -391,19 +391,43 @@ def led_span(a, b, n):
     return idx[(idx >= 0) & (idx < n)]
 
 
+def led_fuse(k, t, n, hurry):
+    """The time left as a burning fuse: rope from the first LED up to k * n,
+    a flickering spark at the tip, embers fading behind it, burnt = dark.
+    In the final seconds the burnt part flashes red at 2 Hz -- the booth
+    team's signal, in sync with the red screen."""
+    i = np.arange(n)
+    d = i - k * n                       # < 0 rope, 0 tip, > 0 burnt
+    rng = np.random.default_rng(int(t * 30))   # new flicker every frame, still a pure function of t
+    rgb = np.zeros((n, 3))
+    rope = d < 0
+    rgb[rope] = np.multiply(LED_ROPE, (0.6 + 0.4 * ((i[rope] // 2) % 2))[:, None])  # braided
+    if hurry and int(t * 4) % 2 == 0:
+        rgb[d > 0] = LED_RED
+    ember = (d >= 0) & (d < 12)
+    fade = (1 - d[ember] / 12) ** 2 * rng.uniform(0.5, 1, ember.sum())
+    rgb[ember] = np.multiply(LED_EMBER, fade[:, None])
+    tip = np.abs(d) < 1.5
+    rgb[tip] = np.multiply(LED_SPARK, rng.uniform(0.6, 1, (tip.sum(), 1)))
+    fly = ember & (rng.random(n) < 0.15)   # single sparks jumping off
+    rgb[fly] = LED_SPARK
+    return rgb
+
+
 def led_pattern(state, k, t, n, w):
     """n LEDs of one pattern as (n, 3) RGB, stripes w LEDs wide.
 
     idle   candy cane, runs slowly -- attract mode, visible from 8 m
-    game   time left as a bar: k = fraction of the round still remaining
-    hurry  final seconds, red at 2 Hz, in sync with the red screen
+    game   time left as a burning fuse: k = fraction of the round still remaining
+    hurry  final seconds: the fuse, burnt part flashing red
     score  same candy cane, four times as fast
+    work   full white, the top center during a round
     """
+    if state in ("game", "hurry"):
+        return led_fuse(k, t, n, state == "hurry")
+    if state == "work":
+        return np.tile(LED_WORK, (n, 1))
     i = np.arange(n)
-    if state == "game":
-        return np.where((i < k * n)[:, None], LED_A, np.multiply(LED_A, 0.08))
-    if state == "hurry":
-        return np.tile(LED_RED if int(t * 4) % 2 == 0 else (0, 0, 0), (n, 1))
     shift = int(t * (4 if state == "score" else 1) * 2 * w)   # two stripes per second
     return np.where((((i + shift) // w) % 2 == 0)[:, None], LED_A, LED_B)
 
@@ -412,13 +436,14 @@ def led_frame(state, k, t, n, sides=LED_SIDES, center=LED_CENTER):
     """One frame of the strip as (n, 3) RGB. Pure function of state and time.
 
     Whole strip first, then every zone span over it with its own pattern:
-    a side span is a bar of its own, the center shows the candy cane while
-    the sides count down. Stripe width stays the whole-strip one, so a
+    a side span is a fuse of its own, the center lights the playfield while
+    the sides burn down. Stripe width stays the whole-strip one, so a
     short span doesn't get finer stripes.
     """
     w = max(1, n // LED_STRIPES)
     out = led_pattern(state, k, t, n, w).astype(float)
-    for spans, st in ((sides, state), (center, "idle" if state == "game" else state)):
+    play = state in ("game", "hurry")
+    for spans, st in ((sides, state), (center, "work" if play else state)):
         for a, b in spans:
             idx = led_span(a, b, n)
             out[idx] = led_pattern(st, k, t, len(idx), w)
@@ -585,16 +610,22 @@ if __name__ == "__main__":
     g, r, b = (enc[len(RESET) + 8 * j:len(RESET) + 8 * j + 8] for j in range(3))
     assert g == bytes([BIT0] * 7 + [BIT1]), "G not first, or not MSB first"
     assert r == bytes([BIT1] + [BIT0] * 7) and b == bytes([BIT0] * 8)
-    # Time-left bar: half a round = half the strip lit
+    # Fuse: half a round = rope up to LED 50, spark at the tip, embers
+    # behind it, burnt part dark -- and red flashing in the final seconds
     fr = led_frame("game", 0.5, 0.0, 100, (), ())
-    assert (fr[:50] == LED_A).all() and not (fr[50:] == LED_A).all()
-    # Zones: a side span running 9 -> 0 is its own bar, half lit = 9..5;
-    # the center plays the candy cane instead of the bar; a span past the
-    # end of the strip is cut off, not a crash
-    fr = led_frame("game", 0.5, 0.0, 100, [(9, 0), (95, 130)], [(20, 29)])
-    lit = (fr == LED_A).all(1)
-    assert lit[5:10].all() and not lit[0:5].any(), "side span not its own bar"
-    assert (fr[24:28] == LED_B).all(), "center not candy cane"
+    rope = (fr[:48] <= LED_ROPE).all(1) & (fr[:48] > 0).any(1)
+    assert rope.all(), "rope not up to the tip"
+    assert fr[50].sum() > sum(LED_ROPE) * 2, "no spark at the tip"
+    assert (fr[70:] == 0).all(), "burnt part not dark"
+    fr = led_frame("hurry", 0.5, 0.0, 100, (), ())
+    assert (fr[70:] == LED_RED).all() and (led_frame("hurry", 0.5, 0.25, 100, (), ())[70:] == 0).all()
+    # Zones: a side span running 59 -> 10 is its own fuse, burning toward
+    # 59; the center goes full white; a span past the end of the strip is
+    # cut off, not a crash
+    fr = led_frame("game", 0.5, 0.0, 100, [(59, 10), (95, 130)], [(70, 79)])
+    assert (fr[36:60] > 0).any(1).all() and (fr[10:20] == 0).all(), "side span not its own fuse"
+    assert (fr[70:80] == LED_WORK).all(), "center not full white"
+    assert (led_frame("idle", 0.5, 0.0, 100, [], [(40, 49)])[44:48] == LED_B).all(), "center not candy cane when idle"
     assert fr.shape == (100, 3)
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")

@@ -12,9 +12,9 @@
 On the strip, live:
   white          the cursor              faint red   every 50th LED
   marching dash  the span you're marking, running from its first LED to the cursor
-  pink bar       a side span as in a round: it drains toward its first LED,
-                 every 4 s. Draining the wrong way? Cursor on it, r
-  pink/white     a center span, candy cane as in a round
+  fuse           a side span as in a round: it burns down toward its first LED,
+                 every 4 s. Burning the wrong way? Cursor on it, r
+  full white     a center span, lighting the playfield as in a round
 """
 import json
 import os
@@ -33,7 +33,7 @@ from hw import Leds, led_frame, led_span                                  # noqa
 MOVES = {"\x1b[C": 1, "\x1b[D": -1, "\x1b[A": 10, "\x1b[B": -10,
          "\x1b[5~": 100, "\x1b[6~": -100}
 COLORS = {"side": (0, 255, 0), "center": (0, 80, 255)}   # span being marked
-DRAIN = 4.0     # s for one side bar to run empty in the live view
+DRAIN = 4.0     # s for one side fuse to burn down in the live view
 
 
 def tokens(data):

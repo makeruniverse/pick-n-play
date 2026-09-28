@@ -378,14 +378,19 @@ LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 1.0))
                       # That's a PSU and heat question in one number, not taste.
 LED_FPS     = 30
 LED_STRIPES = 24      # candy-cane stripes across the full length, density-independent
-# LED_A / LED_B (candy cane, bar) come from the theme; red stays HPI:
+# LED_A / LED_B (candy cane) come from the theme; red stays HPI:
 LED_RED     = (255, 0, 20)
 LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarting it
+# During a round: the sides are a burning fuse (rope, spark at the tip, embers
+# behind it), the top center lights the playfield at full white.
+LED_ROPE    = (70, 25, 4)
+LED_SPARK   = (255, 220, 120)
+LED_EMBER   = (255, 70, 0)
+LED_WORK    = (255, 255, 255)
 # Zones: where on the one long strip the side walls / top edges and the top
 # center sit. Spans are [first, last] LED indices, inclusive, either
-# direction. During a round every side span is its own time bar, draining
-# toward `first` (a wall from the floor up: first = bottom LED). The center
-# plays the candy cane instead. LEDs in no span show the old whole-strip
+# direction. During a round every side span is its own fuse, burning down
+# toward `first`. The center lights the playfield at full white instead. LEDs in no span show the old whole-strip
 # pattern -- no file = the strip as before.
 # Measured on the cabinet with pnp-led, which writes led_zones.json. That
 # file belongs to the machine like scores.db: untracked, so the auto-update
