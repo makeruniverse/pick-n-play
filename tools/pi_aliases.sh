@@ -96,6 +96,21 @@ pnp-arm-limits() {
     sudo systemctl start teleop
 }
 
+# LeRobot calibration: pnp-arm-calibrate [follower|leader], default both.
+# Teleop has to be off meanwhile -- a tty opens twice without complaint, and
+# two processes on one bus garble each other's packets (28.9.). Asks on
+# stdin: type c + ENTER to recalibrate over the existing file.
+pnp-arm-calibrate() {
+    local py=~/miniforge3/envs/lerobot/bin s=/dev/serial/by-id/usb-1a86_USB_Single_Serial_
+    sudo systemctl stop teleop
+    cp -a ~/.cache/huggingface/lerobot/calibration ~/calibration.bak-$(date +%Y%m%d-%H%M)
+    [ "${1:-follower}" = leader ] || $py/lerobot-calibrate --robot.type=so101_follower \
+        --robot.port=${s}5970073917-if00 --robot.id=my_follower_arm
+    [ "${1:-leader}" = follower ] || $py/lerobot-calibrate --teleop.type=so101_leader \
+        --teleop.port=${s}5970072402-if00 --teleop.id=my_leader_arm
+    sudo systemctl start teleop
+}
+
 pnp-arm-help() {
     cat <<'EOF'
 Geofencing: teleop/run.py clamps every joint of the leader into its band in
@@ -164,6 +179,7 @@ hardware
   pnp-leds-off     strip dark
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
+  pnp-arm-calibrate [follower|leader]  LeRobot calibration (stops teleop meanwhile)
   pnp-arm-help     how to dial in the geofence
   pnp-wifi-add SSID PASS      fair wifi, with DHCP
 
