@@ -469,16 +469,15 @@ measured 45 seconds straight at 29.4 to 30.3 — with full CRT, both cameras
 for 30 instead of 60, and the numbers behind it, are in the Overview under
 "Measurement on the Pi".
 
-Still open is **cooling**: without a fan the Pi goes over 80°C under load and
-throttles, and throttling costs up to 35% of compute performance. Continuous
-operation over six trade-show hours isn't accepted this way, even though the
-frame rate is.
+**Cooling is in since 2026-09-28.** Official Pi 5 fan on the fan header,
+driven by the kernel's `pwm-fan` curve (off below 50°C, steps at 60/67.5/75).
+6 minutes at 2.4 GHz with game, teleop and four extra busy loops: max 60°C,
+fan ~4250 rpm, `vcgencmd get_throttled` stays `0x0`. Check with
+`cat /sys/class/hwmon/hwmon*/fan1_input` (rpm; 0 below 50°C is normal).
 
 ## Open
 
-1. **Active cooling.** Without a fan, the Pi throttles under double load.
-   First priority — it blocks continuous operation and skews every further
-   measurement.
+1. ~~**Active cooling.**~~ — done 2026-09-28, see above.
 2. Listen to the audio on the machine's speaker. There's only HDMI audio, no
    USB sound card. ALSA underruns occurred during the test run.
 3. ArUco detection rate against the printed markers. During the test run

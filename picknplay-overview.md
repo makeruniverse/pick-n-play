@@ -2006,9 +2006,8 @@ closed cabinet.
 - ~~Whether the Pi has the 3.3 ms to spare for the curvature~~ — done
   2026-09-10. The curvature now lives in the static darkening map and
   costs nothing at runtime
-- **Active cooling.** Without a fan, the Pi throttles under double load
-  and skews any measurement by up to 35%. First order, blocks
-  continuous operation at the trade show
+- ~~**Active cooling.**~~ — done 2026-09-28. Fan on the header, 60°C max
+  at 2.4 GHz under full load, no throttling
 - Whether the GPU shader gets built (curving the image with a sharp
   font). Optional, not blocking
 - ~~Whether `cv2` loads cleanly next to `pygame` on the Pi~~ — done

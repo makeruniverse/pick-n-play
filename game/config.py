@@ -24,9 +24,7 @@ WIDTH, HEIGHT = 1920, 1080
 # text, camera image. The arcade look comes from scanlines, barrel
 # distortion, and hard pixel edges, not from the frame rate. Half the render
 # load is also half the heat, and the Pi throttles together with teleop.
-# ponytail: 20 until the fan is in (21.9.: 85 °C and crashes even at a
-# 1.5 GHz CPU cap), then back to 30.
-FPS = 20
+FPS = 30
 IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "15"))
                      # half of FPS, so the cadence stays even.
                      # The idle screen changes twice a second -- anything
