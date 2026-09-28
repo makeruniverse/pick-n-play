@@ -85,11 +85,11 @@ CHEAT_TAPS = 5
 # and `uv run game/sprites.py` checks that for every file in themes/.
 # New theme: copy sugar_rush.py, the file's header says what to do.
 THEME = os.environ.get("PNP_THEME", "sugar_rush")
-THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT",
-              "LED_A", "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE")
+THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT", "LED_A",
+              "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE", "ARM")
 _theme = importlib.import_module(f"themes.{THEME}")
-(BG, GREY, WHITE, ACCENT, CANDY, TEXT,
- LED_A, LED_B, BASE, SHAPES, SPRITES, EXTRAS, SPRITE) = (getattr(_theme, k) for k in THEME_KEYS)
+(BG, GREY, WHITE, ACCENT, CANDY, TEXT, LED_A,
+ LED_B, BASE, SHAPES, SPRITES, EXTRAS, SPRITE, ARM) = (getattr(_theme, k) for k in THEME_KEYS)
 
 # Language at startup. The idle screen switches it at runtime (▲ twice), and
 # it stays switched until someone switches back -- a school class is one
@@ -168,8 +168,26 @@ DUCK_RELEASE = 0.35   # seconds back to full
 # Exactly one marker per physical cupcake. ArucoDetector.marks is a dict
 # keyed by ID -- two cupcakes with the same marker count once, and that
 # would be a silent scoring bug that looks like a detection problem on show day.
-VALUES = {0: 14, 1: 17, 2: 21, 3: 24, 4: 28,
-          5: 32, 6: 36, 7: 41, 8: 46, 9: 52}
+# Six, not ten. The master print's plate 2 failed on 2026-09-25 with no time
+# for another six-colour run, so the set was reprinted solid: one filament
+# per treat, the marker cells the only second colour. These six exist as
+# physical objects. The other markers are designed and unprinted -- hw.py
+# ignores any ID that isn't listed here, so a stray treat on the tray counts
+# for nothing instead of scoring a phantom.
+#
+# Sorted by printed volume, riegel 26 cm3 up to torte 80 cm3: heavier is
+# dearer is the one rule a visitor learns without reading anything. The two
+# nearest neighbours (stueck 34, petitfour 40) sit one step apart, so the
+# rule never has to explain a gap it can't show.
+#
+# The price steps are the ones decided on 2026-09-11; six of the ten are in
+# use. Which six is not taste. Of all 210 ways to pick six from that ladder,
+# this is one of seven that leave 12 possible targets for an empty tray
+# instead of the median 9 -- and 12 clears the "at least ten" line that
+# balance.py's self-test draws. Its targets also still span 3.80 to 7.70,
+# the same range the ten-treat set spanned, so the story's budget lines
+# need no new numbers.
+VALUES = {1: 14, 0: 17, 6: 21, 2: 24, 11: 46, 9: 52}
 CENTS  = 10        # one VALUES step in cents. Only read by euro().
 
 # ── Game mode ─────────────────────────────────────────────────────────────

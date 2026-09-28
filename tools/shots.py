@@ -106,17 +106,20 @@ def shots(out):
     # The practice treat lands: the scene goes through the same update()
     # as on the cabinet, so pop-up, sprinkles and Bella's line are real.
     done_tut = scenes.GameScene(ctx, 42, "MAX")
-    stub.tray = {5: quad(.45)}
+    stub.tray = {0: quad(.45)}
     done_tut.update(0.3)
     typed(done_tut.dialog)
     game = scenes.GameScene(ctx, 42, "MAX")
     typed(game.dialog)
     order = scenes.GameScene(ctx, 42, "MAX")
     typed(order.dialog, 1)
-    # A round that landed just off: EUR 0.30 short at EUR 6.70, time ran
-    # out. Gives a score with three digits and two stars.
-    done = scenes.Result(target=67, total=64, dist=67, left=0.0,
-                         marks={0: 1, 3: 1, 7: 1, 9: 1})
+    # A round that landed just off: EUR 0.30 short at EUR 6.60, time ran
+    # out. Gives a score with three digits and two stars. Target and total
+    # are both really reachable with the six printed treats -- bar + cake
+    # (1.40 + 5.20) would have been it, macaron + cupcake (1.70 + 4.60) is
+    # what the player picked.
+    done = scenes.Result(target=66, total=63, dist=66, left=0.0,
+                         marks={0: 1, 11: 1})
     score = scenes.DisplayScoreScene(ctx, done, 42)
     typed(score.dialog)
     # The last page: Oskar has said thanks, Bella hands over the number.
@@ -138,14 +141,14 @@ def shots(out):
         ("5-tutorial-done", done_tut,                                 {}),
         ("6-order",        order,                                     {}),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
-                                      marks={5: quad(.45)}, total=32, target=67,
-                                      pop=["cupcake_lemon", "+3,20", 0.4])),
+                                      marks={11: quad(.45)}, total=46, target=66,
+                                      pop=["cupcake_green", "+4,60", 0.4])),
         ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
                                       clock=0.3)),
         ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,
-                                      marks={5: quad(.35), 9: quad(.55)}, total=84)),
-        ("10-game-perfect", game, dict(left=ROUND_SECONDS * 0.3, total=67, hit=1.0,
-                                       marks={5: quad(.35), 2: quad(.55)},
+                                      marks={2: quad(.35), 9: quad(.55)}, total=76)),
+        ("10-game-perfect", game, dict(left=ROUND_SECONDS * 0.3, total=66, hit=1.0,
+                                       marks={1: quad(.35), 9: quad(.55)},
                                        fx=burst(960, 196, 0.25))),
         # done=True: the screenshot shows the final state, not the first
         # tenth of a second of the count-up.

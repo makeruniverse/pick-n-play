@@ -4,6 +4,7 @@ import textwrap
 import pygame
 from functools import lru_cache
 from typing import NamedTuple
+import arm
 from balance import gap, points
 from config import *
 from app import SceneBase
@@ -114,6 +115,16 @@ def stamp(screen, name, scale, x, y):
     screen.blit(s, s.get_rect(center=(round(x), round(y))))
 
 
+def area(name, rect):
+    """A drawn region that isn't one sprite. Draws nothing -- it exists so
+    the layout self-test can intercept it the way it intercepts stamp().
+
+    The demo on the story screen needs this: it is a little scene of its
+    own, and inside it things are supposed to overlap -- the arm holds the
+    treat, the treat lies in the tray. What must not overlap is the demo
+    and Bella, so the demo reports one box and draws inside it directly."""
+
+
 def hop(t, i=0, px=8):
     """Arcade hop: two positions at a 4 Hz beat, no sine. 8-bit sprites had
     no in-between frames, and that's exactly what reads as 8-bit."""
@@ -138,47 +149,89 @@ def parade(screen, t, y, speed, scale=5, gap=160):
         screen.blit(s, s.get_rect(center=(round(x), y + hop(t, i, scale))))
 
 
-# The demo loop on the story screen: a treat hops off the table onto the
-# tray, six frames at 2 Hz. Discrete steps like hop(), because tweened
-# motion next to 8-bit sprites reads as a different game.
+# The demo loop on the story screen: the robot picks a treat off the table
+# and puts it on the tray, over and over.
 #
 # This is what the todo meant by "less text, more pictures": the sentence
 # it replaces did the work for everyone who can already read and none at
 # all for the five-year-olds the practice round exists for.
 #
 # A gripper was tried here on 2026-09-24 and thrown out the same day -- at
-# the treats' 16 x 16 a two-jaw claw reads as a crucifix. It came back on
-# a 32 x 32 grid, which is what it needed all along, and now the picture
-# says both things: where the treat has to end up, and that the robot is
-# what puts it there. The control stays one sentence in the text box.
-DEMO_SCALE = 10             # 160 px a box -- next to Bella at 12x, less vanishes
-ARM_SCALE = 6               # 192 px. See DEMO for why it can't be bigger.
-DEMO_TREAT = LADDER[len(LADDER) // 2]    # not the cheapest: that one is a crumb
-DEMO_TRAY = (1560, 640)
-# One frame is (x, arm y, claw shut, treat y) -- the treat is always under
-# the arm, so they share x. The heights are not free: the parade ends at
-# y 136 and the text box starts at 726, and between them the arm's 192 px
-# and the treat's 160 px have to fit twice over, once hanging and once
-# with the treat on the tray. Held means arm y + 176, exactly half of both
-# boxes, so the two edges touch and the layout self-test stays happy.
-#
-# The sequence is approach, grip, lift, carry, set down, let go. The grip
-# and the release are a pose swap in place: the same frame twice with a
-# different claw is what makes it read as gripping rather than sliding.
-# The last frame stands three times over -- the frame worth reading is the
-# one where the treat lies on the tray.
-DEMO = ((1180, 272, 0, 480), (1180, 304, 1, 480),
-        (1290, 244, 1, 420), (1450, 244, 1, 420),
-        (1560, 304, 1, 480), (1560, 272, 0, 480),
-        (1560, 272, 0, 480), (1560, 272, 0, 480))
+# the treats' 16 x 16 a two-jaw claw reads as a crucifix. It came back on a
+# 32 x 32 grid, and it still only read as a crane hook, because the whole
+# picture slid from frame to frame: a claw that moves its own shoulder is
+# not an arm. Since 2026-09-25 it is the SO-101 itself, drawn from the
+# published CAD and moved by its own kinematics -- arm.py has the details.
+# The scene only says where the machine stands and how big it is.
+ARM_SCALE = 6               # arm.MM is 4, so this is 1.5 px per millimetre
+ARM_BASE = (1130, 690)      # the base pivot: the arm stands on this point
+# Not a taste: arm.TREAT is the widest thing these jaws can close around
+# without cutting into it, and this is that width in sprite pixels.
+DEMO_SCALE = round(arm.TREAT * ARM_SCALE / arm.MM / 16)
+# Second dearest, not the middle of the ladder. arm.TREAT is only a width;
+# what the drawn jaws actually need is a silhouette with a waist, and of the
+# 2026-09-25 set exactly one shape has one -- a wide disc or box is already
+# in the jaw at the height where a cup still tapers. The self-test at the
+# bottom of this file names the frame if a theme picks a shape that clips,
+# so this stays a one-line choice instead of a rule nobody can check.
+DEMO_TREAT = LADDER[-2]
+# The tray stands where the arm lets go, taken from the arm's own key so the
+# two can never drift apart. The tray fills the top 7 of its 16 rows, so a
+# box centred one row below the counter puts the bowl on it.
+TRAY_ROWS = 7
+DEMO_TRAY = (arm.to_screen(ARM_BASE, ARM_SCALE, arm.KEYS[5])[0],
+             ARM_BASE[1] + (8 - TRAY_ROWS) * DEMO_SCALE)
+# The counter all three stand on. Without it the base, the treat and the
+# tray each float at their own height and the picture has no ground.
+COUNTER = tuple(c + (255 - c) // 4 for c in BG)
+
+
+def treat_at(treat):
+    """Screen centre of the treat, for a spot the arm reported."""
+    return arm.to_screen(ARM_BASE, ARM_SCALE, treat)
+
+
+def _box():
+    """One box for the whole demo, because inside it the overlap is the
+    point -- the arm holds the treat, the treat lies in the tray.
+
+    Taken from what actually gets drawn: the arm's surface, the treat at
+    every step of the loop, the tray. Written out by hand it would be four
+    numbers that quietly stop being true the first time the machine moves
+    or the loop is retimed."""
+    box = pygame.Rect(ARM_BASE[0] - arm.ORIGIN[0] * ARM_SCALE,
+                      ARM_BASE[1] - arm.ORIGIN[1] * ARM_SCALE,
+                      arm.W * ARM_SCALE, arm.H * ARM_SCALE)
+    n = 16 * DEMO_SCALE
+    for x, y in (treat_at(t) for _, t in arm.loop()):
+        box.union_ip(pygame.Rect(x - n // 2, y - n // 2, n, n))
+    # The tray only counts its filled rows: the rest of its grid is blank,
+    # and counting it would push the box down into the text box.
+    box.union_ip(pygame.Rect(DEMO_TRAY[0] - n // 2, DEMO_TRAY[1] - n // 2,
+                             n, TRAY_ROWS * DEMO_SCALE))
+    return box
+
+
+DEMO_BOX = _box()
 
 
 def demo(screen, t):
-    """One frame of the arm putting the treat on the tray."""
-    x, y, shut, ty = DEMO[int(t * 2) % len(DEMO)]
-    stamp(screen, "tray", DEMO_SCALE, *DEMO_TRAY)
-    stamp(screen, "arm" if shut else "arm_open", ARM_SCALE, x, y)
-    stamp(screen, DEMO_TREAT, DEMO_SCALE, x, ty)
+    """One frame of the arm putting the treat on the tray.
+
+    Counter, tray, treat, arm -- in that order, because the order is a
+    depth statement: seen from the side the near jaw is in front of what it
+    is holding. It is no longer what makes the grip read, though. The jaws
+    close on the treat's own width now and never share a pixel with it, so
+    nothing here is covering up an overlap the way it used to.
+    """
+    area("demo", DEMO_BOX)
+    pose, treat = arm.cycle(t)
+    pygame.draw.rect(screen, COUNTER,
+                     (DEMO_BOX.left, ARM_BASE[1], DEMO_BOX.width, 6))
+    for name, at in (("tray", DEMO_TRAY), (DEMO_TREAT, treat_at(treat))):
+        s = sprite(name, DEMO_SCALE)
+        screen.blit(s, s.get_rect(center=at))
+    arm.draw(screen, ARM_BASE, ARM_SCALE, pose)
 
 
 @lru_cache(maxsize=4)
@@ -1088,6 +1141,9 @@ if __name__ == "__main__":
         n = len(SHAPES[_all[name][0]]) * scale / 2
         boxes.append((name, x - n, y - n, x + n, y + n))
 
+    def area(name, rect):                               # noqa: F811
+        boxes.append((name, rect.left, rect.top, rect.right, rect.bottom))
+
     class _Stub:
         """Covers Music, DB, and Detector -- they all do nothing in the test."""
         tray = {}
@@ -1138,6 +1194,33 @@ if __name__ == "__main__":
                 return pages
             d.next()
 
+    # The grip, checked on the pixels that actually get drawn rather than on
+    # the numbers behind them. Two things have to hold in every frame of the
+    # demo loop: the arm never shares a pixel with the treat, and while it is
+    # being carried a jaw is right there on each side -- push the treat one
+    # arm pixel either way and it runs into one. That pair is what pins down
+    # arm.TREAT, arm.SHUT and arm.TCP; a new treat sprite that does not fit
+    # these jaws fails here instead of quietly going back to clipping.
+    #
+    # One arm pixel is also the tightest a grip can be: the arm is drawn at
+    # four millimetres a pixel, so a jaw's edge can only land on that grid,
+    # while the treat lands where the kinematics put it. Asking for less air
+    # than that asks for overlap in whichever frame rounds the other way.
+    _slack = ARM_SCALE + 1
+    _t = sprite(DEMO_TREAT, DEMO_SCALE)
+    _tm, (_w, _h) = pygame.mask.from_surface(_t), _t.get_size()
+    for _k, (_pose, _spot) in enumerate(arm.loop()):
+        _s2 = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        arm.draw(_s2, ARM_BASE, ARM_SCALE, _pose)
+        _am = pygame.mask.from_surface(_s2)
+        _x, _y = treat_at(_spot)
+        _off = (_x - _w // 2, _y - _h // 2)
+        assert not _am.overlap_area(_tm, _off), f"demo {_k}: the arm cuts into the treat"
+        if _k // arm.STEPS in arm.CARRY:
+            for _d in (-_slack, _slack):
+                assert _am.overlap_area(_tm, (_off[0] + _d, _off[1])), \
+                    f"demo {_k}: no jaw on the {'left' if _d < 0 else 'right'}"
+
     widest = dict(name="WWW", no=999, goal=euro(88), price=euro(52))
     for lang in TEXT:
         ctx.lang = lang
@@ -1169,12 +1252,13 @@ if __name__ == "__main__":
             st = StoryScene(ctx, 999, "WWW", new)
             for i, _ in enumerate(read(st.dialog)):
                 st.dialog.i, st.dialog.n = i, 1e9
-                # Every pose of the demo loop, not just the one at t = 0.
-                # The gripper moves and the treat moves with it, so a
-                # single frame proves nothing -- the pose that overlaps is
-                # the one nobody looked at.
-                for k in range(len(DEMO)):
-                    check(f"{lang} story new={new} page {i} demo {k}", st, now=k / 2)
+                # The demo is one box, so one frame would do -- but the
+                # treat is drawn by the arm's own kinematics, and a pose
+                # that pushes it out of that box is exactly the kind of
+                # thing nobody looks at. So walk the whole loop.
+                for k in range(len(arm.loop())):
+                    check(f"{lang} story new={new} page {i} demo {k}", st,
+                          now=k / arm.HZ)
 
         # The phases of a round: empty tray -> practice, a treat lands ->
         # tut_done, ▶ -> order, ▶▶ -> play.
@@ -1192,7 +1276,9 @@ if __name__ == "__main__":
         check(f"{lang} order", g, panes)
         read(g.dialog)
         assert g.handle("right") == "start" and g.phase == "play"
-        _s.tray = {i: [(.3, .3)] * 4 for i in (0, 3, 7, 9)}
+        # Four treats off the actual price list, not four literal IDs: which
+        # markers exist is print-day data since 2026-09-25.
+        _s.tray = {i: [(.3, .3)] * 4 for i in sorted(VALUES)[:4]}
         g.update(0.05)
         check(f"{lang} play", g, panes + bar + fuse_)
         check(f"{lang} play confirm", g, panes + bar + fuse_, confirm=2.0)

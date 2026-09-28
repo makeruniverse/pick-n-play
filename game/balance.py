@@ -132,7 +132,10 @@ if __name__ == "__main__":
     rng = random.Random(0)
     misses, perfect = [], []
     for _ in range(200):
-        on = frozenset(rng.sample(sorted(VALUES), rng.choice((3, 4, 5, 6, 7))))
+        # Tray sizes from the count, not from a written-out tuple: the number
+        # of treats is print-day data now, and a literal 7 raised ValueError
+        # the moment the set shrank to six.
+        on = frozenset(rng.sample(sorted(VALUES), rng.randrange(2, len(VALUES))))
         g = gap(on)
         assert GAP_MIN <= abs(g) <= GAP_MAX, g
         # exactly solvable in GAP_MOVES moves
