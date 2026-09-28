@@ -60,6 +60,13 @@ for s in ('idle', 'game', 'hurry', 'score'):
 l.close()" 2>&1 | grep -v pygame
 }
 
+# LED zones: walk the strip, mark side / center spans, prints the config lines.
+# pnp-zones 0.3 for dim. No timeout: it waits for typing, it doesn't load the Pi.
+pnp-zones() {
+    pnp-running && { echo "game is running, pnp-stop first"; return 1; }
+    PYGAME_HIDE_SUPPORT_PROMPT=1 PNP_LED_BRIGHT=${1:-1.0} $PNP_PY $PNP/tools/led_zones.py
+}
+
 pnp-leds-off() {
     timeout -s KILL 10 $PNP_PY -c "
 import sys; sys.path.insert(0, '$PNP/game')
@@ -177,6 +184,7 @@ hardware
   pnp-status       process, temp, throttling, voltage, errors
   pnp-leds [0..1]  LED test, all four states
   pnp-leds-off     strip dark
+  pnp-zones [0..1] LED zones: which LED is side / top center (prints config)
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
   pnp-arm-calibrate [follower|leader]  LeRobot calibration (stops teleop meanwhile)

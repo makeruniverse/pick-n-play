@@ -13,7 +13,8 @@ import pygame
 from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ,
                     TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
-                    LED_STRIPES, LED_A, LED_B, LED_RED)
+                    LED_STRIPES, LED_A, LED_B, LED_RED, LED_SIDES,
+                    LED_CENTER)
 
 
 def notify(msg):
@@ -382,8 +383,16 @@ def led_encode(rgb, order=LED_ORDER):
     return RESET + np.where(bits, BIT1, BIT0).astype(np.uint8).tobytes()
 
 
-def led_frame(state, k, t, n):
-    """One frame of the strip as (n, 3) RGB. Pure function of state and time.
+def led_span(a, b, n):
+    """(first, last) inclusive, either direction -> indices first..last,
+    cut off at n (PNP_LED_COUNT=60 on the test strip must not crash)."""
+    s = 1 if b >= a else -1
+    idx = np.arange(a, b + s, s)
+    return idx[(idx >= 0) & (idx < n)]
+
+
+def led_pattern(state, k, t, n, w):
+    """n LEDs of one pattern as (n, 3) RGB, stripes w LEDs wide.
 
     idle   candy cane, runs slowly -- attract mode, visible from 8 m
     game   time left as a bar: k = fraction of the round still remaining
@@ -395,9 +404,25 @@ def led_frame(state, k, t, n):
         return np.where((i < k * n)[:, None], LED_A, np.multiply(LED_A, 0.08))
     if state == "hurry":
         return np.tile(LED_RED if int(t * 4) % 2 == 0 else (0, 0, 0), (n, 1))
-    w = max(1, n // LED_STRIPES)
     shift = int(t * (4 if state == "score" else 1) * 2 * w)   # two stripes per second
     return np.where((((i + shift) // w) % 2 == 0)[:, None], LED_A, LED_B)
+
+
+def led_frame(state, k, t, n, sides=LED_SIDES, center=LED_CENTER):
+    """One frame of the strip as (n, 3) RGB. Pure function of state and time.
+
+    Whole strip first, then every zone span over it with its own pattern:
+    a side span is a bar of its own, the center shows the candy cane while
+    the sides count down. Stripe width stays the whole-strip one, so a
+    short span doesn't get finer stripes.
+    """
+    w = max(1, n // LED_STRIPES)
+    out = led_pattern(state, k, t, n, w).astype(float)
+    for spans, st in ((sides, state), (center, "idle" if state == "game" else state)):
+        for a, b in spans:
+            idx = led_span(a, b, n)
+            out[idx] = led_pattern(st, k, t, len(idx), w)
+    return out
 
 
 class Leds:
@@ -433,13 +458,16 @@ class Leds:
         self.th.start()
 
     def show(self, state, k=1.0):
+        """state: a game state, or an (n, 3) RGB array shown as is
+        (tools/led_zones.py)."""
         self.slot = (state, k)    # assigning a tuple is atomic, no lock needed
 
     def _loop(self):
         t0 = time.monotonic()
         while self.run:
             state, k = self.slot
-            self._write(led_frame(state, k, time.monotonic() - t0, self.n))
+            self._write(state if isinstance(state, np.ndarray)
+                        else led_frame(state, k, time.monotonic() - t0, self.n))
             time.sleep(1 / LED_FPS)   # ponytail: plus write time (~15 ms), so ~20 frames/s
 
     def _write(self, rgb):
@@ -558,8 +586,16 @@ if __name__ == "__main__":
     assert g == bytes([BIT0] * 7 + [BIT1]), "G not first, or not MSB first"
     assert r == bytes([BIT1] + [BIT0] * 7) and b == bytes([BIT0] * 8)
     # Time-left bar: half a round = half the strip lit
-    fr = led_frame("game", 0.5, 0.0, 100)
+    fr = led_frame("game", 0.5, 0.0, 100, (), ())
     assert (fr[:50] == LED_A).all() and not (fr[50:] == LED_A).all()
+    # Zones: a side span running 9 -> 0 is its own bar, half lit = 9..5;
+    # the center plays the candy cane instead of the bar; a span past the
+    # end of the strip is cut off, not a crash
+    fr = led_frame("game", 0.5, 0.0, 100, [(9, 0), (95, 130)], [(20, 29)])
+    lit = (fr == LED_A).all(1)
+    assert lit[5:10].all() and not lit[0:5].any(), "side span not its own bar"
+    assert (fr[24:28] == LED_B).all(), "center not candy cane"
+    assert fr.shape == (100, 3)
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")
     q.show("game", 0.3)

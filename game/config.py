@@ -380,3 +380,12 @@ LED_STRIPES = 24      # candy-cane stripes across the full length, density-indep
 # LED_A / LED_B (candy cane, bar) come from the theme; red stays HPI:
 LED_RED     = (255, 0, 20)
 LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarting it
+# Zones: where on the one long strip the side walls / top edges and the top
+# center sit. Spans are (first, last) LED indices, inclusive, either
+# direction. During a round every side span is its own time bar, draining
+# toward `first` (a wall from the floor up: first = bottom LED). The center
+# plays the candy cane instead. LEDs in no span show the old whole-strip
+# pattern -- both lists empty = the strip as before. Measured on the
+# cabinet with tools/led_zones.py (pnp-zones), which prints these two lines.
+LED_SIDES   = []
+LED_CENTER  = []
