@@ -19,6 +19,7 @@ Runs in the conda env `lerobot` (Python 3.10), not in the game's .venv:
                                        LIMITS and FLOOR (pnp-arm-help)
   python teleop/run.py --test          self-test, no hardware
 """
+import contextlib
 import os
 import shutil
 import socket
@@ -52,6 +53,7 @@ SHORT = {"shoulder_pan": "pan", "shoulder_lift": "lift", "elbow_flex": "elbow",
 FLOOR = None
 
 RAMP = 1.0   # s, after a start the follower glides from where it stands
+LOST_MAX = 3.0   # s the leader bus may stay silent before systemd restarts us
 
 
 # Servo firmware overload guard: above Overload_Torque (80 %) for longer
@@ -143,6 +145,7 @@ def main(watch=False, fenced=False):
              if fenced else {})
     notify("READY=1")
     seen, n, marks, trail, pose = {}, 0, [], [], None
+    lost, reopened, target = None, False, start
     t0 = time.perf_counter()
 
     def mark():    # Enter in the terminal: the leader's pose is a table point
@@ -156,7 +159,33 @@ def main(watch=False, fenced=False):
     try:
         while True:
             t = time.perf_counter()
-            action = lead.get_action()
+            try:
+                action = lead.get_action()
+            except ConnectionError as e:
+                # 28.9.: the leader bus went silent while playing, and LeRobot
+                # reads with a single try -- one lost packet ended teleop, and
+                # restart + connect left the arm dead for ~15 s. Now the
+                # follower holds still, the port is reopened after 0.5 s, and
+                # only after LOST_MAX systemd gets to restart us. No watchdog
+                # ping meanwhile, WatchdogSec (10 s) stays above LOST_MAX.
+                if lost is None:
+                    lost = t
+                    print(f"leader bus lost: {e}", flush=True)
+                if t - lost > LOST_MAX:
+                    raise
+                if not reopened and t - lost > 0.5:
+                    lead.bus.port_handler.closePort()
+                    lead.bus.port_handler.openPort()
+                    reopened = True
+                    print("leader bus: port reopened", flush=True)
+                time.sleep(1 / FPS)
+                continue
+            if lost is not None:
+                print(f"leader bus back after {t - lost:.2f} s"
+                      + (", port reopened" if reopened else ""), flush=True)
+                lost, reopened = None, False
+                if fenced:     # the leader moved on meanwhile: glide, don't jump
+                    start, t0 = target, t
             target = fence(action) if fenced else action
             k = (t - t0) / RAMP
             if fenced and k < 1:
@@ -196,8 +225,10 @@ def main(watch=False, fenced=False):
                 print(f"FLOOR = ({a:.3f}, {b:.3f}, {c:.1f}, {side})")
             else:
                 print(f"# no FLOOR: needs 3+ table points, got {len(marks)}")
-        lead.disconnect()
-        follow.disconnect()
+        # A dead bus fails the disconnect too, and that error would bury the real one.
+        for arm in (lead, follow):
+            with contextlib.suppress(ConnectionError):
+                arm.disconnect()
 
 
 if __name__ == "__main__":
