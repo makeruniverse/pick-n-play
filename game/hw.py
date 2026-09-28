@@ -553,8 +553,12 @@ if __name__ == "__main__":
         time.sleep(4 / DETECT_HZ)
         return det.fresh()
 
-    # 1 · Detection, values, and position of the quads with an open window
-    spots = {0: (60, 60), 4: (260, 60), 9: (460, 260)}
+    # 1 · Detection, values, and position of the quads with an open window.
+    # The three IDs come from the price list, not from literals: the detector
+    # drops every marker that isn't in VALUES (see above), so a hard-coded ID
+    # turns into a silent empty result the day the printed set changes.
+    _near, _mid, _far = sorted(VALUES)[:3]
+    spots = {_near: (60, 60), _mid: (260, 60), _far: (460, 260)}
     still = _Still(_tray(spots))
     det_open = ArucoDetector(still, roi=(0, 0, 1, 1))
     marks = _settle(det_open)
@@ -565,13 +569,16 @@ if __name__ == "__main__":
         cy = sum(p[1] for p in marks[i]) / 4 * H
         assert abs(cx - (x + MS / 2)) < 3 and abs(cy - (y + MS / 2)) < 3, (i, cx, cy)
 
-    # 1b · Inverted marker (chocolate cupcake) is detected the same way
-    det_inv = ArucoDetector(_Still(255 - _tray({5: (260, 160)})), roi=(0, 0, 1, 1))
-    assert sorted(_settle(det_inv)) == [5], det_inv.fresh()
+    # 1b · Inverted marker (light cells on dark) is detected the same way.
+    # Plate 2 printed no such treat -- the chocolate ones carry them -- but
+    # detectInvertedMarker stays on, so this path stays tested.
+    det_inv = ArucoDetector(_Still(255 - _tray({11: (260, 160)})), roi=(0, 0, 1, 1))
+    assert sorted(_settle(det_inv)) == [11], det_inv.fresh()
 
     # 2 · Window filters out what lies outside
     det_roi = ArucoDetector(_Still(_tray(spots)), roi=(0.0, 0.0, 0.6, 0.5))
-    assert sorted(_settle(det_roi)) == [0, 4], det_roi.fresh()   # 9 lies outside
+    assert sorted(_settle(det_roi)) == sorted((_near, _mid)), det_roi.fresh()
+                                                     # the third one lies outside
 
     # 3 · Hysteresis holds briefly and then decays
     still.frame = _tray({})                 # tray cleared out

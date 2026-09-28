@@ -27,16 +27,58 @@ done on 2026-09-24:
 - ● **The arm, second attempt** (2026-09-24): the gripper is back, on a
   32 × 32 grid like the faces, and the loop is now eight frames — approach,
   grip, lift, carry, set down, let go, and the last frame three times over.
-  What the first attempt got wrong was the grid, not the idea. Two things
-  were not free to choose: held means arm y + 176, exactly half of the two
-  boxes together, so their edges touch instead of overlapping and the
-  layout self-test stays quiet; and the arm runs at scale 6, because
-  between the parade (ends at y 136) and the text box (starts at 726)
-  scale 7 leaves 32 px of lift instead of 60, and 32 px reads as sliding.
+  What the first attempt got wrong was the grid, not the idea.
   The joints are `STEEL`, not `ACCENT` — pink means "what you are
   affecting" everywhere else, and the arm only copies.
   Open: the shoulder block hangs in mid-air. A sprite can't come in from
-  the edge of the screen.
+  the edge of the screen. *Superseded on 2026-09-25, see below.*
+- ● **The arm is the SO-101 now** (2026-09-25): not a drawing of an arm, the
+  arm. `game/arm.py`, and `tools/so101_chain.py` to regenerate it.
+
+  The second attempt still read as a crane hook, and the grid was not the
+  reason — the motion was. `demo()` slid the whole picture from keyframe to
+  keyframe, so the shoulder travelled with the gripper, and no amount of
+  detail fixes a claw that moves its own base.
+
+  So the shape is measured instead of drawn. TheRobotStudio publishes the
+  SO-101 as a URDF plus one STL per part; `tools/so101_chain.py` walks the
+  joint tree at the zero pose, projects every link onto the side view,
+  takes the outer contour of each and runs `approxPolyDP` over it. 37 MB of
+  triangles come out as seventy numbers, each link's outline written
+  relative to its own joint. Runtime is then a rotate-and-add, no matrices.
+
+  What came free with it:
+  - Real link lengths — upper arm 116 mm, forearm 135 mm, wrist to tip 159.
+  - `solve()` is two-link IK with the wrist pinned vertical, so the grip
+    from above is a constraint instead of a pose somebody drew, and the
+    treat is placed by asking the arm where its jaws are.
+  - `LIMITS` from the URDF, so every pose is one the real servos could
+    hold. That also *bounds the demo*: the band where this arm can hold
+    something with the jaws truly down is about x 90…310, y 0…120 mm, and
+    the keyframes had to move inside it.
+  - Interpolation between keys happens in joint space, not picture space.
+    That single word is most of what reads as an arm — steady joints sweep
+    the gripper along arcs, and arcs are what no tween gives you.
+
+  Three things that only showed up on screen. The base and shoulder use
+  their convex hull, because at 4 mm a pixel the motor holder's slots read
+  as holes punched in the machine. The base servo is dropped entirely —
+  in the real arm it sits inside its holder, and drawn on top it poked out.
+  And `SHUT` is 18°, not 0: closed on nothing is not what this gripper ever
+  does here, and at 0 the two jaws overlap in the side view and swallow the
+  treat they are carrying.
+
+  Two joints are not animated: `shoulder_pan` and `wrist_roll` turn about
+  an axis lying in the picture plane, so from the side there is nothing to
+  see. The side view is what makes the other four legible; this is the bill
+  for it.
+
+  The layout self-test got simpler rather than harder. The demo is one
+  `area()` box now, because inside it the overlap is the point — the arm
+  holds the treat. The old "held means arm y + 176, exactly half of both
+  boxes" arithmetic is gone with it. The arm, the treat and the tray all
+  stand on one counter line, and the tray's x comes from the arm's own drop
+  keyframe, so the two cannot drift apart.
 
 Also on 2026-09-24, on top of the three: the **player number is on screen
 from the name entry onwards**, not only during the practice round.
