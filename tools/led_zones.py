@@ -1,17 +1,15 @@
 """pnp-led: mark which LED is side and which is top center, saved right away.
 
-  <- ->       cursor 1 LED          white = cursor, faint red = every 50th
-  up down     10 LEDs               green = side, blue = center
-  PgUp PgDn   100 LEDs              yellow = span being marked
-  g           go to LED number
-  space       span starts here
-  s           span ends here: side   (the time bar drains toward its start,
-                                      so start a wall at the floor)
-  c           span ends here: center
-  Esc         drop the started span
-  u           undo the last span
-  t           preview idle / game / hurry / score with these zones
-  q           quit
+  s ... s     side span: s on its first LED, walk, s on its last LED.
+              The time bar drains toward the first one: start a wall at the floor
+  c ... c     top-center span, same way
+  Esc         drop the span you started      u   undo the last saved span
+
+  <- ->  1 LED    up down  10 LEDs    PgUp PgDn  100 LEDs    g  go to LED number
+  t      preview idle / game / hurry / score with these zones      q  quit
+
+  On the strip: white = cursor, green = side, blue = center, faint red = every
+  50th LED. The span you're marking right now is lit brighter.
 """
 import json
 import os
@@ -42,14 +40,15 @@ def tokens(data):
     return out
 
 
-def picture(n, zones, cur, start):
+def picture(n, zones, cur, open_):
     rgb = np.full((n, 3), 6)
     rgb[::50] = (70, 0, 0)
     for name, spans in zones.items():
         for a, b in spans:
             rgb[led_span(a, b, n)] = COLORS[name]
-    if start is not None:
-        rgb[led_span(start, cur, n)] = (110, 80, 0)
+    if open_:
+        name, start = open_
+        rgb[led_span(start, cur, n)] = np.multiply(COLORS[name], 2.5)
     rgb[cur] = 255
     return rgb
 
@@ -77,34 +76,45 @@ def main():
     n = LED_COUNT
     zones = {"side": list(LED_SIDES), "center": list(LED_CENTER)}
     done = ["side"] * len(LED_SIDES) + ["center"] * len(LED_CENTER)   # for u
-    cur, start = 0, None
+    cur, open_ = 0, None      # open_: (zone, first LED) while a span is being marked
     fd = sys.stdin.fileno()
     tty_mode = termios.tcgetattr(fd)
     leds = Leds()
     print(__doc__)
+    say = lambda msg: print(f"\r\x1b[K  {msg}")   # a line that stays
     try:
         tty.setcbreak(fd)     # keys without Enter; Ctrl-C still works
         while True:
-            leds.show(picture(n, zones, cur, start))
-            span = "" if start is None else f"   span from {start}"
-            print(f"\r\x1b[K  LED {cur}{span}   side {zones['side']}   "
-                  f"center {zones['center']}", end="", flush=True)
+            leds.show(picture(n, zones, cur, open_))
+            # One short line, rewritten in place -- if it wrapped, \r would
+            # only go back to the start of the last row.
+            nxt = (f"{open_[0]} from {open_[1]}: {open_[0][0]} = ends here, Esc = drop"
+                   if open_ else "s = side starts here, c = center starts here")
+            print(f"\r\x1b[K  LED {cur:>4}   {nxt}", end="", flush=True)
             for k in tokens(os.read(fd, 64).decode(errors="ignore")):
                 if isinstance(k, int):
                     cur = min(max(cur + k, 0), n - 1)
-                elif k == " ":
-                    start = cur
-                elif k == "\x1b":
-                    start = None
-                elif k in ("s", "c") and start is not None:
+                elif k in ("s", "c"):
                     name = "side" if k == "s" else "center"
-                    zones[name].append([start, cur])
-                    done.append(name)
-                    start = None
-                    save(zones)
-                elif k == "u" and done:
-                    zones[done.pop()].pop()
-                    save(zones)
+                    if open_ and open_[0] == name:
+                        zones[name].append([open_[1], cur])
+                        done.append(name)
+                        save(zones)
+                        say(f"saved: {name} {open_[1]} -> {cur}   "
+                            f"({len(zones['side'])} side, {len(zones['center'])} center)")
+                        open_ = None
+                    else:     # new span, or the other key: switch type, keep the start
+                        open_ = (name, open_[1] if open_ else cur)
+                elif k == "\x1b":
+                    open_ = None
+                elif k == "u":
+                    if done:
+                        name = done.pop()
+                        a, b = zones[name].pop()
+                        save(zones)
+                        say(f"undone: {name} {a} -> {b}")
+                    else:
+                        say("nothing to undo")
                 elif k == "g":
                     termios.tcsetattr(fd, termios.TCSADRAIN, tty_mode)
                     try:
@@ -114,6 +124,7 @@ def main():
                     tty.setcbreak(fd)
                 elif k == "t":
                     preview(leds, n, zones)
+                    say("preview done")
                 elif k == "q":
                     return
     except KeyboardInterrupt:
@@ -121,8 +132,8 @@ def main():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, tty_mode)
         leds.close()
-        print(f"\n\nsaved in {os.path.normpath(LED_ZONES)}. "
-              "The game reads it at start: pnp-expo")
+        print(f"\n\n  side   {zones['side']}\n  center {zones['center']}\n"
+              f"  in {os.path.normpath(LED_ZONES)}. The game reads it at start: pnp-expo")
 
 
 if __name__ == "__main__":
