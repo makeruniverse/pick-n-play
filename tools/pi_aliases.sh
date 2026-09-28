@@ -60,11 +60,27 @@ for s in ('idle', 'game', 'hurry', 'score'):
 l.close()" 2>&1 | grep -v pygame
 }
 
-# LED zones: walk the strip, mark side / center spans, prints the config lines.
-# pnp-zones 0.3 for dim. No timeout: it waits for typing, it doesn't load the Pi.
-pnp-zones() {
+# Find the LED zones: light FIRST..LAST (first green, last red, white
+# between) and exit -- the strip keeps the last frame. Without numbers: a
+# ruler, blue every 100, red every 50, dim every 10. Rest dark.
+#     pnp-led 300 450      pnp-led 312      pnp-led
+pnp-led() {
     pnp-running && { echo "game is running, pnp-stop first"; return 1; }
-    PYGAME_HIDE_SUPPORT_PROMPT=1 PNP_LED_BRIGHT=${1:-1.0} $PNP_PY $PNP/tools/led_zones.py
+    PYGAME_HIDE_SUPPORT_PROMPT=1 PNP_LED_BRIGHT=${PNP_LED_BRIGHT:-0.3} timeout -s KILL 10 $PNP_PY -c "
+import sys; sys.path.insert(0, '$PNP/game')
+import numpy as np
+from hw import Leds
+l = Leds()
+if not l.run: sys.exit()
+l.run = False; l.th.join()       # stop the idle loop, write one frame by hand
+rgb = np.zeros((l.n, 3))
+a = sorted(int(x) for x in sys.argv[1:])
+if a:
+    rgb[a[0]:a[-1] + 1] = 255
+    if len(a) > 1: rgb[a[0]], rgb[a[-1]] = (0, 255, 0), (255, 0, 0)
+else:
+    rgb[::10], rgb[::50], rgb[::100] = (40, 40, 40), (255, 0, 0), (0, 0, 255)
+l._write(rgb)" "$@"
 }
 
 pnp-leds-off() {
@@ -184,7 +200,7 @@ hardware
   pnp-status       process, temp, throttling, voltage, errors
   pnp-leds [0..1]  LED test, all four states
   pnp-leds-off     strip dark
-  pnp-zones [0..1] LED zones: which LED is side / top center (prints config)
+  pnp-led [a [b]]  light LEDs a..b (no args: ruler) -- find the LED zones
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
   pnp-arm-calibrate [follower|leader]  LeRobot calibration (stops teleop meanwhile)

@@ -386,6 +386,6 @@ LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarti
 # toward `first` (a wall from the floor up: first = bottom LED). The center
 # plays the candy cane instead. LEDs in no span show the old whole-strip
 # pattern -- both lists empty = the strip as before. Measured on the
-# cabinet with tools/led_zones.py (pnp-zones), which prints these two lines.
+# cabinet with pnp-led FIRST LAST, checked with pnp-leds.
 LED_SIDES   = []
 LED_CENTER  = []
