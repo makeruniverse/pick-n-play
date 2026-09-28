@@ -92,6 +92,12 @@ ExecStart=/bin/sh -c 'echo 1500000 > /sys/devices/system/cpu/cpufreq/policy0/sca
 [Install]
 WantedBy=multi-user.target
 EOF
+# A Pi 5 on a 3 A supply caps all four USB ports at 600 mA together. Both
+# 5 MP cameras streaming plus both servo adapters sit right at that: on
+# 28.9. the cameras fell off the bus one after the other mid-game, no error
+# in dmesg. The supply holds 5.07 V under load. Takes effect after a reboot.
+grep -q '^usb_max_current_enable=1' /boot/firmware/config.txt ||
+    echo usb_max_current_enable=1 >> /boot/firmware/config.txt
 # git: fsync on write, so a pulled plug doesn't leave half-written objects
 sudo -u ubuntu git -C $R config core.fsync committed
 
