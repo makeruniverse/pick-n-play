@@ -175,19 +175,22 @@ DUCK_RELEASE = 0.35   # seconds back to full
 # ignores any ID that isn't listed here, so a stray treat on the tray counts
 # for nothing instead of scoring a phantom.
 #
-# Sorted by printed volume, riegel 26 cm3 up to torte 80 cm3: heavier is
-# dearer is the one rule a visitor learns without reading anything. The two
-# nearest neighbours (stueck 34, petitfour 40) sit one step apart, so the
-# rule never has to explain a gap it can't show.
+# Sorted by printed volume, bonbon 26 cm3 up to the two-tier torte 99 cm3:
+# heavier is dearer is the one rule a visitor learns without reading anything.
 #
-# The price steps are the ones decided on 2026-09-11; six of the ten are in
-# use. Which six is not taste. Of all 210 ways to pick six from that ladder,
-# this is one of seven that leave 12 possible targets for an empty tray
-# instead of the median 9 -- and 12 clears the "at least ten" line that
-# balance.py's self-test draws. Its targets also still span 3.80 to 7.70,
-# the same range the ten-treat set spanned, so the story's budget lines
-# need no new numbers.
-VALUES = {1: 14, 0: 17, 6: 21, 2: 24, 11: 46, 9: 52}
+# Eleven treats since the reprint of 2026-09-28 (tools/nachdruck.py): the
+# expo set of six plus macaron, cup_mini, bonbon, cup_vanille, a bigger
+# riegel and a two-tier torte, all one filament plus marker cells. The ten
+# price steps of 2026-09-11 go to the ten lighter ones unchanged; the
+# eleventh, 6.20 for the two-tier torte, is the one of all extra steps that
+# leaves the most targets for an empty tray (27 instead of 21 with the old
+# ten). Targets span 3.80 to 8.70 now -- the budget lines only ever say
+# {goal}, so no text changes with it.
+#
+# The pink petit four from the first CMYK test also carries #2. It stays off
+# the tray: two #2 on it count once.
+VALUES = {4: 14, 1: 17, 0: 21, 10: 24, 6: 28, 2: 32,
+          11: 36, 7: 41, 5: 46, 9: 52, 8: 62}
 CENTS  = 10        # one VALUES step in cents. Only read by euro().
 
 # ── Game mode ─────────────────────────────────────────────────────────────

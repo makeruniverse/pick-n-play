@@ -30,6 +30,7 @@ from app import Ctx, crt_gain, px                               # noqa: E402
 from config import (WIDTH, HEIGHT, FONT_PATH, FONT_SIZES, CRT,  # noqa: E402
                     BARREL_K, CAM_VIEW, GREY, BG, ROUND_SECONDS, FUSE_PULSE)
 import scenes                                                   # noqa: E402
+from config import VALUES as V, SPRITE                           # noqa: E402
 
 
 class Stub:
@@ -141,12 +142,12 @@ def shots(out):
         ("5-tutorial-done", done_tut,                                 {}),
         ("6-order",        order,                                     {}),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
-                                      marks={11: quad(.45)}, total=46, target=66,
-                                      pop=["cupcake_green", "+4,60", 0.4])),
+                                      marks={11: quad(.45)}, total=V[11], target=66,
+                                      pop=[SPRITE[11], "+" + scenes.euro(V[11], sign=False), 0.4])),
         ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
                                       clock=0.3)),
         ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,
-                                      marks={2: quad(.35), 9: quad(.55)}, total=76)),
+                                      marks={2: quad(.35), 9: quad(.55)}, total=V[2] + V[9])),
         ("10-game-perfect", game, dict(left=ROUND_SECONDS * 0.3, total=66, hit=1.0,
                                        marks={1: quad(.35), 9: quad(.55)},
                                        fx=burst(960, 196, 0.25))),

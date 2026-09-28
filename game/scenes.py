@@ -168,13 +168,13 @@ ARM_BASE = (1130, 690)      # the base pivot: the arm stands on this point
 # Not a taste: arm.TREAT is the widest thing these jaws can close around
 # without cutting into it, and this is that width in sprite pixels.
 DEMO_SCALE = round(arm.TREAT * ARM_SCALE / arm.MM / 16)
-# Second dearest, not the middle of the ladder. arm.TREAT is only a width;
-# what the drawn jaws actually need is a silhouette with a waist, and of the
-# 2026-09-25 set exactly one shape has one -- a wide disc or box is already
-# in the jaw at the height where a cup still tapers. The self-test at the
-# bottom of this file names the frame if a theme picks a shape that clips,
-# so this stays a one-line choice instead of a rule nobody can check.
-DEMO_TREAT = LADDER[-2]
+# The dearest cupcake, not the middle of the ladder. arm.TREAT is only a
+# width; what the drawn jaws actually need is a silhouette with a waist, and
+# only the cupcake has one -- a wide disc or box is already in the jaw at the
+# height where a cup still tapers. The self-test at the bottom of this file
+# names the frame if a theme picks a shape that clips, so this stays a
+# one-line choice instead of a rule nobody can check.
+DEMO_TREAT = [s for s in LADDER if SPRITES[s][0] == "cupcake"][-1]
 # The tray stands where the arm lets go, taken from the arm's own key so the
 # two can never drift apart. The tray fills the top 7 of its 16 rows, so a
 # box centred one row below the counter puts the bowl on it.
