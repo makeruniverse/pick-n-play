@@ -41,8 +41,12 @@ CANDY = ((255, 101, 189),   # ACCENT
 # of the text box -- three lines of 30 glyphs each, the self-test in
 # scenes.py checks every page.
 #
-# Uppercase only, like the rest of the screen: Press Start 2P has the
-# umlauts, but ß has no capital here, so it's written SS.
+# Uppercase only, like the rest of the screen. Press Start 2P has no capital
+# ẞ (it draws the missing-glyph box), but its lowercase ß reads fine among
+# capitals, so German keeps its ß: HEIßT, SÜßIGKEIT, GRÖßER.
+#
+# Written for the fair, not translated: each language says it the way a
+# machine in that language would. No "--" in anything a visitor reads.
 #
 # The story: BELLA runs the bakery, OSKAR is the customer with a birthday
 # and exactly that much money. Fictional on purpose -- a real person as the
@@ -50,62 +54,68 @@ CANDY = ((255, 101, 189),   # ACCENT
 TEXT = {
     "en": dict(
         press="PRESS ▶", best="TODAY'S BEST",
-        lang="▲ DEUTSCH", lang_ok="▲ NOCHMAL: DEUTSCH",
+        lang="▲ DEUTSCH", lang_ok="▲ NOCHMAL FÜR DEUTSCH",
         again="▼ PLAYED BEFORE?",
         ask_name="WHAT'S YOUR NAME?", which="WHICH {name} ARE YOU?",
-        pick_abc="▲▼ CHANGE LETTER", pick_no="▲▼ PICK YOURS",
+        pick_abc="▲▼ PICK A LETTER", pick_no="▲▼ FIND YOURS",
         days=("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"),
-        back="◀ BACK", next="▶ NEXT", done="▶ DONE", unknown="NAME NOT FOUND",
+        back="◀ BACK", next="▶ NEXT", done="▶ OK", unknown="NAME NOT FOUND",
         baker="BELLA", guest="OSKAR",
-        hello="HI {name}! I'M BELLA, AND THIS IS MY LITTLE BAKERY.",
-        help="MOVE THE BIG ARM -- THE ROBOT COPIES YOU.|"
-             "EVERY TREAT HAS A PRICE. BIGGER TREATS COST MORE!",
-        welcome="WELCOME BACK, {name}! LET'S BEAT YOUR SCORE.",
+        hello="HI {name}! I'M BELLA. WELCOME TO MY LITTLE BAKERY!",
+        help="SEE THE ARM IN FRONT OF YOU? MOVE IT, AND THE ROBOT COPIES "
+             "EVERY MOVE.|"
+             "EVERY TREAT HAS ITS PRICE. THE BIGGER IT IS, THE MORE IT COSTS.",
+        welcome="{name}, YOU'RE BACK! READY TO BEAT YOUR SCORE?",
         practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
-        tut="PUT ANY TREAT ON THE TRAY IN THE MIDDLE.",
-        tut_done="YUMMY! THAT ONE COSTS {price}. HERE COMES OUR FIRST GUEST!",
+        tut="LET'S WARM UP FIRST. PUT ANY TREAT ON THE TRAY IN THE MIDDLE.",
+        tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
         skip="▶ SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
-        order_head="ORDER",
-        order="HI! IT'S MY BIRTHDAY, AND I HAVE EXACTLY {goal}.|"
-              "PICK ME TREATS THAT COST EXACTLY {goal} TOGETHER!",
-        go="▶ GO!", add="ADD", over="TOO MUCH", hold="HOLD {n}",
+        order_head="BUDGET",
+        order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
+              "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?",
+        go="▶ START", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
-        remember="WANT TO PLAY AGAIN? REMEMBER YOUR NUMBER: #{no}.",
-        react=("HM, THE TRAY STAYED EMPTY. NEXT TIME!",
-               "THANK YOU! THAT'S A GREAT START.",
-               "WOW, ALMOST EXACTLY! THANK YOU SO MUCH!",
-               "PERFECT! BEST BIRTHDAY EVER!"),
+        remember="WANT ANOTHER GO? JUST REMEMBER YOUR NUMBER: #{no}",
+        react=("OH, THE TRAY IS STILL EMPTY. MAYBE NEXT TIME!",
+               "THANKS! THAT'S A GOOD START.",
+               "WOW, SO CLOSE! THANK YOU SO MUCH!",
+               "SPOT ON! BEST BIRTHDAY EVER!"),
     ),
     "de": dict(
-        press="DRÜCK ▶", best="BESTE HEUTE",
-        lang="▲ ENGLISH", lang_ok="▲ AGAIN: ENGLISH",
+        press="▶ SPIELEN", best="DIE BESTEN VON HEUTE",
+        lang="▲ ENGLISH", lang_ok="▲ AGAIN FOR ENGLISH",
         again="▼ SCHON GESPIELT?",
-        ask_name="WIE HEISST DU?", which="WELCHER {name} BIST DU?",
-        pick_abc="▲▼ BUCHSTABE ÄNDERN", pick_no="▲▼ AUSWÄHLEN",
+        ask_name="WIE HEIßT DU?", which="WANN WARST DU DA?",
+        pick_abc="▲▼ BUCHSTABEN WÄHLEN", pick_no="▲▼ AUSWÄHLEN",
         days=("SO", "MO", "DI", "MI", "DO", "FR", "SA"),
-        back="◀ ZURÜCK", next="▶ WEITER", done="▶ FERTIG",
-        unknown="NAME NICHT GEFUNDEN",
+        back="◀ ZURÜCK", next="▶ WEITER", done="▶ OK",
+        unknown="NAME UNBEKANNT",
         baker="BELLA", guest="OSKAR",
-        hello="HALLO {name}! ICH BIN BELLA, UND DAS IST MEINE KLEINE BÄCKEREI.",
-        help="BEWEG DEN GROSSEN ARM -- DER ROBOTER MACHT DICH NACH.|"
-             "JEDER TREAT HAT EINEN PREIS. GRÖSSERE TREATS KOSTEN MEHR!",
-        welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! SCHLAG DEINEN REKORD.",
-        practice="ÜBUNG", tut_head="1 TREAT AUFS TABLETT",
-        tut="LEG IRGENDEINEN TREAT AUFS TABLETT IN DER MITTE.",
-        tut_done="LECKER! DER KOSTET {price}. DA KOMMT SCHON UNSER ERSTER GAST!",
-        skip="▶ ÜBERSPRINGEN", quit="◀ AUFHÖREN", quit_ok="◀ NOCHMAL = AUFHÖREN",
-        order_head="BESTELLUNG",
-        order="HALLO! ICH HABE GEBURTSTAG UND GENAU {goal} DABEI.|"
-              "STELL MIR TREATS ZUSAMMEN, DIE ZUSAMMEN GENAU {goal} KOSTEN!",
-        go="▶ LOS!", add="NOCH DAZU", over="ZU VIEL", hold="HALTEN {n}",
+        hello="HALLO {name}! ICH BIN BELLA. WILLKOMMEN IN MEINER BÄCKEREI!",
+        help="SIEHST DU DEN ARM VOR DIR? WENN DU IHN BEWEGST, MACHT DER "
+             "ROBOTER ALLES NACH.|"
+             "JEDE SÜßIGKEIT HAT IHREN PREIS. JE GRÖßER, DESTO TEURER.",
+        welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! KNACKST DU DEINEN "
+                "REKORD?",
+        practice="PROBERUNDE", tut_head="1 SÜßIGKEIT AUFLEGEN",
+        tut="ERST MAL ZUM ÜBEN: LEG IRGENDEINE SÜßIGKEIT AUFS TABLETT IN "
+            "DER MITTE.",
+        tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
+        skip="▶ ÜBERSPRINGEN", quit="◀ ABBRECHEN",
+        quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
+        order_head="BUDGET",
+        order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
+              "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?",
+        go="▶ LOS GEHT'S", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
+        hold="NICHT MEHR ANFASSEN! {n}",
         perfect="PERFEKT", player="SPIELER #{no}",
         score="PUNKTE", rank="PLATZ {place} VON {count} HEUTE",
-        remember="WILLST DU NOCHMAL SPIELEN? MERK DIR DEINE NUMMER: #{no}.",
-        react=("HM, DAS TABLETT BLIEB LEER. NÄCHSTES MAL!",
-               "DANKE! DAS IST EIN SUPER ANFANG.",
+        remember="LUST AUF NOCH EINE RUNDE? MERK DIR DEINE NUMMER: #{no}",
+        react=("OH, DAS TABLETT IST JA NOCH LEER. VIELLEICHT NÄCHSTES MAL!",
+               "DANKE! DAS IST SCHON MAL EIN ANFANG.",
                "WOW, FAST GENAU! VIELEN DANK!",
-               "PERFEKT! BESTER GEBURTSTAG ALLER ZEITEN!"),
+               "AUF DEN CENT GENAU! BESTER GEBURTSTAG ÜBERHAUPT!"),
     ),
 }
 
