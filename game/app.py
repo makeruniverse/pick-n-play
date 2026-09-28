@@ -148,6 +148,10 @@ def run_game(scene, width, height, fps, beat=None):
             if action == "quit":
                 scene = None
                 break
+            if action == "mlg":            # staff easter egg, from any scene
+                from mlg import MlgScene   # lazy: mlg imports this module
+                scene.switch_to(MlgScene(scene.ctx))
+                continue
             # Every button press makes a sound: "ok" if the scene took it,
             # otherwise "nope". handle() returns the name, None means nope.
             scene.ctx.music.sfx(scene.handle(action) or "nope")

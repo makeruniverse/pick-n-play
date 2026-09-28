@@ -16,3 +16,4 @@ wheels/
 scores.db*
 led_zones.json
 result.json
+game/assets/mlg/
