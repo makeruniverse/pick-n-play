@@ -107,6 +107,9 @@ pnp-update-now() {
     echo "HEAD $(git -C $PNP log --oneline -1) -- updater: $(systemctl is-active pnp-update)"
 }
 
+# Camera exposure/zoom live while the game runs, saved to cam.json (tools/cam.py)
+pnp-cam() { PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY $PNP/tools/cam.py "$@"; }
+
 # Teleop by hand instead of the service, e.g. with the geofence on. Stops the
 # service meanwhile, both want the same two serial ports.
 # The pnp-arm* bodies are ( subshells ) with an EXIT trap: a second Ctrl-C
@@ -230,6 +233,9 @@ hardware
   pnp-leds-off     strip dark
   pnp-led [0..1]   LED zones, interactive: mark side / top center, saves itself
   pnp-buttons      button test, 15 s
+  pnp-cam          camera values; pnp-cam top exposure 60 (lower = darker,
+                   auto = camera decides), zoom 46, gain, brightness -- live,
+                   kept for the next start. pnp-cam snap: frames + detection box
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
   pnp-arm-test     play with the geofence on (stops teleop meanwhile)
   pnp-arm-bus [s]  live servo voltages, DROP when a motor goes missing

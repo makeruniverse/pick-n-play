@@ -15,5 +15,6 @@ wheels/
 # Laufzeit-Artefakte
 scores.db*
 led_zones.json
+cam.json
 result.json
 game/assets/mlg/

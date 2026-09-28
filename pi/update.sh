@@ -19,9 +19,11 @@ changed() { ! g diff --quiet "$old" "$new" -- "$@"; }
 uv_sync() { as_ubuntu timeout 600 /home/ubuntu/.local/bin/uv --directory $R sync --extra pi; }
 healthy() {
     for u in $units; do
-        # pnp-arm* stops teleop on purpose and runs run.py by hand (28.9.):
-        # not the update's fault, and counting it would mark a good commit bad
-        [ $u = teleop ] && pgrep -f "[t]eleop/run.py" > /dev/null && continue
+        # Stopped by hand (pnp-arm*, pnp-stop) is inactive + Result=success:
+        # not the update's fault, counting it marked good commits bad twice
+        # (28.9.). A crash can't look like that: Restart=always -> NRestarts.
+        [ "$(systemctl show -p ActiveState --value $u)$(systemctl show -p Result --value $u)" \
+            = inactivesuccess ] && continue
         systemctl is-active -q $u || return 1
         [ "$(systemctl show -p NRestarts --value $u)" = "${n0[$u]}" ] || return 1
     done
@@ -33,7 +35,7 @@ main() {
         echo "repo broken, re-cloning"
         rm -rf $R.new
         as_ubuntu timeout 300 git clone -q -b expo $URL $R.new || return 0
-        mv $R/.venv $R/scores.db* $R/led_zones.json $R.new/ 2>/dev/null
+        mv $R/.venv $R/scores.db* $R/led_zones.json $R/cam.json $R.new/ 2>/dev/null
         mv $R $R.broken.$(date +%s) && mv $R.new $R
         systemctl restart pnp-expo teleop
         return 0

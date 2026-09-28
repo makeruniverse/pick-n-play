@@ -1,10 +1,12 @@
 import os
+import signal
+import subprocess
 
 import cv2
 import pygame
 from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA,
                     CAM_INDEXES, CAM_ZOOM, CAM_FLIP, DEMO_VIDEO, CV_THREADS, BUTTONS,
-                    CAM_STALE)
+                    CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC)
 from app import Ctx, run_game
 from db import DB
 from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
@@ -26,6 +28,28 @@ def main():
     arm, top = CAM_INDEXES
     cams = {i: Camera(i, zoom=CAM_ZOOM if i == top else None, flip=CAM_FLIP and i == top)
             for i in set(CAM_INDEXES)} if CAMERA else {}
+    # Exposure etc. from config + cam.json (pnp-cam). auto_exposure comes
+    # first in each dict: exposure_time is refused until it's manual.
+    for role, i in zip(("arm", "top"), CAM_INDEXES if cams and not MAC else ()):
+        for k, v in CAM_CTRLS[role].items():
+            subprocess.run(["v4l2-ctl", "-d", f"/dev/video{i}", "-c", f"{k}={v}"])
+
+    def snap(*_):
+        """pnp-cam snap: the frames as they come in, the top one with the
+        detection box, next to the scene state (or /tmp under pnp-start)."""
+        for role, i in zip(("arm", "top"), CAM_INDEXES):
+            f = cams[i].read()[1]
+            if f is None:
+                continue
+            if role == "top":
+                h, w = f.shape[:2]
+                rx, ry, rw, rh = TRAY_ROI
+                f = cv2.rectangle(f.copy(), (int(rx * w), int(ry * h)),
+                                  (int((rx + rw) * w), int((ry + rh) * h)), (0, 255, 0), 3)
+            cv2.imwrite(os.path.join(os.environ.get("RUNTIME_DIRECTORY", "/tmp"),
+                                     f"cam-{role}.jpg"), f)
+    if cams:
+        signal.signal(signal.SIGUSR1, snap)
     det = ArucoDetector(cams[top]) if cams else FakeDetector()
     # Left is plain passthrough, right is the same image plus overlay. Only
     # the top-down pane gets the detector.

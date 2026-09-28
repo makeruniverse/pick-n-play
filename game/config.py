@@ -345,6 +345,21 @@ CAM_ZOOM      = 40
 # the camera has no V4L2 flip, so the grabber turns the frame. TRAY_ROI is
 # in the turned (upright) image, as it was picked.
 CAM_FLIP      = not MAC
+# V4L2 controls per camera, set on every start after CAM_ZOOM (the camera
+# keeps whatever the last program left). Auto exposure blew out the hall
+# (28.9.), so manual. Tuned live with pnp-cam, which writes cam.json --
+# untracked like led_zones.json, so an update never resets it.
+CAM_CTRLS_FILE = os.path.join(os.path.dirname(__file__), "..", "cam.json")
+CAM_CTRLS     = {"arm": {"auto_exposure": 1, "exposure_time_absolute": 78},
+                 "top": {"auto_exposure": 1, "exposure_time_absolute": 78}}
+try:
+    with open(CAM_CTRLS_FILE) as _f:
+        for _k, _v in json.load(_f).items():
+            CAM_CTRLS[_k].update(_v)
+            if CAM_CTRLS[_k].get("auto_exposure") != 1:   # auto: no fixed time
+                CAM_CTRLS[_k].pop("exposure_time_absolute", None)
+except FileNotFoundError:
+    pass
 # 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
 # 1.8 times the area of the earlier 544 x 306: the player steers the arm by
 # these images, so they get priority. The instruction sits above, the bar
