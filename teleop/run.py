@@ -122,6 +122,11 @@ def leader():
     from lerobot.teleoperators.so101_leader import SO101Leader, SO101LeaderConfig
     arm = SO101Leader(SO101LeaderConfig(port=LEADER, id="my_leader_arm"))
     arm.connect()
+    # The leader's gripper turns the other way than the follower's (28.9.).
+    # Set here, not in the calibration json: lerobot-calibrate writes
+    # drive_mode 0 every time, and a recalibration flipped it back once.
+    # Set, not toggled, so a json that already says 1 stays correct.
+    arm.bus.calibration["gripper"].drive_mode = 1
     return arm
 
 

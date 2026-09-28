@@ -89,7 +89,9 @@ while True:
 }
 
 # Expo mode (pi/setup.sh): the game as a systemd service that never gives up
-alias pnp-expo='sudo systemctl start pnp-expo'
+# A pnp-start game still holds the buttons' GPIO: the service dies on 'GPIO busy'
+unalias pnp-expo 2>/dev/null   # was an alias: re-sourcing a shell would choke
+pnp-expo() { pnp-running > /dev/null && pnp-stop; sudo systemctl start pnp-expo; }
 alias pnp-expo-stop='sudo systemctl stop pnp-expo'
 alias pnp-expo-log='journalctl -u pnp-expo -u teleop -u pnp-update -f'
 alias pnp-expo-on='sudo systemctl enable --now pnp-expo pnp-update.timer'     # autostart
