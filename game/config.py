@@ -267,6 +267,7 @@ KEYMAP = {
     pygame.K_UP:   "up",   pygame.K_DOWN:  "down",
     pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
     pygame.K_q:    "quit",   # ponytail: development only, doesn't exist on the cabinet
+    pygame.K_m:    "mlg",    # on the cabinet: MLG_CHORD, see below
 }
 
 # The physical button behind each direction, as a color and as a glyph. The
@@ -343,6 +344,8 @@ MARK_WIDTH    = 5         # line width of the detection window and of the
 # 12 V. An emergency stop that has to go through Python first isn't one.
 BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blue, yellow, red, green
 HOLD_QUIT     = 5.0    # all four buttons held this long -> game exits (expo: systemd restarts it)
+MLG_CHORD     = {"up", "down"}   # blue + yellow held MLG_HOLD s -> MLG mode (mlg.py), red ends it
+MLG_HOLD      = 2.0
 CAM_STALE     = 5.0    # no new camera frame for this long -> stop the watchdog, systemd restarts
 # Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
 BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
@@ -368,3 +371,8 @@ LED_STRIPES = 24      # candy-cane stripes across the full length, density-indep
 # LED_A / LED_B (candy cane, bar) come from the theme; red stays HPI:
 LED_RED     = (255, 0, 20)
 LED_DOWN    = (60, 20, 0)   # calm dim orange: game crashed, systemd is restarting it
+
+# ── MLG mode ──────────────────────────────────────────────────────────────
+# Optional clip under the text spam, its sound as video.wav next to it. Not
+# in git (size, and it's somebody's YouTube upload) -- pnp-help says how.
+MLG_VIDEO = os.path.join(os.path.dirname(__file__), "assets", "mlg", "video.mp4")

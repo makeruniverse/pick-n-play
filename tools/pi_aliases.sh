@@ -48,14 +48,14 @@ pnp-status() {
     grep -iE "error|traceback|LEDs off" $PNP_LOG 2>/dev/null | tail -5
 }
 
-# LED strip: the four game states, 4 s each. pnp-leds 0.1 for dim
+# LED strip: the four game states plus MLG, 4 s each. pnp-leds 0.1 for dim
 pnp-leds() {
     pnp-running && { echo "game is running, pnp-stop first"; return 1; }
     PNP_LED_BRIGHT=${1:-1.0} timeout -s KILL 30 $PNP_PY -c "
 import sys, time; sys.path.insert(0, '$PNP/game')
 from hw import Leds
 l = Leds()
-for s in ('idle', 'game', 'hurry', 'score'):
+for s in ('idle', 'game', 'hurry', 'score', 'mlg'):
     print(s, flush=True); l.show(s, 0.5); time.sleep(4)
 l.close()" 2>&1 | grep -v pygame
 }
@@ -119,6 +119,18 @@ Re-measuring from scratch: set that joint back to (-100, 100) first.
 EOF
 }
 
+# MLG mode's clip (game/mlg.py). 360p on purpose: the screen crunches it to
+# 320x180 anyway, and a small file costs the Pi nothing to decode. The sound
+# goes to video.wav because cv2 plays no audio. Not in git.
+pnp-mlg-video() {
+    [ $# = 1 ] || { echo "usage: pnp-mlg-video YOUTUBE-URL"; return 1; }
+    local d=$PNP/game/assets/mlg
+    mkdir -p $d && rm -f $d/video.*
+    yt-dlp -f "b[height<=360]" --remux-video mp4 -o "$d/video.%(ext)s" "$1" &&
+    ffmpeg -y -loglevel error -i $d/video.mp4 -vn -ac 1 -ar 44100 $d/video.wav &&
+    echo "ok, next MLG mode plays it: $d"
+}
+
 # Fair wifi: pnp-wifi-add SSID PASS. Replaces the previous fair network,
 # the studio wifi stays. DHCP on, because a fair hands out its own addresses.
 # netplan apply drops wifi for a moment -- do it at the keyboard, not over it.
@@ -160,7 +172,7 @@ expo mode (systemd: game, teleop, auto-update from branch expo)
 
 hardware
   pnp-status       process, temp, throttling, voltage, errors
-  pnp-leds [0..1]  LED test, all four states
+  pnp-leds [0..1]  LED test, all four states plus MLG
   pnp-leds-off     strip dark
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
@@ -169,5 +181,9 @@ hardware
 
 All four buttons held for 5 s restart the game. In expo mode that's the way
 back from a stuck screen, without a keyboard.
+
+MLG mode: blue + yellow held for 2 s, from any scene (a running round is
+dropped). Red ends it. Green = air horn, blue/yellow = more text.
+  pnp-mlg-video URL   clip for it (yt-dlp + ffmpeg), otherwise synth only
 EOF
 }

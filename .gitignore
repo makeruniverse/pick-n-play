@@ -15,3 +15,4 @@ wheels/
 # Laufzeit-Artefakte
 scores.db*
 result.json
+game/assets/mlg/

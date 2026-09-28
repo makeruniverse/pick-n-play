@@ -13,7 +13,7 @@ import pygame
 from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ,
                     TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
-                    LED_STRIPES, LED_A, LED_B, LED_RED)
+                    LED_STRIPES, LED_A, LED_B, LED_RED, MLG_CHORD, MLG_HOLD)
 
 
 def notify(msg):
@@ -244,6 +244,7 @@ class Buttons:
                      for p, a in pins.items()}
         self.wait = {}     # action -> seconds until the next repeat
         self.held = 0.0    # all four pressed for this long, see pump()
+        self.mlg = 0.0     # MLG_CHORD pressed for this long
 
     def pump(self, dt):
         """Actions that have fired since the last frame."""
@@ -254,6 +255,12 @@ class Buttons:
         if self.held >= HOLD_QUIT:
             self.held = 0.0
             return ["quit"]
+        # Easter egg, same idea: MLG_CHORD held for MLG_HOLD -> "mlg", once.
+        # -inf keeps it from firing again until the chord is let go.
+        self.mlg = self.mlg + dt if set(pressed) == MLG_CHORD else 0.0
+        if self.mlg >= MLG_HOLD:
+            self.mlg = float("-inf")
+            return ["mlg"]
         # More than one button at a time is nobody playing -- it's the escape
         # hatch being pressed. Without this the four buttons repeated at
         # KEY_REPEAT for five seconds, which walked the game through its
@@ -389,8 +396,14 @@ def led_frame(state, k, t, n):
     game   time left as a bar: k = fraction of the round still remaining
     hurry  final seconds, red at 2 Hz, in sync with the red screen
     score  same candy cane, four times as fast
+    mlg    gamer RGB: two rainbows running a lap a second, white sparkles
     """
     i = np.arange(n)
+    if state == "mlg":
+        k6 = (np.array((5, 3, 1)) + ((i / n * 2 - t) % 1)[:, None] * 6) % 6   # hue -> RGB
+        rgb = (1 - np.clip(np.minimum(k6, 4 - k6), 0, 1)) * 255
+        rgb[np.random.default_rng(int(t * 20)).random(n) < 0.03] = 255   # seeded: still pure in t
+        return rgb
     if state == "game":
         return np.where((i < k * n)[:, None], LED_A, np.multiply(LED_A, 0.08))
     if state == "hurry":
@@ -520,7 +533,7 @@ if __name__ == "__main__":
         is_pressed = False
     btn = Buttons.__new__(Buttons)
     btn.delay, btn.rate = 0.5, 0.25
-    btn.btns, btn.wait, btn.held = {"up": _Pin(), "down": _Pin()}, {}, 0.0
+    btn.btns, btn.wait, btn.held, btn.mlg = {"up": _Pin(), "down": _Pin()}, {}, 0.0, 0.0
     assert btn.pump(0.125) == []                        # not pressed
     btn.btns["up"].is_pressed = True
     assert btn.pump(0.125) == ["up"], "edge doesn't fire immediately"
@@ -542,6 +555,17 @@ if __name__ == "__main__":
     btn.btns["down"].is_pressed = True
     btn.pump(HOLD_QUIT / 2)
     assert btn.pump(HOLD_QUIT / 2) == ["quit"] and btn.held == 0.0
+    # MLG_CHORD held for MLG_HOLD -> "mlg" exactly once, again only after release
+    btn.btns = {a: _Pin() for a in ("up", "down", "left", "right")}
+    btn.wait, btn.mlg = {}, 0.0
+    for a in MLG_CHORD:
+        btn.btns[a].is_pressed = True
+    assert btn.pump(MLG_HOLD / 2) == [] and btn.pump(MLG_HOLD / 2) == ["mlg"]
+    assert [btn.pump(MLG_HOLD) for _ in range(3)] == [[], [], []], "mlg fires twice"
+    for a in MLG_CHORD:
+        btn.btns[a].is_pressed = False
+    btn.pump(0.1)
+    assert btn.mlg == 0.0, "release doesn't re-arm mlg"
 
     # 5 · FakeDetector has the same interface: starts empty, adds over time
     fk = FakeDetector(period=0.05)
@@ -560,6 +584,14 @@ if __name__ == "__main__":
     # Time-left bar: half a round = half the strip lit
     fr = led_frame("game", 0.5, 0.0, 100)
     assert (fr[:50] == LED_A).all() and not (fr[50:] == LED_A).all()
+    # MLG: a real spectrum, a few sparkles, same frame for the same t, and
+    # less power than the candy cane's white half
+    fr = led_frame("mlg", 1.0, 2.0, 800)
+    assert fr.shape == (800, 3) and fr.min() >= 0 and fr.max() <= 255
+    assert len({tuple(c) for c in (fr // 64).astype(int)}) >= 6
+    assert 5 < (fr == 255).all(axis=1).sum() < 60
+    assert (fr == led_frame("mlg", 1.0, 2.0, 800)).all() and fr.sum() / 800 / 255 < 1.6
+    assert (led_frame("mlg", 1, 0, 3)[0] == (255, 0, 0)).all()
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")
     q.show("game", 0.3)
