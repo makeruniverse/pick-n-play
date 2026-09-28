@@ -84,11 +84,11 @@ CHEAT_TAPS = 5
 # and `uv run game/sprites.py` checks that for every file in themes/.
 # New theme: copy sugar_rush.py, the file's header says what to do.
 THEME = os.environ.get("PNP_THEME", "sugar_rush")
-THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT",
-              "LED_A", "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE")
+THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT", "LED_A",
+              "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE", "ARM")
 _theme = importlib.import_module(f"themes.{THEME}")
-(BG, GREY, WHITE, ACCENT, CANDY, TEXT,
- LED_A, LED_B, BASE, SHAPES, SPRITES, EXTRAS, SPRITE) = (getattr(_theme, k) for k in THEME_KEYS)
+(BG, GREY, WHITE, ACCENT, CANDY, TEXT, LED_A,
+ LED_B, BASE, SHAPES, SPRITES, EXTRAS, SPRITE, ARM) = (getattr(_theme, k) for k in THEME_KEYS)
 
 # Language at startup. The idle screen switches it at runtime (▲ twice), and
 # it stays switched until someone switches back -- a school class is one
@@ -167,8 +167,29 @@ DUCK_RELEASE = 0.35   # seconds back to full
 # Exactly one marker per physical cupcake. ArucoDetector.marks is a dict
 # keyed by ID -- two cupcakes with the same marker count once, and that
 # would be a silent scoring bug that looks like a detection problem on show day.
-VALUES = {0: 14, 1: 17, 2: 21, 3: 24, 4: 28,
-          5: 32, 6: 36, 7: 41, 8: 46, 9: 52}
+# Six, not ten. The master print's plate 2 failed on 2026-09-25 with no time
+# for another six-colour run, so the set was reprinted solid: one filament
+# per treat, the marker cells the only second colour. These six exist as
+# physical objects. The other markers are designed and unprinted -- hw.py
+# ignores any ID that isn't listed here, so a stray treat on the tray counts
+# for nothing instead of scoring a phantom.
+#
+# Sorted by printed volume, bonbon 26 cm3 up to the two-tier torte 99 cm3:
+# heavier is dearer is the one rule a visitor learns without reading anything.
+#
+# Eleven treats since the reprint of 2026-09-28 (tools/nachdruck.py): the
+# expo set of six plus macaron, cup_mini, bonbon, cup_vanille, a bigger
+# riegel and a two-tier torte, all one filament plus marker cells. The ten
+# price steps of 2026-09-11 go to the ten lighter ones unchanged; the
+# eleventh, 6.20 for the two-tier torte, is the one of all extra steps that
+# leaves the most targets for an empty tray (27 instead of 21 with the old
+# ten). Targets span 3.80 to 8.70 now -- the budget lines only ever say
+# {goal}, so no text changes with it.
+#
+# The pink petit four from the first CMYK test also carries #2. It stays off
+# the tray: two #2 on it count once.
+VALUES = {4: 14, 1: 17, 0: 21, 10: 24, 6: 28, 2: 32,
+          11: 36, 7: 41, 5: 46, 9: 52, 8: 62}
 CENTS  = 10        # one VALUES step in cents. Only read by euro().
 
 # ── Game mode ─────────────────────────────────────────────────────────────

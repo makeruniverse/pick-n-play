@@ -36,7 +36,13 @@ N = 16             # base area 16 x 16 voxels = 80 x 80 mm, like a sprite
 FIL = dict(ivory=IVORY, latte=LATTE, sakura=SAKURA, lemon=LEMON, ice=ICE, lilac=LILAC,
            tan=TAN, caramel=CARAMEL, scarlet=SCARLET, apple=APPLE,
            dark_chocolate=(77, 51, 36), charcoal=(0, 0, 0),
-           plum=(149, 0, 81), dark_blue=(4, 47, 86))       # Plum, Dark Blue: marker cells only
+           plum=(149, 0, 81), dark_blue=(4, 47, 86),       # Plum, Dark Blue: marker cells only
+           # The spools actually standing in the three printers on 2026-09-25.
+           # scarlet and sakura above are already Matte Scarlet Red and Matte
+           # Sakura Pink, ivory is the white and charcoal the black.
+           hot_pink=(236, 0, 140), purple=(94, 67, 183),
+           blue=(0, 134, 214), grass_green=(97, 198, 128),
+           yellow=(244, 238, 42))
 # Cube faces: normal, four corners counter-clockwise as seen from outside.
 FACES = (((1, 0, 0), ((1, 0, 0), (1, 1, 0), (1, 1, 1), (1, 0, 1))),
          ((-1, 0, 0), ((0, 0, 0), (0, 0, 1), (0, 1, 1), (0, 1, 0))),
@@ -142,47 +148,84 @@ def cake(frost, sponge, jam):
                  (disc(5.2), frost), (candle, "*ivory"), (candle, "*ivory"), (candle, "*lemon"))
 
 
+def solid(g, fil):
+    """Every voxel of `g` in one filament, decoration included.
+
+    The six-colour print failed on 2026-09-25 with no time for a second run,
+    so the expo set is built this way instead: one filament for the body, and
+    the marker cells as the only second colour. That is two filaments per
+    object instead of four to six -- and because the marker lives in the top
+    DEPTH mm alone, everything below prints through in one colour and the
+    purge tower nearly disappears. On a multi-material printer that tower,
+    not the object, is what eats the hours.
+
+    The '*' prefix survives, so decoration still drops out where the marker
+    goes. It just no longer carries a colour of its own: the bar's label and
+    the cake's candles read as embossed geometry now, not as another filament.
+    """
+    # Width from the longest name in FIL, not from `fil`: place() writes the
+    # marker's ink name into this same array afterwards, and a body colour
+    # shorter than it would silently truncate ("charcoal" -> "charcoa").
+    out = np.full(g.shape, "", dtype=f"<U{max(map(len, FIL)) + 1}")
+    out[g != ""] = fil
+    out[np.char.startswith(g, "*")] = "*" + fil
+    return out
+
+
 # Name -> build plan. Order like SPRITE in the theme: cheap/light first.
+# The six wrapped in solid() are the expo set; the other eight keep their
+# full-colour plans for whenever there's a printer and an afternoon again.
 TREATS = {
-    "macaron":      lambda: macaron("sakura", "ivory"),
-    "riegel":       lambda: bar("scarlet", "dark_chocolate"),
-    "petitfour":    lambda: petitfour("sakura", "ice"),
+    "macaron":      lambda: solid(macaron("sakura", "ivory"), "hot_pink"),
+    "riegel":       lambda: solid(bar("scarlet", "dark_chocolate"), "scarlet"),
+    "petitfour":    lambda: solid(petitfour("sakura", "ice"), "yellow"),
     "berliner":     lambda: berliner("caramel", "tan"),
     "cup_mini":     lambda: cupcake([3, 3.3, 3.6], 4.2, [3.8, 3, 1.6], None,
                                     ("lemon", "ivory"), "caramel", "sakura"),
     "cup_vanille":  lambda: cupcake([3.6, 4, 4.2, 4.6, 4.8], 5.2, [4.8, 4.2, 3.2, 2.2], "scarlet",
                                     ("sakura", "ivory"), "tan", "ivory"),
-    "cup_blaubeer": lambda: cupcake([3.2, 3.4, 3.6, 3.8, 4, 4.2], 4.6, [4.2, 3.6, 2.6], "lilac",
-                                    ("lilac", "ivory"), "tan", "ice"),
+    "cup_blaubeer": lambda: solid(cupcake([3.2, 3.4, 3.6, 3.8, 4, 4.2], 4.6, [4.2, 3.6, 2.6],
+                                          "lilac", ("lilac", "ivory"), "tan", "ice"), "grass_green"),
     "cup_erdbeer":  lambda: cupcake([4, 4.4, 4.8, 5.2], 5.8, [5.4, 4.8, 3.8, 2.4], "scarlet",
                                     ("ivory", "sakura"), "tan", "sakura"),
     "cup_schoko":   lambda: cupcake([3.6, 4, 4.2, 4.6, 4.8], 5.2, [4.6, 3.8, 3.8, 2.8, 2.8, 1.6], "scarlet",
                                     ("dark_chocolate", "caramel"), "caramel", "dark_chocolate"),
     "cup_luxus":    lambda: cupcake([3.8, 4.2, 4.4, 4.8, 5, 5.2], 5.6, [5.2, 4.6, 4, 3.2, 2.2], "lemon",
                                     ("charcoal", "tan"), "dark_chocolate", "tan"),
-    "stueck_erdbeer": lambda: slice_("sakura", "tan", "scarlet"),
+    "stueck_erdbeer": lambda: solid(slice_("sakura", "tan", "scarlet"), "purple"),
     "stueck_schoko":  lambda: slice_("dark_chocolate", "caramel", "latte"),
     "torte_schoko":   lambda: cake("dark_chocolate", "caramel", "latte"),
-    "torte_erdbeer":  lambda: cake("sakura", "tan", "scarlet"),
+    "torte_erdbeer":  lambda: solid(cake("sakura", "tan", "scarlet"), "blue"),
 }
 
 
 # Name -> (marker ID from DICT_4X4_50, cell color, base color, search region).
-# IDs 0..9 like SPRITE in the theme, 10..13 are new. Color pairs from
-# docs/meshy-prompts.md; inverted on chocolate (light cells).
+# IDs 0..9 like SPRITE in the theme, 10..13 are new.
+#
+# For the six of the expo set the base color is the body's own filament, so
+# the cells are the only second colour on the object -- one rule for all of
+# them, white cells, because white is the spool that exists more than once
+# and a spool cannot be in two printers at once. Yellow is the exception:
+# white on it measures under 2:1 in grey, so it gets black cells and its
+# printer is the one that also carries the black spool.
+# hw.py has detectInvertedMarker on, so light-on-dark is the tested path.
+# The other eight keep the pairs from docs/meshy-prompts.md.
 MARKERS = {
-    "macaron":        (0, "plum", "sakura", None),
-    "riegel":         (1, "charcoal", "ivory", X > -2),     # paper only
-    "petitfour":      (2, "plum", "sakura", None),
+    "macaron":        (0, "ivory", "hot_pink", None),
+    "riegel":         (1, "ivory", "scarlet", X > -2),      # flat right half only
+    "petitfour":      (2, "charcoal", "yellow", None),      # white on yellow is too pale
     "berliner":       (3, "charcoal", "ivory", None),
     "cup_erdbeer":    (4, "plum", "sakura", None),
     "cup_vanille":    (5, "charcoal", "ivory", None),
-    "stueck_erdbeer": (6, "plum", "sakura", None),
+    "stueck_erdbeer": (6, "ivory", "purple", None),
     "torte_schoko":   (7, "ivory", "dark_chocolate", None),
     "stueck_schoko":  (8, "ivory", "dark_chocolate", None),
-    "torte_erdbeer":  (9, "plum", "sakura", None),
+    "torte_erdbeer":  (9, "ivory", "blue", None),
     "cup_mini":       (10, "plum", "sakura", None),
-    "cup_blaubeer":   (11, "dark_blue", "ice", None),
+    "cup_blaubeer":   (11, "charcoal", "grass_green", None),
+                                                            # black reads BETTER
+                                                            # on this green: 30 mm
+                                                            # against 24 mm white
     "cup_schoko":     (12, "ivory", "dark_chocolate", None),
     "cup_luxus":      (13, "charcoal", "tan", None),
 }

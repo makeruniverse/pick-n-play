@@ -438,14 +438,13 @@ SHAPES["guest_joy"] = _swap(SHAPES["guest"],
 # everything else on this screen is round. Now: a blunt 4 px tip, a wider
 # neck, legs that taper over three rows, and the highlight as a 2 x 2 blob
 # instead of a one-pixel diagonal, so it reads as a glint at 6 x scale.
-# The demo on the story screen: the arm, and the tray it drops into.
-# Not treats, so they live outside SPRITES and never ride the idle belt.
+# The tray the arm drops a treat into, on the story screen. Not a treat,
+# so it lives outside SPRITES and never rides the idle belt. Aligned to the
+# top of its box: the rim starts on the first row, so a treat box set
+# directly above it is lying in it and not floating.
 #
-# All three grids are aligned to their box edges, because scenes place them
-# by box and the layout self-test rejects any overlap: the claw's jaws end
-# on the last row, the tray's rim starts on the first. A treat box set
-# directly underneath the arm is then held by it, and one set directly
-# above the tray is lying in it -- no pixel nudging in the scene.
+# The arm that reaches into it is no longer a grid at all -- it is drawn
+# from the real SO-101 CAD, see arm.py.
 SHAPES["tray"] = (
     "kkkkkkkkkkkkkkkk",
     "keeeeeeeeeeeeeek",
@@ -455,91 +454,6 @@ SHAPES["tray"] = (
     "..kkeeeeeeeekk..",
     "...kkkkkkkkkk...",
 ) + ("................",) * 9
-
-# The arm, 32 x 32 like the faces -- at the treats' 16 there is no room for
-# both an arm and a claw, and what was left over on the first attempt was
-# two thin jaws on a crossbar, which reads as a crucifix. The shoulder sits
-# in the top left corner and is meant to run off the edge: the real arm
-# stands next to the cabinet, so a base on the picture would be a second,
-# wrong machine.
-#
-# No pink. The joints are a darker shade (ARM_SHADE) instead of ACCENT, which
-# was tried first: three pink blocks made half the sprite an accent colour,
-# and ACCENT means "what the visitor is affecting right now" everywhere
-# else on the screen. The arm is not that -- it copies, it does not signal.
-#
-# Two poses, and the loop in scenes.py switches between them: that switch
-# is the whole animation of the grip. The jaws splay outwards when open --
-# an open claw pointing straight down reads as a pair of legs.
-SHAPES["arm"] = (
-    "aaaaaaaaak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddakkkkk..................",
-    "aaddddddaaaaakk.................",
-    "aaaaaaabaaaaaakk................",
-    "aaaaaaaabaaaaaakk...............",
-    "kkkkkkkkkbaaaaaakk..............",
-    "........kkbaaaaaak..............",
-    ".........kbaaaaaakkkk...........",
-    ".........kkdddddddddk...........",
-    "..........kdddddddddk...........",
-    "..........kdddddddddkk..........",
-    "..........kdddddddddak..........",
-    "..........kdddddddddkk..........",
-    "..........kdddddddddak..........",
-    "..........kkkkbaaaaaak..........",
-    ".............kbaaaaaak..........",
-    "........kkkkkkbaaaaaakkk........",
-    "........kddddddddddddddk........",
-    "........kddddddddddddddk........",
-    "..kkkkkkkddddddddddddddkkkkkkk..",
-    "..kaaaaaaddddddddddddddaaaaaak..",
-    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
-    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
-    "..kkaaaaaakkkkkkkkkkkkaaaaaakk..",
-    "...kkkaaaaakk......kkaaaaakkk...",
-    ".....kkkaaaakkk..kkkaaaakkk.....",
-    ".......kkkaaaakkkkaaaakkk.......",
-    ".........kkkaaakkaaakkk.........",
-)
-
-SHAPES["arm_open"] = (
-    "aaaaaaaaak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddak......................",
-    "aaddddddakkkkk..................",
-    "aaddddddaaaaakk.................",
-    "aaaaaaabaaaaaakk................",
-    "aaaaaaaabaaaaaakk...............",
-    "kkkkkkkkkbaaaaaakk..............",
-    "........kkbaaaaaak..............",
-    ".........kbaaaaaakkkk...........",
-    ".........kkdddddddddk...........",
-    "..........kdddddddddk...........",
-    "..........kdddddddddkk..........",
-    "..........kdddddddddak..........",
-    "..........kdddddddddkk..........",
-    "..........kdddddddddak..........",
-    "..........kkkkbaaaaaak..........",
-    ".............kbaaaaaak..........",
-    "........kkkkkkbaaaaaakkk........",
-    "........kddddddddddddddk........",
-    "........kddddddddddddddk........",
-    "..kkkkkkkddddddddddddddkkkkkkk..",
-    "..kaaaaaaddddddddddddddaaaaaak..",
-    "..kaabbaaaaaaaaaaaaaaaaaaaaaak..",
-    ".kkaabbaaaaaaaaaaaaaaaaaaaaaakk.",
-    ".kaaaaaakkkkkkkkkkkkkkkkaaaaaak.",
-    "kkaaaaakk..............kkaaaaakk",
-    "kaaaaakk................kkaaaaak",
-    "kaaaakk..................kkaaaak",
-    "kaaaak....................kaaaak",
-)
 
 SHAPES["star"] = (
     "......kaak......",
@@ -567,15 +481,64 @@ SAKURA, LEMON, ICE = (232, 175, 207), (247, 217, 89), (163, 216, 225)
 APPLE, LILAC, SCARLET = (194, 225, 137), (174, 150, 212), (222, 67, 67)
 IVORY, TAN, LATTE = (255, 255, 255), (232, 219, 183), (211, 183, 167)
 CARAMEL, BONE, MILK = (174, 131, 91), (203, 198, 184), (128, 84, 60)
-# The arm in the colours of the real one: translucent blue PLA, sampled
-# from a photo of the SO-101 (lit face, shaded face). The only non-sweet
-# colours; the screen shows the machine the visitor is standing next to.
-ARM_BLUE, ARM_SHADE = (84, 124, 234), (46, 70, 160)
+STEEL = (86, 74, 92)        # the arm's servos, the only non-sweet colour
+
+# The six spools the expo set is printed from (2026-09-25). SCARLET above is
+# already Matte Scarlet Red, so it serves twice. These four are PLA Basic and
+# therefore glossy -- the only reason that matters is the top-down camera, see
+# the marker note in tools/voxel.py.
+HOT_PINK, PURPLE = (236, 0, 140), (94, 67, 183)
+BLUE, GRASS, YELLOW = (0, 134, 214), (97, 198, 128), (244, 238, 42)
+
+# The robot, printed plate and servo. Its own key because arm.py draws from
+# CAD instead of a grid, so it has no SPRITES entry to carry a palette. No
+# pink in it: ACCENT means "what the visitor is affecting right now"
+# everywhere else, and the arm only copies, it never signals.
+# The plate is the real arm's translucent blue PLA, sampled from a photo
+# (2026-09-28), so the screen shows the machine next to the visitor.
+ARM = ((84, 124, 234), STEEL)
 
 # Applies to every sprite, individual palettes override it.
 BASE = dict(k=(18, 6, 14), w=IVORY, y=LEMON, m=ICE, r=SCARLET, e=BONE, b=IVORY)
 
+
+def _mix(c, f):
+    """Same hue, f times as bright. f > 1 blends toward white instead of
+    multiplying: a saturated blue has a zero channel, and scaling it up would
+    leave a highlight that never lightens."""
+    if f <= 1:
+        return tuple(round(v * f) for v in c)
+    return tuple(round(v + (255 - v) * (f - 1)) for v in c)
+
+
+def _solid(c):
+    """Palette for a treat printed in ONE filament.
+
+    Every letter becomes a shade of the same colour, so the sprite gets its
+    depth the way the real object does -- from light falling on geometry, not
+    from a second material. Only k, the outline, stays dark. Without this a
+    solid-printed treat would draw with BASE's white sprinkles and scarlet
+    cherry, and the screen would promise a detail the tray can't show.
+    """
+    lo, hi = _mix(c, 0.72), _mix(c, 1.22)
+    return dict(a=c, b=hi, c=lo, d=_mix(c, 0.58), r=c, w=hi, y=hi, m=hi, e=lo)
+
+
 SPRITES = {
+    # The six _solid ones are the expo set, one filament each; the colour is
+    # the spool, straight from MARKERS in tools/voxel.py.
+    "bar_red":          ("bar",       _solid(SCARLET)),
+    "macaron_hot":      ("macaron",   _solid(HOT_PINK)),
+    "slice_purple":     ("slice",     _solid(PURPLE)),
+    "petitfour_yellow": ("petitfour", _solid(YELLOW)),
+    "cupcake_green":    ("cupcake",   _solid(GRASS)),
+    "cake_blue":        ("cake",      _solid(BLUE)),
+    # The reprint of 2026-09-28 (tools/nachdruck.py), same rule.
+    "bonbon_green":     ("bonbon",    _solid(GRASS)),
+    "cupcake_yellow":   ("cupcake",   _solid(YELLOW)),
+    "bar_blue":         ("bar",       _solid(BLUE)),
+    "cupcake_red":      ("cupcake",   _solid(SCARLET)),
+    "cake_hot":         ("cake",      _solid(HOT_PINK)),
     "cupcake_pink":   ("cupcake",   dict(a=SAKURA, c=ICE, d=(118, 176, 190))),
     "cupcake_lemon":  ("cupcake",   dict(a=LEMON, c=SAKURA, d=(196, 130, 168))),
     "cupcake_mint":   ("cupcake",   dict(a=APPLE, c=LILAC, d=(132, 108, 176))),
@@ -604,7 +567,6 @@ SPRITES = {
 SKIN, HAIR = (240, 196, 160), (150, 92, 60)
 _BELLA = dict(s=SKIN, h=HAIR, c=SAKURA, a=(255, 101, 189))
 _OSKAR = dict(s=SKIN, h=CARAMEL, c=SAKURA, a=(255, 101, 189), d=ICE, g=APPLE)
-_ARM = dict(a=ARM_BLUE, d=ARM_SHADE, b=(170, 196, 250))
 EXTRAS = {
     "baker":       ("baker",       _BELLA),
     "baker_talk":  ("baker_talk",  _BELLA),
@@ -614,16 +576,16 @@ EXTRAS = {
     "star_on":     ("star",        dict(a=LEMON, b=IVORY)),
     "star_off":    ("star",        dict(a=(96, 56, 82), b=(120, 76, 104))),
     "tray":        ("tray",        {}),
-    "arm":         ("arm",         _ARM),
-    "arm_open":    ("arm_open",    _ARM),
 }
 
 # marker_id -> sprite. The screen must show the same thing that's on the
 # tray -- otherwise the price reveal teaches the wrong association.
-# ponytail: placeholder, cheap/light -> expensive/wobbly. Reassign once
-# the printed objects are settled; one line per object. Donuts are missing
-# on purpose: the hole cuts through the marker.
-SPRITE = {0: "macaron_pink",   1: "bar_milk",      2: "petitfour_pink",
-          3: "berliner",       4: "cupcake_pink",  5: "cupcake_lemon",
-          6: "slice_straw",    7: "cake_choc",     8: "slice_choc",
-          9: "cake_straw"}
+# Everything printed solid (one filament plus marker cells), in the same
+# order as VALUES, cheap and light first. Shape and colour together tell the
+# treats apart: a solid object has no icing or filling left to do it. Where a
+# colour repeats (yellow, green, red, blue, hot pink) the shape differs. Donuts stay missing on
+# purpose: the hole cuts through the marker.
+SPRITE = {4: "bonbon_green",     1: "bar_red",        0: "macaron_hot",
+          10: "cupcake_yellow",  6: "slice_purple",   2: "petitfour_yellow",
+          11: "cupcake_green",   7: "bar_blue",       5: "cupcake_red",
+          9: "cake_blue",        8: "cake_hot"}
