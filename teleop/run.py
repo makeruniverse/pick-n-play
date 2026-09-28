@@ -20,6 +20,7 @@ Runs in the conda env `lerobot` (Python 3.10), not in the game's .venv:
   python teleop/run.py --test          self-test, no hardware
 """
 import os
+import shutil
 import socket
 import sys
 import threading
@@ -39,6 +40,8 @@ LIMITS = {
     "wrist_roll":    (-100, 100),
     "gripper":       (0, 100),
 }
+SHORT = {"shoulder_pan": "pan", "shoulder_lift": "lift", "elbow_flex": "elbow",
+         "wrist_flex": "wrist", "wrist_roll": "roll", "gripper": "grip"}   # --show line
 
 # The table, measured with --show: where shoulder_lift = a*elbow_flex +
 # b*wrist_flex + c the gripper touches it, `side` (+1/-1) is the side lift
@@ -172,11 +175,17 @@ def main(watch=False, fenced=False):
                 trail.append(pose)   # ponytail: ~40k tuples per 10 min, fine
                 n += 1
                 if n % 6 == 0:     # 10 lines a second, nobody reads 60
-                    print("  ".join(f"{j} {lo:6.1f}..{hi:6.1f}"
-                                    for j, (lo, hi) in seen.items()),
-                          end="\r", flush=True)
+                    # One line that fits: a wrapped line breaks the \r, and
+                    # the terminal fills with copies (28.9.).
+                    line = "  ".join(f"{SHORT.get(j, j)} {lo:.0f}..{hi:.0f}"
+                                     for j, (lo, hi) in seen.items())
+                    cols = shutil.get_terminal_size().columns
+                    print(line[:cols - 1].ljust(cols - 1), end="\r", flush=True)
             time.sleep(max(0.0, 1 / FPS - (time.perf_counter() - t)))
     except KeyboardInterrupt:
+        pass
+    finally:
+        # Also when the bus dies mid-run: what was measured so far is printed.
         if watch:
             print("\nLIMITS = {")
             for j, (lo, hi) in seen.items():
@@ -187,7 +196,6 @@ def main(watch=False, fenced=False):
                 print(f"FLOOR = ({a:.3f}, {b:.3f}, {c:.1f}, {side})")
             else:
                 print(f"# no FLOOR: needs 3+ table points, got {len(marks)}")
-    finally:
         lead.disconnect()
         follow.disconnect()
 
