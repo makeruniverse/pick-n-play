@@ -96,13 +96,15 @@ alias pnp-expo-on='sudo systemctl enable --now pnp-expo pnp-update.timer'     # 
 alias pnp-expo-off='sudo systemctl disable --now pnp-expo pnp-update.timer'   # back to pnp-start
 alias pnp-update-now='sudo systemctl start pnp-update'
 
-# Geofencing: teleop with a live min/max table, Ctrl-C prints LIMITS.
-# Stops the service meanwhile, both want the same two serial ports.
-pnp-arm-limits() {
+# Teleop by hand instead of the service, e.g. with the geofence on. Stops the
+# service meanwhile, both want the same two serial ports.
+pnp-arm() {
     sudo systemctl stop teleop
-    (cd $PNP && ~/miniforge3/envs/lerobot/bin/python teleop/run.py --show)
+    (cd $PNP && ~/miniforge3/envs/lerobot/bin/python teleop/run.py "$@")
     sudo systemctl start teleop
 }
+alias pnp-arm-test='pnp-arm --fence'            # play with the geofence on
+alias pnp-arm-limits='pnp-arm --fence --show'   # plus live min/max, table points
 
 # LeRobot calibration: pnp-arm-calibrate [follower|leader], default both.
 # Teleop has to be off meanwhile -- a tty opens twice without complaint, and
@@ -121,24 +123,30 @@ pnp-arm-calibrate() {
 
 pnp-arm-help() {
     cat <<'EOF'
-Geofencing: teleop/run.py clamps every joint of the leader into its band in
-LIMITS before the follower sees it. At the edge only that joint stops, the
-others keep following, so the arm stays playable instead of looking broken.
+Geofencing: teleop/run.py --fence clamps every joint of the leader into its
+band in LIMITS, and keeps the gripper above the table plane FLOOR by raising
+shoulder_lift. At a band edge only that joint stops, the others keep
+following, so the arm stays playable instead of looking broken. After a
+start the follower glides to the leader for 1 s instead of jumping.
+teleop.service runs WITHOUT --fence until it's tested -- only the servo
+overload guard (0.5 s) is always on.
 
-Dialing the bands in:
+Dialing it in:
   1. pnp-arm-limits          the arm keeps following, with a live min/max table
-  2. move every joint as far as the follower may go -- not onto the table,
-     not into the cabinet wall, not past the tray. The follower moves along,
-     so you see where it gets close instead of guessing from numbers.
-  3. also try the bad combinations: shoulder_lift and elbow_flex can each be
-     inside their band and still put the gripper on the table. Each band is
-     its own joint, the pair is not a region in space -- when in doubt, tighter.
-  4. Ctrl-C prints a LIMITS block. Paste it into teleop/run.py, commit,
-     push to expo -- the updater restarts teleop by itself.
+  2. move every joint as far as the follower may go -- not into the cabinet
+     wall, not past the tray. The follower moves along, so you see where it
+     gets close instead of guessing from numbers.
+  3. the table: hold the gripper just above it and press Enter, at 3-4 poses
+     spread over the table (near, far, left, right, wrist bent differently).
+     That's the table plane: shoulder_lift and elbow_flex can each be inside
+     their band and still put the gripper on the table, the plane catches it.
+  4. Ctrl-C prints LIMITS and FLOOR. Paste both into teleop/run.py.
+  5. pnp-arm-test            play with the fence on, try to hit the table
 
-Careful: the printed numbers are the leader's, before the clamp. Where a
+Careful: the printed numbers are the leader's, before the fence. Where a
 band is already narrow, the number keeps rising while the arm has stopped.
-Re-measuring from scratch: set that joint back to (-100, 100) first.
+Re-measuring from scratch: set that joint back to (-100, 100) first, and
+FLOOR back to None.
 EOF
 }
 
@@ -188,6 +196,7 @@ hardware
   pnp-led [0..1]   LED zones, interactive: mark side / top center, saves itself
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
+  pnp-arm-test     play with the geofence on (stops teleop meanwhile)
   pnp-arm-calibrate [follower|leader]  LeRobot calibration (stops teleop meanwhile)
   pnp-arm-help     how to dial in the geofence
   pnp-wifi-add SSID PASS      fair wifi, with DHCP

@@ -71,9 +71,16 @@ Done 2026-09-17: `teleop/run.py` replaces `run_teleop.sh`. It reads the
 leader, clamps each joint into its band from `LIMITS`, writes the follower,
 and pings the systemd watchdog. At the edge only that joint stops.
 
-Open: `LIMITS` is still the full range. On the machine run `pnp-arm-limits`,
-move the leader to the safe edges, Ctrl-C, paste the printed table.
-Idle torque shutoff, park pose and wake ramp have a home now, not built.
+2026-09-28, branch `arm-fence-test`, not on expo yet: the fence sits behind
+`--fence`, the service runs without it (overload guard at 0.5 s only, that
+one is on expo). New in the fence: `FLOOR`, the table as a plane in
+(lift, elbow, wrist), measured with Enter in `pnp-arm-limits` -- lift gets
+raised so the gripper slides over the table. And a 1 s wake ramp after a
+start. Test with `pnp-arm-test`, see `pnp-arm-help`.
+
+Open: `LIMITS` and `FLOOR` still to measure on the machine, then test, then
+`--fence` into `teleop.service` and merge to expo.
+Idle torque shutoff and park pose have a home now, not built.
 
 ### ○ Self-healing: calibration without us
 If teleop can't start because the calibration doesn't match (motor swapped,
