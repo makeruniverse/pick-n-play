@@ -106,6 +106,14 @@ pnp-arm() {
 alias pnp-arm-test='pnp-arm --fence'            # play with the geofence on
 alias pnp-arm-limits='pnp-arm --fence --show'   # plus live min/max, table points
 
+# Live bus check: voltage per motor on both buses, DROP when one goes missing.
+# Move the leader and wiggle cables meanwhile. pnp-arm-bus [s], default 60.
+pnp-arm-bus() {
+    sudo systemctl stop teleop
+    ~/miniforge3/envs/lerobot/bin/python $PNP/tools/scan_motors.py --watch ${1:-60}
+    sudo systemctl start teleop
+}
+
 # LeRobot calibration: pnp-arm-calibrate [follower|leader], default both.
 # Teleop has to be off meanwhile -- a tty opens twice without complaint, and
 # two processes on one bus garble each other's packets (28.9.). Asks on
@@ -209,6 +217,7 @@ hardware
   pnp-buttons      button test, 15 s
   pnp-arm-limits   dial in the geofence (stops teleop meanwhile)
   pnp-arm-test     play with the geofence on (stops teleop meanwhile)
+  pnp-arm-bus [s]  live servo voltages, DROP when a motor goes missing
   pnp-arm-calibrate [follower|leader]  LeRobot calibration (stops teleop meanwhile)
   pnp-arm-help     how to dial in the geofence
   pnp-wifi-add SSID PASS      fair wifi, with DHCP
