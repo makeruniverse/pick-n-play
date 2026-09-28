@@ -69,7 +69,7 @@ TEXT = {
         practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
         tut="LET'S WARM UP FIRST. PUT ANY TREAT ON THE TRAY IN THE MIDDLE.",
         tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
-        skip="▶ SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
+        skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET",
         order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
               "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?",
@@ -102,7 +102,8 @@ TEXT = {
         tut="ERST MAL ZUM ÜBEN: LEG IRGENDEINE SÜßIGKEIT AUFS TABLETT IN "
             "DER MITTE.",
         tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
-        skip="▶ ÜBERSPRINGEN", quit="◀ ABBRECHEN",
+        skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
+        quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
         order_head="BUDGET",
         order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
@@ -462,7 +463,7 @@ SHAPES["tray"] = (
 # stands next to the cabinet, so a base on the picture would be a second,
 # wrong machine.
 #
-# No pink. The joints are a darker grey (STEEL) instead of ACCENT, which
+# No pink. The joints are a darker shade (ARM_SHADE) instead of ACCENT, which
 # was tried first: three pink blocks made half the sprite an accent colour,
 # and ACCENT means "what the visitor is affecting right now" everywhere
 # else on the screen. The arm is not that -- it copies, it does not signal.
@@ -566,7 +567,10 @@ SAKURA, LEMON, ICE = (232, 175, 207), (247, 217, 89), (163, 216, 225)
 APPLE, LILAC, SCARLET = (194, 225, 137), (174, 150, 212), (222, 67, 67)
 IVORY, TAN, LATTE = (255, 255, 255), (232, 219, 183), (211, 183, 167)
 CARAMEL, BONE, MILK = (174, 131, 91), (203, 198, 184), (128, 84, 60)
-STEEL = (86, 74, 92)        # the arm's joints, the only non-sweet colour
+# The arm in the colours of the real one: translucent blue PLA, sampled
+# from a photo of the SO-101 (lit face, shaded face). The only non-sweet
+# colours; the screen shows the machine the visitor is standing next to.
+ARM_BLUE, ARM_SHADE = (84, 124, 234), (46, 70, 160)
 
 # Applies to every sprite, individual palettes override it.
 BASE = dict(k=(18, 6, 14), w=IVORY, y=LEMON, m=ICE, r=SCARLET, e=BONE, b=IVORY)
@@ -600,7 +604,7 @@ SPRITES = {
 SKIN, HAIR = (240, 196, 160), (150, 92, 60)
 _BELLA = dict(s=SKIN, h=HAIR, c=SAKURA, a=(255, 101, 189))
 _OSKAR = dict(s=SKIN, h=CARAMEL, c=SAKURA, a=(255, 101, 189), d=ICE, g=APPLE)
-_ARM = dict(a=BONE, d=STEEL)     # b (the light edge) comes from BASE
+_ARM = dict(a=ARM_BLUE, d=ARM_SHADE, b=(170, 196, 250))
 EXTRAS = {
     "baker":       ("baker",       _BELLA),
     "baker_talk":  ("baker_talk",  _BELLA),

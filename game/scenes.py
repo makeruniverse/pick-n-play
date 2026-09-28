@@ -729,7 +729,7 @@ class GameScene(SceneBase):
         self.marks = dict(ctx.detector.fresh())
         self.total = tray_sum(self.marks)
         self.left = float(ROUND_SECONDS)
-        self.confirm = self.hit = self.clock = self.still = 0.0
+        self.confirm = self.skip = self.hit = self.clock = self.still = 0.0
         self.taps = 0
         self.fx = self.pop = self.first = None
         self.target = self.dist = None
@@ -762,7 +762,12 @@ class GameScene(SceneBase):
         if action != "right":
             return None
         if self.phase == "tutorial":
-            self.order()
+            # Double-confirm like ◀: the practice is the only place the
+            # player learns what the arm does, one bumped ▶ shouldn't cost it.
+            if self.skip > 0:
+                self.order()
+            else:
+                self.skip = CONFIRM_SECONDS
         elif self.phase == "tut_done" and self.dialog.next():
             self.order()
         elif self.phase == "order" and self.dialog.next():
@@ -780,6 +785,7 @@ class GameScene(SceneBase):
     def update(self, dt):
         self.clock += dt
         self.confirm = max(0.0, self.confirm - dt)
+        self.skip = max(0.0, self.skip - dt)
         # One look at the detector per frame: total, overlay, pop-up and
         # sound come from the same snapshot and can't contradict each other.
         marks = dict(self.ctx.detector.fresh())
@@ -968,7 +974,9 @@ class GameScene(SceneBase):
             done = self.phase == "order" and self.dialog.last and not self.dialog.typing
             right = self.t("go" if done else "next")
         footer(screen, f, self.t("quit"), right,
-               note=self.t("quit_ok") if self.confirm > 0 else None)
+               note=self.t("quit_ok") if self.confirm > 0
+               else self.t("skip_ok") if self.skip > 0 and self.phase == "tutorial"
+               else None)
 
 
 class DisplayScoreScene(SceneBase):
@@ -1182,6 +1190,15 @@ if __name__ == "__main__":
         g = GameScene(ctx, 999, "WWW")
         assert g.phase == "tutorial"
         check(f"{lang} tutorial", g, panes)
+        g.handle("right")
+        assert g.phase == "tutorial" and g.skip > 0, "one ▶ only asks"
+        check(f"{lang} tutorial skip?", g, panes)
+        g.update(CONFIRM_SECONDS + 0.1)
+        g.handle("right")
+        assert g.phase == "tutorial", "the question times out"
+        g.handle("right")
+        assert g.phase == "order", "▶▶ skips"
+        g = GameScene(ctx, 999, "WWW")
         _s.tray = {9: [(.3, .3)] * 4}
         g.update(0.05)
         assert g.phase == "tut_done" and g.pop and g.first is not None
