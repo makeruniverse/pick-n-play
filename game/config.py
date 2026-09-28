@@ -293,11 +293,25 @@ CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
 # a camera into another socket swaps the panes. index0 is the image node,
 # index1 is metadata and delivers no image. OpenCV 5 can't open V4L2 by
 # path, hence the symlink resolved to the index.
-CAM_PORTS     = ("platform-xhci-hcd.0-usb-0:2:1.0",   # arm
+CAM_PORTS     = ("platform-xhci-hcd.0-usb-0:1:1.0",   # arm
                  "platform-xhci-hcd.1-usb-0:1:1.0")   # top-down
-CAM_INDEXES   = (0, 0) if MAC else tuple(
-    int(os.path.realpath(f"/dev/v4l/by-path/{p}-video-index0").removeprefix("/dev/video"))
-    for p in CAM_PORTS)
+# A camera not in its socket (reassembly, 2026-09-28) takes whichever camera
+# is left over instead of crashing the import: panes may swap, the game runs.
+def _cam_indexes(by="/dev/v4l/by-path/"):
+    idx = lambda f: int(os.path.realpath(by + f).removeprefix("/dev/video"))
+    try:
+        found = {idx(f) for f in os.listdir(by) if "usb" in f and f.endswith("-video-index0")}
+    except FileNotFoundError:
+        found = set()
+    want = [idx(f"{p}-video-index0") if os.path.exists(f"{by}{p}-video-index0") else None
+            for p in CAM_PORTS]
+    spare = sorted(found - set(want))
+    for k, i in enumerate(want):
+        if i is None:
+            want[k] = spare.pop(0) if spare else next((j for j in want if j is not None), 0)
+            print(f"camera {CAM_PORTS[k]} missing, using /dev/video{want[k]}", flush=True)
+    return tuple(want)
+CAM_INDEXES   = (0, 0) if MAC else _cam_indexes()
 CAM_SIZE      = (1280, 720)
 # Hardware zoom of the top-down camera (V4L2 zoom_absolute, 0..60). The
 # camera crops its 5 MP sensor, so the zoomed image has real detail, not
