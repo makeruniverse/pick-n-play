@@ -5,6 +5,7 @@ import socket
 import struct
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -166,17 +167,39 @@ class ArucoDetector:
         self.roi = roi
         self.lock = threading.Lock()
         self.marks = {}         # marker_id -> (timestamp, quad in 0..1)
-        # Also bright cells on a dark background: chocolate cupcakes carry the
-        # marker inverted. It still finds normal markers, it tries both.
-        params = cv2.aruco.DetectorParameters()
-        params.detectInvertedMarker = True
-        # Larger threshold windows: the pink macaron carries a purple marker,
-        # little contrast in gray. Measured 2026-09-16 at zoom 40: 84 instead
-        # of 68 of 90 frames, 9 instead of 4 ms -- plenty at DETECT_HZ.
-        params.adaptiveThreshWinSizeMax = 53
-        params.adaptiveThreshWinSizeStep = 6
-        self.det = cv2.aruco.ArucoDetector(
-            cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), params)
+        # Several detectors over several channels, union of what they find.
+        # Measured at the fair (29.9., hall light, zoom 40): no single one
+        # sees every puck -- the base set loses all markers at short
+        # exposure, the loose set misses some in gray that it finds in G
+        # (pink and purple on pink have their contrast in one channel).
+        # cv2 releases the GIL, so the pool runs them on separate cores.
+        # ponytail: fixed variant list, pick per-frame adaptively if the Pi runs out of CPU
+        def mk(**kw):
+            p = cv2.aruco.DetectorParameters()
+            # Also bright cells on a dark background: chocolate cupcakes
+            # carry the marker inverted. It still finds normal markers.
+            p.detectInvertedMarker = True
+            # Larger threshold windows: the pink macaron carries a purple
+            # marker, little contrast in gray (2026-09-16).
+            p.adaptiveThreshWinSizeMax = 53
+            p.adaptiveThreshWinSizeStep = 6
+            for k, v in kw.items():
+                setattr(p, k, v)
+            return cv2.aruco.ArucoDetector(
+                cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), p)
+        loose = dict(polygonalApproxAccuracyRate=0.1, errorCorrectionRate=1.0,
+                     minMarkerPerimeterRate=0.02, adaptiveThreshWinSizeMin=3,
+                     adaptiveThreshWinSizeStep=10, adaptiveThreshConstant=3,
+                     perspectiveRemoveIgnoredMarginPerCell=0.3,
+                     maxErroneousBitsInBorderRate=0.6, minOtsuStdDev=2.0)
+        gray = lambda c: cv2.cvtColor(c, cv2.COLOR_BGR2GRAY)
+        # (detector, channel), one detector per thread
+        # Measured on the Pi at the fair, 5 frames each: base gray 2-3 of 4,
+        # base G 3, loose gray 3-4, loose G 4 of 4 every time. B never helps.
+        # 7 + 15 + 17 ms, about 20 ms wall time in the pool.
+        G = lambda c: c[:, :, 1]
+        self.variants = [(mk(), G), (mk(**loose), gray), (mk(**loose), G)]
+        self.pool = ThreadPoolExecutor(len(self.variants))
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
@@ -191,11 +214,12 @@ class ArucoDetector:
                 # and detection only costs as much as the window is big.
                 # Measured 1.21 instead of 2.00 ms at 60% x 70%.
                 # The crop is a numpy view, not a copy.
-                gray = cv2.cvtColor(frame[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
-                corners, ids, _ = self.det.detectMarkers(gray)
+                crop = frame[y0:y1, x0:x1]
+                runs = self.pool.map(lambda v: v[0].detectMarkers(v[1](crop))[:2], self.variants)
                 now = time.monotonic()
                 found = {}
-                for c, i in zip(corners, ids.flatten() if ids is not None else ()):
+                for c, i in ((c, i) for corners, ids in runs
+                             for c, i in zip(corners, ids.flatten() if ids is not None else ())):
                     if int(i) not in VALUES:
                         continue    # foreign marker, not part of the game
                     # Window fraction back to image fraction, so the scene only
