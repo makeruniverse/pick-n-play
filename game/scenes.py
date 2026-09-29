@@ -493,7 +493,7 @@ class IdleScene(SceneBase):
         self.ask = 0.0
         self.top = ctx.db.top(len(self.PODIUM))
         # The number a new player gets, before any name (29.9., booth ask)
-        self.next = ctx.db.next_player()
+        self.no = ctx.db.next_player()
 
     def handle(self, action):
         if action == "right":
@@ -546,7 +546,7 @@ class IdleScene(SceneBase):
                note=self.t("lang_ok") if self.ask > 0 else None)
         # Right under PRESS: that is the number pressing gets you. tiny fits
         # the gap to BEST, small does not (layout test).
-        draw(screen, f["tiny"], self.t("player", no=self.next), 960, 499, ACCENT)
+        draw(screen, f["tiny"], self.t("player", no=self.no), 960, 499, ACCENT)
 
 
 class EntryScene(SceneBase):
