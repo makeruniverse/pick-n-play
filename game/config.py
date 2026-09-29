@@ -72,7 +72,7 @@ IDLE_TIMEOUT  = 60    # non-idle scenes fall back on their own (20 was too short
 CONFIRM_SECONDS = 3   # window for the double-confirm to abort
 # A typed-out page turns itself after this long (29.9., fair): people stood
 # in front of Bella and Oskar and waited instead of pressing ▶.
-PAGE_SECONDS  = 4
+PAGE_SECONDS  = 6     # 4 was too sudden after the practice
 # ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
 # is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
 # letters back without a deploy (drop-in like pnp-time).

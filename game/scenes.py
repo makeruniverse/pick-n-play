@@ -1101,8 +1101,12 @@ class GameScene(SceneBase):
         # their place instead, big enough to do the sums from.
         reading = self.phase in ("tut_intro", "read", "order")
         views = () if reading else zip(self.ctx.views, CAM_POS)
-        if self.phase in ("read", "order"):
+        # The prices only come with the think time (29.9.): shown while
+        # Oskar still talks, people stared at them and missed the order.
+        if self.phase == "order":
             self.ladder(screen, f)
+        if self.phase == "read":
+            stamp(screen, self.dialog.face(), 10, 960, 520 + hop(self.clock, 0, 6))
         if self.phase == "tut_intro":     # Bella and the arm, as in the story
             stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.clock, 0, 6))
             demo(screen, self.clock)
@@ -1461,7 +1465,7 @@ if __name__ == "__main__":
         g.update(PAGE_SECONDS + 1)
         assert g.phase == "tutorial" and g.skip == 0
         st = StoryScene(ctx, 999, "WWW", True)
-        for _ in range(100):
+        for _ in range(400):
             st.update(0.25)
         assert isinstance(st.next, GameScene), "Bella's pages turn themselves"
         g = GameScene(ctx, 999, "WWW")
