@@ -386,6 +386,10 @@ CAM_VIEW      = (736, 414)
 # the arm cam is mirrored against the leader arm and people steered the
 # wrong way by it. 414 px is the height limit between header and bar, so
 # the top-down doesn't grow -- it moves to the center where the eye is.
+# PNP_ARM_MIRROR=1 mirrors the arm cam left/right (pnp-mirror on the Pi):
+# test 29.9. whether that alone fixes the "arm goes the wrong way" feeling.
+# Display only -- the top-down pane and the detector never see it.
+ARM_MIRROR    = os.environ.get("PNP_ARM_MIRROR") == "1"
 # PNP_LAYOUT=split brings back the two equal panes (pnp-layout on the Pi).
 if os.environ.get("PNP_LAYOUT") == "split":
     CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960

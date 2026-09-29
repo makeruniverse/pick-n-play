@@ -4,7 +4,7 @@ import subprocess
 
 import cv2
 import pygame
-from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS,
+from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS, ARM_MIRROR,
                     CAM_INDEXES, CAM_ZOOM, CAM_FLIP, DEMO_VIDEO, CV_THREADS, BUTTONS,
                     CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC)
 from app import Ctx, run_game
@@ -54,7 +54,7 @@ def main():
     # Left is plain passthrough, right is the same image plus overlay. Only
     # the top-down pane gets the detector.
     ctx = Ctx(detector=det, db=DB(), fonts=fonts, music=Music(), leds=Leds(),
-              views=(CameraView(cams[arm], size=CAM_VIEWS[0]),
+              views=(CameraView(cams[arm], size=CAM_VIEWS[0], mirror=ARM_MIRROR),
                      CameraView(cams[top], det, size=CAM_VIEWS[1])) if cams else (),
               demo=VideoView(DEMO_VIDEO) if DEMO_VIDEO else None,
               buttons=Buttons() if BUTTONS else None)

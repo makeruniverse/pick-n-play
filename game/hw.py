@@ -386,8 +386,8 @@ class CameraView:
     the Pi.
     """
 
-    def __init__(self, cam, det=None, size=CAM_VIEW):
-        self.cam = cam
+    def __init__(self, cam, det=None, size=CAM_VIEW, mirror=False):
+        self.cam, self.mirror = cam, mirror
         self.det = det      # only the top-down pane has one: the arm image is
         self.size = size    # a pure passthrough, there'd be nothing to show
         self.seq = -1
@@ -399,6 +399,8 @@ class CameraView:
         # this comparison, every frame gets converted twice, for nothing.
         if seq != self.seq and frame is not None:
             small = cv2.resize(frame, self.size, interpolation=cv2.INTER_LINEAR)
+            if self.mirror:
+                small = cv2.flip(small, 1)
             # Brighter for the player only: the exposure stays where the
             # detector reads best (29.9., hall too dark on screen).
             small = cv2.LUT(small, VIEW_LUT)
@@ -703,6 +705,14 @@ if __name__ == "__main__":
     assert 5 < (fr == 255).all(axis=1).sum() < 60
     assert (fr == led_frame("mlg", 1.0, 2.0, 800, (), ())).all() and fr.sum() / 800 / 255 < 1.6
     assert (led_frame("mlg", 1, 0, 3, (), ())[0] == (255, 0, 0)).all()
+    # The mirror flips the pane left/right, nothing else
+    class _Cam:
+        def read(self):
+            f = np.zeros((20, 40, 3), np.uint8)
+            f[:, :10] = 255
+            return 1, f
+    v = CameraView(_Cam(), size=(40, 20), mirror=True).surface()
+    assert v.get_at((35, 5))[:3] != (0, 0, 0) and v.get_at((5, 5))[:3] == (0, 0, 0)
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")
     q.show("game", 0.3)

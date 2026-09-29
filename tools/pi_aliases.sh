@@ -159,6 +159,19 @@ pnp-layout() {
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"
 }
 
+# Arm cam mirrored left/right: pnp-mirror on|off. Restarts the game.
+pnp-mirror() {
+    local d=/etc/systemd/system/pnp-expo.service.d
+    if [ -z "$1" ]; then
+        grep -ho 'PNP_ARM_MIRROR=[01]' $d/mirror.conf 2>/dev/null || echo "default (off)"
+        return
+    fi
+    case $1 in on) v=1;; off) v=0;; *) echo "pnp-mirror on|off"; return 1;; esac
+    sudo mkdir -p $d
+    printf '[Service]\nEnvironment=PNP_ARM_MIRROR=%s\n' "$v" | sudo tee $d/mirror.conf >/dev/null
+    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "mirror $1, game restarted"
+}
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {
