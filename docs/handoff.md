@@ -20,6 +20,10 @@ run tests or camera snaps on the Pi while someone plays (it stutters).
   `/var/lib/systemd/timesync/clock` (last run time), so check it:
   `date` on Pi vs Mac, then `sudo date -s @$(date +%s)` via ssh.
   `ts` columns are UTC; `events.t` is monotonic per boot.
+- **Day split without the clock:** from 30.9. new players start at
+  `PLAYER_FIRST` = 100 (day one ended at #81). Day two = `players.id >= 100`,
+  `runs.player >= 100`; events without a player: `rowid` greater than the
+  first event with `player >= 100`. Never split days by `ts`.
 - The Mac has no `timeout`; use `perl -e 'alarm N; exec @ARGV' ...`.
 
 ## Unattended: what heals itself

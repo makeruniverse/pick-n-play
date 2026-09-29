@@ -7,7 +7,7 @@ import time
 import sys
 
 from balance import points
-from config import DB_PATH, TOP_N
+from config import DB_PATH, PLAYER_FIRST, TOP_N
 
 # Hourly copies (main.py), one per hour of the day: 24 at most, no cleanup.
 BACKUP_GLOB = DB_PATH.replace(".db", "") + ".backup-auto-*.db"
@@ -46,6 +46,8 @@ class DB:
     round per number counts -- improving is the point, a worse second try
     never costs anything.
     """
+
+    first = PLAYER_FIRST
 
     def __init__(self, path=DB_PATH):
         # None, or what went wrong -- shown on the menu's status page
@@ -142,21 +144,21 @@ class DB:
 
     def new_player(self, name):
         """Registers a player, returns their number."""
-        cur = self.con.execute("INSERT INTO players (name) VALUES (?)", (name,))
+        no = self.next_player()
+        self.con.execute("INSERT INTO players (id, name) VALUES (?, ?)", (no, name))
         self.con.commit()
-        return cur.lastrowid
+        return no
 
     def next_player(self):
         """The number the next new_player() will hand out.
 
-        Not a guess: `players.id` is an INTEGER PRIMARY KEY *without*
-        AUTOINCREMENT, so SQLite assigns max(id) + 1 on the next INSERT --
-        the same rule this query runs. That lets the entry screen show the
+        max(id) + 1, but never below `first` (PLAYER_FIRST). new_player()
+        inserts exactly this id, so the entry screen can show the
         number while the name is still being typed, instead of registering
         a player for everyone who walks up and presses a button.
         """
         return self.con.execute(
-            "SELECT IFNULL(MAX(id), 0) + 1 FROM players").fetchone()[0]
+            "SELECT MAX(IFNULL(MAX(id), 0) + 1, ?) FROM players", (self.first,)).fetchone()[0]
 
     def players_named(self, name):
         """[(number, weekday 0=Sunday, "HH:MM")] for a name, newest first.
@@ -313,7 +315,16 @@ elif __name__ == "__main__":
 
     # Player numbers: two MAX are two people, and the same number playing
     # again keeps its best round.
+    # The floor: an empty table and yesterday's 1..81 both continue at
+    # PLAYER_FIRST, and past it numbering just counts on.
+    f = DB(":memory:")
+    f.first = 100
+    assert f.next_player() == 100
+    f.con.execute("INSERT INTO players (id, name) VALUES (81, 'OLD')")
+    assert f.new_player("NEW") == 100 and f.next_player() == 101
+
     p = DB(":memory:")
+    p.first = 1                     # from here on, numbering as before 30.9.
     # The entry screen shows next_player() before the name is submitted, so
     # it has to be exactly what new_player() then hands out -- on an empty
     # table too.
@@ -370,7 +381,7 @@ elif __name__ == "__main__":
     v = DB(path2)
     assert v.top() == []
     v.add("NEU", 1, dist=50, player=v.new_player("NEU"))
-    assert v.top() == [("#1", points(1, 50))], v.top()
+    assert v.top() == [(f"#{v.first}", points(1, 50))], v.top()
 
     # A corrupt file: aside, and the newest good backup comes back.
     d = tempfile.mkdtemp()

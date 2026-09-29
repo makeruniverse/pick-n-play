@@ -318,6 +318,9 @@ STAR_TWO     = 700    # score for the second star. One star for any treat on
 # ── Persistence ───────────────────────────────────────────────────────────
 DB_PATH = "scores.db"
 TOP_N   = 10
+# Lowest player number handed out (30.9.: day one ended at 81, day two starts
+# at 100). A floor, not a reset: past it, numbering just counts on.
+PLAYER_FIRST = int(env("PLAYER_FIRST", "100"))
 
 # ── Input ─────────────────────────────────────────────────────────────────
 # Four arcade buttons, nothing else. Convention throughout the game:
