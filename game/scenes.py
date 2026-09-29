@@ -525,6 +525,33 @@ def footer(screen, f, left=None, right=None, note=None):
         draw_hint(screen, f["small"], right, 1320, FOOTER_Y, WHITE)
 
 
+class PauseScene(SceneBase):
+    """The top camera didn't open: say so instead of a black restart loop,
+    then end, so systemd starts the game again and the camera gets another
+    try. LEDs calm orange like any restart."""
+
+    MUSIC = None
+    PAUSE_SECONDS = 20
+
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        ctx.music.stop()
+        ctx.leds.close(LED_DOWN)
+        self.left = self.PAUSE_SECONDS
+
+    def update(self, dt):
+        self.left -= dt
+        if self.left <= 0:
+            self.next = None     # run_game ends, systemd restarts the game
+
+    def render(self, screen):
+        f = self.ctx.fonts
+        screen.fill(BG)
+        draw(screen, f["mid"], "TECHNIK-PAUSE", 960, 400, ACCENT)
+        draw(screen, f["small"], "SHORT TECHNICAL BREAK", 960, 520, WHITE)
+        draw(screen, f["tiny"], f"CAMERA -- RETRY IN {max(0, math.ceil(self.left))} S", 960, 640, GREY)
+
+
 class IdleScene(SceneBase):
     """Attract screen. ▶ new player, ▼ played before, ▲▲ switches language.
 

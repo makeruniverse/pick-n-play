@@ -35,7 +35,7 @@ main() {
         echo "repo broken, re-cloning"
         rm -rf $R.new
         as_ubuntu timeout 300 git clone -q -b expo $URL $R.new || return 0
-        mv $R/.venv $R/scores.db* $R/led_zones.json $R/cam.json $R.new/ 2>/dev/null
+        mv $R/.venv $R/scores.* $R/led_zones.json $R/cam.json $R/flip.json $R/settings.json* $R/arm.json $R.new/ 2>/dev/null
         mv $R $R.broken.$(date +%s) && mv $R.new $R
         systemctl restart pnp-expo teleop
         return 0
