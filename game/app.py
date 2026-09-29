@@ -39,6 +39,8 @@ class SceneBase:
 
     def switch_to(self, scene):
         self.next = scene
+        self.ctx.db.log("scene", getattr(scene, "player", None),
+                        to=type(scene).__name__, frm=type(self).__name__)
 
 def action_of(e):
     if e.type == pygame.QUIT:

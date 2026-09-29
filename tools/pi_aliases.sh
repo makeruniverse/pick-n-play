@@ -127,6 +127,10 @@ pnp-time() {
 # to first treat. pnp-winners 20 for more rows.
 pnp-winners() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py winners "$@"); }
 
+# Game log: every scene switch, phase, tray change, hint, quit and round end
+# (events table in scores.db). pnp-events 200 for more; SQL for the rest.
+pnp-events() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py events "$@"); }
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {

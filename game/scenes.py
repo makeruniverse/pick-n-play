@@ -503,6 +503,7 @@ class IdleScene(SceneBase):
         elif action == "up":
             if self.ask > 0:
                 self.ctx.lang = "de" if self.ctx.lang == "en" else "en"
+                self.ctx.db.log("lang", lang=self.ctx.lang)
                 self.ask = 0.0
             else:
                 self.ask = CONFIRM_SECONDS
@@ -806,11 +807,19 @@ class GameScene(SceneBase):
         # Practice even with treats already on the tray (29.9.): a leftover
         # or one stray detection skipped it for new players at the fair.
         # It ends on a NEWLY seen marker, so leftovers can't finish it.
+        self.phase, self.hinted = "start", None
+        self.log("round", tray=sorted(self.marks), total=self.total, lang=ctx.lang,
+                 secs=ROUND_SECONDS, tutorial=tutorial)
         if tutorial:
             self.phase = "tutorial"
             self.dialog = Dialog(ctx.music, "baker", self.t("baker"), self.t("tut"))
         else:
             self.order()
+
+    def log(self, event, **data):
+        """Every round event with phase and scene clock, for the analysis."""
+        self.ctx.db.log(event, self.player, phase=self.phase,
+                        clock=round(self.clock, 2), **data)
 
     def order(self):
         self.phase = "order"
@@ -818,6 +827,8 @@ class GameScene(SceneBase):
         # would decide whether someone has to bridge EUR 0.30 or EUR 20.
         self.dist = gap(self.marks, up=True)
         self.target = self.total + self.dist
+        self.log("order", tray=sorted(self.marks), total=self.total,
+                 dist=self.dist, target=self.target)
         self.dialog = Dialog(self.ctx.music, "guest", self.t("guest"),
                              self.t("order", goal=euro(self.target)))
 
@@ -825,6 +836,8 @@ class GameScene(SceneBase):
         if action == "left":
             self.taps = 0
             if self.confirm > 0:
+                self.log("quit", tray=sorted(self.marks), total=self.total,
+                         target=self.target, left=round(self.left, 1))
                 self.switch_to(IdleScene(self.ctx))
             else:
                 self.confirm = CONFIRM_SECONDS
@@ -835,6 +848,7 @@ class GameScene(SceneBase):
             # Double-confirm like ◀: the practice is the only place the
             # player learns what the arm does, one bumped ▶ shouldn't cost it.
             if self.skip > 0:
+                self.log("tut_skip")
                 self.order()
             else:
                 self.skip = CONFIRM_SECONDS
@@ -842,6 +856,7 @@ class GameScene(SceneBase):
             self.order()
         elif self.phase == "order" and self.dialog.next():
             self.phase, self.dialog = "play", None
+            self.log("play", tray=sorted(self.marks), total=self.total, target=self.target)
             self.ctx.music.stage(self.left)
             return "start"
         elif self.phase == "play" and CHEAT_TAPS:
@@ -867,12 +882,15 @@ class GameScene(SceneBase):
             self.pop = [SPRITE[min(new or gone)],
                         ("+" if v >= 0 else "-") + euro(abs(v), sign=False), 0.0]
             self.still = 0.0
+            self.log("tray", add=sorted(new), off=sorted(gone), total=tray_sum(marks),
+                     target=self.target, left=round(self.left, 1))
         if new:
             # Only on NEWLY detected, otherwise it fires DETECT_HZ times a second.
             self.ctx.music.sfx("blip")
             if self.first is None:
                 self.first = self.clock
             if self.phase == "tutorial":
+                self.log("tut_done", treat=min(new))
                 self.phase = "tut_done"
                 self.fx = Sprinkles(*self.POP)
                 self.ctx.music.sfx("ok")
@@ -903,6 +921,12 @@ class GameScene(SceneBase):
             self.fx.update(dt)
         else:
             self.fx = None
+        h = self.hint()
+        if h != self.hinted:
+            self.hinted = h
+            if h is not None:
+                self.log("hint", treat=h, take=h in self.marks, total=self.total,
+                         target=self.target, left=round(self.left, 1))
         self.ctx.music.stage(self.left)
         # The LEDs still go red for the last seconds: that's for the booth
         # team, not the player, so the screen stays calm.
@@ -914,6 +938,10 @@ class GameScene(SceneBase):
             # time left would be a lie in the database instead of a zero.
             res = Result(self.target, self.total, self.dist,
                          max(0.0, self.left), self.marks)
+            self.log("end", why="perfect" if self.hit >= PERFECT_HOLD else "time",
+                     tray=sorted(self.marks), total=self.total, target=self.target,
+                     off=abs(self.target - self.total), left=round(res.left, 1),
+                     first=self.first)
             # Everything the round physically was -- the database computes
             # the score itself, so a later formula also applies to old rounds.
             self.ctx.db.add(self.name, res.off, goal=res.target, total=res.total,
@@ -928,7 +956,7 @@ class GameScene(SceneBase):
         if self.phase != "play" or self.still < HINT_SECONDS or self.total == self.target:
             return None
         # First step of a shortest way, not the greedy closest treat (29.9.)
-        return next_move(self.marks, self.target)
+        return next_move(frozenset(self.marks), self.target)
 
     def mood(self):
         """Oskar's face: sweating when over budget, beaming when it's exact."""

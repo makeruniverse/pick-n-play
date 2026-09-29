@@ -32,6 +32,7 @@ in at the start.
 """
 
 import random
+from functools import lru_cache
 
 from config import (VALUES, GAP_MIN, GAP_MAX, GAP_MOVES,
                     GAP_ONE_MISS, GAP_ONE_MAX, ROUND_SECONDS, PERFECT_HOLD,
@@ -81,6 +82,8 @@ def gap(on, up=False):
     return random.choice(ok or band or [GAP_MIN])
 
 
+# ponytail: cached, render and update ask every frame for the same tray
+@lru_cache(maxsize=256)
 def next_move(on, target):
     """First treat of a SHORTEST way from tray `on` to sum `target`, or None.
 
@@ -196,12 +199,12 @@ if __name__ == "__main__":
         tray = set(rng.sample(sorted(VALUES), rng.randrange(0, 3)))
         goal = sum(VALUES[i] for i in tray) + gap(tray, up=True)
         for n in range(GAP_MOVES + 1):
-            i = next_move(tray, goal)
+            i = next_move(frozenset(tray), goal)
             if i is None:
                 break
             tray ^= {i}
         assert sum(VALUES[i] for i in tray) == goal and n <= GAP_MOVES, (tray, goal, n)
-    assert next_move(set(), 0) is None and next_move(set(), -1) is None
+    assert next_move(frozenset(), 0) is None and next_move(frozenset(), -1) is None
 
     # 6 · Scoring. Order and bounds, not the curve itself.
     span = ROUND_SECONDS - PERFECT_HOLD

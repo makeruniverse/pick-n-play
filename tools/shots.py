@@ -49,6 +49,7 @@ class Stub:
     def rank(self, player):      return 4, 23
     def new_player(self, name):  return 42
     def next_player(self):       return 42
+    def log(self, *a, **k):      pass
     # Three MAXes on two days -- the case the pick list exists for.
     def players_named(self, name): return [(42, 2, "17:40"), (31, 2, "11:05"),
                                            (12, 1, "16:48")]

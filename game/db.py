@@ -1,5 +1,7 @@
 import csv
+import json
 import sqlite3
+import time
 import sys
 
 from balance import points
@@ -52,6 +54,17 @@ class DB:
                                 total INT,
                                 dist  INT,
                                 secs  REAL)""")
+        # Everything that happens, one row each, for analysing the day
+        # afterwards (29.9.): scene switches, phases, every tray change,
+        # hints, quits, round ends. `t` is monotonic seconds -- differences
+        # between rows are exact even though the Pi's wall clock is off
+        # without internet; `ts` has milliseconds for ordering across boots.
+        self.con.execute("""CREATE TABLE IF NOT EXISTS events (
+                                ts     TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+                                t      REAL,
+                                event  TEXT NOT NULL,
+                                player INT,
+                                data   TEXT)""")
         # INTEGER PRIMARY KEY is the rowid: 1, 2, 3 ... -- short enough to
         # read out at the booth and type into a form.
         self.con.execute("""CREATE TABLE IF NOT EXISTS players (
@@ -113,6 +126,17 @@ class DB:
             "       strftime('%H:%M', ts, 'localtime') "
             "FROM players WHERE name = ? ORDER BY id DESC", (name,))]
 
+    def log(self, event, player=None, **data):
+        """One row in events. Never raises: a full disk or a locked file
+        must not end a visitor's round over a log line."""
+        try:
+            self.con.execute("INSERT INTO events (t, event, player, data) VALUES (?, ?, ?, ?)",
+                             (round(time.monotonic(), 3), event, player,
+                              json.dumps(data, default=str) if data else None))
+            self.con.commit()
+        except sqlite3.Error as e:
+            print("log failed:", e, flush=True)
+
     def add(self, name, off, goal=None, total=None, dist=None, secs=0.0,
             player=None, first=None):
         self.con.execute(
@@ -173,6 +197,17 @@ if __name__ == "__main__" and sys.argv[1:2] == ["winners"]:
     for player, name, off, dist, secs, first, ts in rows:
         print(f"{player or '-':>4} {name:4} {points(off, dist, secs or 0.0):>5} "
               f"{off / 10:>6.2f} {secs or 0:>6.1f} {first or 0:>5.1f}  {ts}")
+elif __name__ == "__main__" and sys.argv[1:2] == ["events"]:
+    # pnp-events [n]: the last n events, oldest first. `+s` is the gap to
+    # the row before, from the monotonic clock.
+    n = int(sys.argv[2]) if sys.argv[2:] else 40
+    rows = DB().con.execute("SELECT ts, t, event, player, data FROM events "
+                            "ORDER BY rowid DESC LIMIT ?", (n,)).fetchall()[::-1]
+    prev = None
+    for ts, t, event, player, data in rows:
+        gap = f"+{t - prev:6.1f}" if prev is not None and t >= prev else "  boot?"
+        prev = t
+        print(f"{ts[11:19]} {gap} {player or '-':>4} {event:9} {data or ''}")
 elif __name__ == "__main__" and sys.argv[1:] == ["export"]:
     # After the show, on the Pi:  uv run game/db.py export > players.csv
     DB().export(sys.stdout)
