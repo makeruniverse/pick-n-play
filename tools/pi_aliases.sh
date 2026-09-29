@@ -160,21 +160,9 @@ pnp-layout() {
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"
 }
 
-# Arm cam orientation: pnp-mirror on (left/right) | ud (upside down) |
-# 180 (both) | off. Test: turn the leader arm left -> the arm cam image
-# should slide RIGHT, like turning your head. Restarts the game.
-pnp-mirror() {
-    local d=/etc/systemd/system/pnp-expo.service.d m u
-    if [ -z "$1" ]; then
-        cat $d/mirror.conf 2>/dev/null | grep -o 'PNP_ARM_[A-Z]*=[01]' || echo "default (on)"
-        return
-    fi
-    case $1 in on) m=1 u=0;; ud) m=0 u=1;; 180) m=1 u=1;; off) m=0 u=0;;
-        *) echo "pnp-mirror on|ud|180|off"; return 1;; esac
-    sudo mkdir -p $d
-    printf '[Service]\nEnvironment=PNP_ARM_MIRROR=%s\nEnvironment=PNP_ARM_UD=%s\n' "$m" "$u" | sudo tee $d/mirror.conf >/dev/null
-    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "arm cam $1, game restarted"
-}
+# Pane orientation, live without a restart: pnp-cam arm flip mirror|ud|180|off
+# (same for top). Test: turn the leader arm left -> the arm cam image should
+# slide RIGHT, like turning your head.
 
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.

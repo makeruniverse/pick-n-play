@@ -735,12 +735,9 @@ class PickScene(SceneBase):
 class StoryScene(SceneBase):
     """Bella says hello. A returning player gets one line and skips practice.
 
-    No player number here any more (2026-09-24): not everyone wants to come
-    back a second time, and a number plus "show it to the team" as the
-    first thing after your name is homework before the game. It's shown
-    where it's needed instead -- small during the practice round, so the
-    team can copy it into the sign-up form, and once at the end, when
-    playing again is actually the question.
+    The player number stands big at the top (29.9., fair). On 24.9. it had
+    been moved to a small corner tag as "homework before the game"; at the
+    fair the team needs it for the sign-up form and nobody saw it.
     """
 
     MUSIC_IN = (0.0, 800)
@@ -774,7 +771,10 @@ class StoryScene(SceneBase):
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BG)
-        parade(screen, self.now, 96, 60)
+        # The number up top, big, in the game's header style (29.9., fair):
+        # small in the corner, nobody noticed it before the end.
+        draw(screen, f["small"], self.t("your_no"), 960, 64, GREY)
+        draw(screen, f["mid"], f"#{self.player}", 960, 196, ACCENT)
         stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.now, 0, 6))
         demo(screen, self.now)
         self.dialog.draw(screen, f)
@@ -1054,19 +1054,22 @@ class GameScene(SceneBase):
             return "guest_joy"
         return "guest_sweat" if self.target and self.total > self.target else "guest"
 
-    def overlay(self, screen, r):
+    def overlay(self, screen, r, mirror=False, ud=False):
         """Detection window and a frame around every marker the camera sees.
 
         The frame answers "did it count?" right on the image, where the
         player is looking anyway -- without covering the treat the way a
-        price label did.
+        price label did. Flipped like the pane (pnp-cam top flip).
         """
+        fx = (lambda x: 1 - x) if mirror else (lambda x: x)
+        fy = (lambda y: 1 - y) if ud else (lambda y: y)
+        px = lambda x, y: (r.x + fx(x) * r.w, r.y + fy(y) * r.h)
         rx, ry, rw, rh = TRAY_ROI
-        pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
-                                        rw * r.w, rh * r.h), MARK_WIDTH)
+        (x0, y0), (x1, y1) = px(rx, ry), px(rx + rw, ry + rh)
+        pygame.draw.rect(screen, GREY, (min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0)),
+                         MARK_WIDTH)
         for quad in self.marks.values():
-            pygame.draw.polygon(screen, ACCENT, [(r.x + x * r.w, r.y + y * r.h)
-                                                 for x, y in quad], MARK_WIDTH)
+            pygame.draw.polygon(screen, ACCENT, [px(x, y) for x, y in quad], MARK_WIDTH)
 
     def bar(self, screen):
         """Where the total stands and where it needs to go, as one image.
@@ -1146,7 +1149,8 @@ class GameScene(SceneBase):
                 screen.fill(GREY, r.inflate(8, 8))
                 screen.blit(cam, r)
                 if view.det:
-                    self.overlay(screen, r)
+                    self.overlay(screen, r, getattr(view, "mirror", False),
+                                 getattr(view, "ud", False))
         if self.fx:
             self.fx.draw(screen)    # over the panes, under the numbers
         # The top says what to do, with a verb: "ADD 3,20 €", not "OFF BY".

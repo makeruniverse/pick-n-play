@@ -12,8 +12,14 @@ run tests or camera snaps on the Pi while someone plays (it stutters).
 - `ssh picknplay` (WiFi, 172.22.1.2) is not reliable: `eth0` and `wlan0`
   share the static IP in netplan. `docs/operation.md` ("DHCP") is out of date.
 - **The Pi has no internet.** `pnp-update.timer` pulls nothing, a push to
-  origin/expo does NOT reach the Pi. Its wall clock is off, so DB `ts`
-  columns are wrong; differences in `events.t` are right (monotonic).
+  origin/expo does NOT reach the Pi.
+- **Clock:** no NTP and the RTC has no battery. Set by hand from the Mac on
+  29.9. (was 9 h 35 min behind; all DB `ts` of that boot shifted by the same
+  offset, backup `scores.backup-before-clock.db`), timezone Europe/Berlin.
+  After a power cut it resumes from the mtime of
+  `/var/lib/systemd/timesync/clock` (last run time), so check it:
+  `date` on Pi vs Mac, then `sudo date -s @$(date +%s)` via ssh.
+  `ts` columns are UTC; `events.t` is monotonic per boot.
 - The Mac has no `timeout`; use `perl -e 'alarm N; exec @ARGV' ...`.
 
 ## Unattended: what heals itself
@@ -42,8 +48,10 @@ Returning players start at `read`.
 
 Defaults, no drop-ins needed any more: layout `split` (top-down left, arm cam
 right, Oskar between), arm cam mirrored, round 120 s, `MARKER_HOLD` 1.0 s.
-Toggles still work (each restarts the game): `pnp-layout split|top`,
-`pnp-mirror on|off|ud|180`, `pnp-time N`, `pnp-think N`.
+Toggles: `pnp-cam arm flip mirror|ud|180|off` (and `top`) flips a pane
+live, no restart, kept in `flip.json` (display only, the overlay follows).
+These restart the game: `pnp-layout split|top`, `pnp-time N`, `pnp-think N`.
+The player number stands big on Bella's first screen.
 
 ## What the floor data said (29.9., 59 players, 25 finished rounds)
 

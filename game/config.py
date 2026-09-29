@@ -386,12 +386,14 @@ except FileNotFoundError:
 # below, the timer pie in the 224 px gap between the two. 768 x 432 left the
 # pie 8 px from the frames and the instruction no room to its label.
 CAM_VIEW      = (736, 414)
-# The arm cam is mirrored left/right by default (29.9., fair): unmirrored it
-# ran against the leader arm and people steered the wrong way by it.
-# PNP_ARM_MIRROR=0 turns it off (pnp-mirror). Display only -- the top-down
-# pane and the detector never see it.
-ARM_MIRROR    = os.environ.get("PNP_ARM_MIRROR", "1") == "1"
-ARM_UD        = os.environ.get("PNP_ARM_UD") == "1"   # upside down; both = 180°
+# How each pane is flipped on screen. Display only: the detector never sees
+# it, the overlay flips along. The arm cam is mirrored by default (29.9.,
+# fair): unmirrored it ran against the leader arm. `pnp-cam arm flip 180`
+# writes FLIP_FILE and the running game picks it up within a second.
+FLIPS         = {"off": (False, False), "mirror": (True, False),   # (mirror, upside down)
+                 "ud": (False, True), "180": (True, True)}
+FLIP_DEFAULT  = {"arm": "mirror", "top": "off"}
+FLIP_FILE     = os.path.join(os.path.dirname(__file__), "..", "flip.json")
 # split (default since the 29.9. evening): two equal panes, top-down left,
 # arm cam right. top: top-down big in the center, arm cam a small inset on
 # the left. The big arm cam in the center (fpv) stuttered and was dropped.

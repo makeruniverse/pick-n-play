@@ -1,16 +1,17 @@
 import os
 import signal
 import subprocess
+import time
 
 import cv2
 import pygame
-from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS, ARM_MIRROR, ARM_UD,
+from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS,
                     CAM_INDEXES, CAM_ZOOM, CAM_FLIP, DEMO_VIDEO, CV_THREADS, BUTTONS,
                     CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC)
 from app import Ctx, run_game
 from db import DB
 from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
-                Leds, VideoView, notify)
+                Leds, VideoView, notify, read_flips)
 from music import Music, SR, BUF
 from scenes import IdleScene
 
@@ -54,7 +55,7 @@ def main():
     # Left is plain passthrough, right is the same image plus overlay. Only
     # the top-down pane gets the detector.
     ctx = Ctx(detector=det, db=DB(), fonts=fonts, music=Music(), leds=Leds(),
-              views=(CameraView(cams[arm], size=CAM_VIEWS[0], mirror=ARM_MIRROR, ud=ARM_UD),
+              views=(CameraView(cams[arm], size=CAM_VIEWS[0]),
                      CameraView(cams[top], det, size=CAM_VIEWS[1])) if cams else (),
               demo=VideoView(DEMO_VIDEO) if DEMO_VIDEO else None,
               buttons=Buttons() if BUTTONS else None)
@@ -62,10 +63,16 @@ def main():
     # The scene name goes to a file so the updater only restarts between
     # rounds; the watchdog ping only goes out while every camera delivers.
     run_dir = os.environ.get("RUNTIME_DIRECTORY")
-    last = None
+    last, polled = None, 0.0
 
     def beat(scene):
-        nonlocal last
+        nonlocal last, polled
+        # pnp-cam <role> flip ...: re-read once a second, no restart
+        if ctx.views and time.monotonic() - polled > 1.0:
+            polled = time.monotonic()
+            flips = read_flips()
+            for role, view in zip(("arm", "top"), ctx.views):
+                view.mirror, view.ud = flips[role]
         name = type(scene).__name__
         if run_dir and name != last:
             with open(os.path.join(run_dir, "state"), "w") as f:

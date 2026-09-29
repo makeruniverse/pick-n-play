@@ -4,6 +4,7 @@
   pnp-cam top exposure 60     manual exposure in 100 us (1..10000), lower = darker
   pnp-cam arm exposure auto   back to the camera's own exposure
   pnp-cam top zoom 46         also gain, brightness, gamma, or any v4l2 name
+  pnp-cam arm flip 180        pane on screen: mirror | ud | 180 | off, live, no restart
   pnp-cam snap                both frames, top with the detection box, as jpg
   pnp-cam --test              self-test, no hardware
 """
@@ -27,8 +28,24 @@ def plan(name, value):
     return {name: int(value)}
 
 
+def flip(path, role, word):
+    """Write one pane's flip into flip.json, keep the other's."""
+    from config import FLIPS
+    if word not in FLIPS:
+        sys.exit(f"flip: {' | '.join(FLIPS)}")
+    try:
+        with open(path) as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        saved = {}
+    saved[role] = word
+    with open(path, "w") as f:
+        json.dump(saved, f)
+
+
 def main(argv):
-    from config import CAM_INDEXES, CAM_CTRLS_FILE
+    from config import CAM_INDEXES, CAM_CTRLS_FILE, FLIP_FILE
+    from hw import read_flips
     roles = dict(zip(("arm", "top"), CAM_INDEXES))
 
     def ctl(role, *args):
@@ -51,6 +68,10 @@ def main(argv):
                 if os.path.exists(p) and os.path.getmtime(p) >= t:
                     print(p)
         return
+    if len(argv) == 3 and argv[0] in roles and argv[1] == "flip":
+        # Display only, the game re-reads the file every second
+        flip(FLIP_FILE, argv[0], argv[2])
+        argv = []
     if argv:
         if len(argv) != 3 or argv[0] not in roles:
             sys.exit(__doc__)
@@ -68,6 +89,10 @@ def main(argv):
             saved[role].pop("exposure_time_absolute", None)
         with open(CAM_CTRLS_FILE, "w") as f:
             json.dump(saved, f, indent=1)
+    from config import FLIPS
+    names = {v: k for k, v in FLIPS.items()}
+    for r, f in read_flips().items():
+        print(f"{r:4} flip {names[f]}")
     for r in roles:
         print(f"{r:4}", "  ".join(l.strip() for l in ctl(r, "-C", SHOW).splitlines()))
 
@@ -78,6 +103,13 @@ if __name__ == "__main__":
         assert plan("exposure", "auto") == {"auto_exposure": 3}
         assert plan("zoom", "46") == {"zoom_absolute": 46}
         assert plan("gain", "80") == {"gain": 80}
+        import tempfile
+        from hw import read_flips
+        t = tempfile.mktemp(suffix=".json")
+        flip(t, "top", "ud")
+        flip(t, "arm", "off")
+        assert read_flips(t) == {"arm": (False, False), "top": (False, True)}
+        os.unlink(t)
         print("ok")
     else:
         main(sys.argv[1:])

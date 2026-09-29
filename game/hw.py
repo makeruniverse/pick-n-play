@@ -1,4 +1,5 @@
 import fcntl
+import json
 import os
 import random
 import socket
@@ -11,7 +12,7 @@ import cv2
 import numpy as np
 import pygame
 
-from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ,
+from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ, FLIPS, FLIP_DEFAULT, FLIP_FILE,
                     TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
                     LED_STRIPES, LED_A, LED_B, LED_RED, LED_SIDES,
@@ -372,6 +373,20 @@ VIEW_GAMMA = float(os.environ.get("PNP_VIEW_GAMMA", "0.55"))   # <1 = brighter
 VIEW_LUT = np.array([255 * (i / 255) ** VIEW_GAMMA for i in range(256)], np.uint8)
 
 
+def read_flips(path=FLIP_FILE):
+    """{"arm": (mirror, ud), "top": ...} from FLIP_DEFAULT and flip.json.
+    A missing or broken file, or an unknown word, falls back to the default:
+    a typo must never take the game down."""
+    try:
+        with open(path) as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        saved = {}
+    if not isinstance(saved, dict):
+        saved = {}
+    return {r: FLIPS.get(saved.get(r), FLIPS[d]) for r, d in FLIP_DEFAULT.items()}
+
+
 class CameraView:
     """Passthrough: newest camera frame as a pygame surface at inset size.
 
@@ -717,6 +732,15 @@ if __name__ == "__main__":
     assert v.get_at((5, 5))[:3] != (0, 0, 0) and v.get_at((35, 5))[:3] == (0, 0, 0)
     v = CameraView(_Cam(), size=(40, 20), mirror=True, ud=True).surface()   # 180°
     assert v.get_at((35, 5))[:3] != (0, 0, 0) and v.get_at((5, 5))[:3] == (0, 0, 0)
+    # Flips: default, file, and garbage that must fall back instead of raising
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as t:
+        t.write('{"arm": "180", "top": "nonsense"}')
+    assert read_flips(t.name) == {"arm": (True, True), "top": FLIPS[FLIP_DEFAULT["top"]]}
+    open(t.name, "w").write("{broken")
+    assert read_flips(t.name) == {r: FLIPS[d] for r, d in FLIP_DEFAULT.items()}
+    os.unlink(t.name)
+    assert read_flips("/nonexistent")["arm"] == FLIPS[FLIP_DEFAULT["arm"]]
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")
     q.show("game", 0.3)

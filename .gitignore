@@ -16,5 +16,6 @@ wheels/
 scores.db*
 led_zones.json
 cam.json
+flip.json
 result.json
 game/assets/mlg/
