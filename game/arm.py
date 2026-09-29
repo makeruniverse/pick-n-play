@@ -311,6 +311,28 @@ def loop():
     return out
 
 
+# Where the players should leave the arm after a drop (29.9., fair): upper
+# arm up, forearm down, jaws in front of the base -- clear of the tray and
+# out of the top camera's view. Picked on rendered poses; fully folded (the
+# real rest) turns into a knot at this pixel size.
+PARK = {"shoulder_lift": -10.0, "elbow_flex": 62.0, "wrist_flex": 45.0, "gripper": 10.0}
+
+
+@lru_cache(maxsize=1)
+def park_loop():
+    """Jaws open over the tray -> PARK in joint space, then a beat of rest."""
+    a = solve(*KEYS[6])
+    out = [{j: float(round(a[j] + (PARK[j] - a[j]) * s / 6)) for j in JOINTS}
+           for s in range(7)]
+    return out + out[-1:] * 6
+
+
+def park(t):
+    """Pose at time t of the tray -> rest loop, stepped like cycle()."""
+    steps = park_loop()
+    return steps[int(t * HZ) % len(steps)]
+
+
 def cycle(t):
     """Pose and treat position at time t. Discrete steps, like hop(): a
     tweened arm next to 8-bit sprites reads as a different game."""

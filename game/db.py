@@ -170,8 +170,12 @@ class DB:
         return sorted(best.values(), key=lambda r: -r[2])
 
     def top(self, n=TOP_N):
-        """[(name, best score)] -- one row per player, high is good."""
-        return [(name, pts) for _, name, pts, _ in self._best()[:n]]
+        """[(label, best score)] -- one row per player, high is good.
+        The label is the player number (29.9., fair: the booth hands out
+        prizes by number), also for players who typed a name back then.
+        Rounds from before numbers existed keep their name."""
+        return [(f"#{key}" if isinstance(key, int) else name, pts)
+                for key, name, pts, _ in self._best()[:n]]
 
     def rank(self, player):
         """(place, number of players) for the score screen."""
@@ -239,6 +243,9 @@ elif __name__ == "__main__":
     db.add("FAST", 0, dist=50, secs=span)
     db.add("SLOW", 0, dist=50, secs=0.0)
     assert db.top(1) == [("FAST", 1000)], db.top(1)
+    db.add("MAX", 0, goal=50, total=50, dist=50, secs=99.0, player=7)
+    assert "#7" in [r[0] for r in db.top(99)] and "MAX" not in [r[0] for r in db.top(99)], \
+        "the number, not the name"
 
     # Player numbers: two MAX are two people, and the same number playing
     # again keeps its best round.
@@ -261,7 +268,7 @@ elif __name__ == "__main__":
     p.add("MAX", 10, dist=50, player=b)
     p.add("MAX", 0, dist=50, player=a)          # second try, perfect
     p.add("MAX", 40, dist=50, player=a)         # third try, worse -- doesn't count
-    assert p.top() == [("MAX", 900), ("MAX", points(10, 50))], p.top()
+    assert p.top() == [("#1", 900), ("#2", points(10, 50))], p.top()   # numbers, not names
     assert p.rank(a) == (1, 2) and p.rank(b) == (2, 2)
     buf = io.StringIO()
     p.export(buf)
@@ -299,5 +306,5 @@ elif __name__ == "__main__":
     v = DB(path2)
     assert v.top() == []
     v.add("NEU", 1, dist=50, player=v.new_player("NEU"))
-    assert v.top() == [("NEU", points(1, 50))], v.top()
+    assert v.top() == [("#1", points(1, 50))], v.top()
     print("ok")

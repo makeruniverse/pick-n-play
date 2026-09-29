@@ -72,9 +72,9 @@ TEXT = {
         up_next="UP NEXT: PRACTICE ROUND", just_practice="DOESN'T COUNT!",
         practice_n="PRACTICE: {n}",
         tut_intro="AFTER EVERY DROP: ARM AWAY FROM THE TRAY, OR THE CAMERA CAN'T READ THE CODES!",
-        tut_done="NICE, THAT ONE IS {price}! NOW LET GO OF THE ARM, OR THE CAMERA CAN'T READ THE CODES.",
-        tut_over="PRACTICE DONE!", let_go="LET GO OF THE ARM!",
-        tut_fail="NO WORRIES, THAT WAS JUST PRACTICE! LET GO OF THE ARM, A CUSTOMER IS COMING.",
+        tut_done="NICE, THAT ONE IS {price}! ARM BACK TO REST, OR THE CAMERA CAN'T READ THE CODES.",
+        tut_over="PRACTICE DONE!", let_go="ARM BACK TO REST!",
+        tut_fail="NO WORRIES, THAT WAS JUST PRACTICE! ARM BACK TO REST, A CUSTOMER IS COMING.",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET", think="TIME TO PLAN: {n}",
         order="HI! IT'S MY BIRTHDAY. PICK ME TREATS THAT ADD UP TO EXACTLY {goal}!|"
@@ -113,9 +113,9 @@ TEXT = {
         practice_n="PROBERUNDE: {n}",
         tut_intro="NACH JEDEM ABLEGEN: ARM WEG VOM TABLETT, SONST SIEHT DIE "
                   "KAMERA DIE CODES NICHT!",
-        tut_done="SUPER, DIE KOSTET {price}! ARM LOSLASSEN, SONST SIEHT DIE KAMERA DIE CODES NICHT.",
-        tut_over="PROBERUNDE VORBEI!", let_go="ARM LOSLASSEN!",
-        tut_fail="KEIN PROBLEM, WAR NUR ZUM ÜBEN! ARM LOSLASSEN, GLEICH KOMMT KUNDSCHAFT.",
+        tut_done="SUPER, {price}! ARM ZURÜCK IN RUHEPOSITION, SONST SIEHT DIE KAMERA DIE CODES NICHT.",
+        tut_over="PROBERUNDE VORBEI!", let_go="ARM IN RUHEPOSITION!",
+        tut_fail="KEIN PROBLEM, WAR NUR ZUM ÜBEN! ARM IN RUHEPOSITION, GLEICH KOMMT KUNDSCHAFT.",
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
@@ -502,7 +502,7 @@ STEEL = (86, 74, 92)        # the arm's servos, the only non-sweet colour
 # already Matte Scarlet Red, so it serves twice. These four are PLA Basic and
 # therefore glossy -- the only reason that matters is the top-down camera, see
 # the marker note in tools/voxel.py.
-HOT_PINK, PURPLE = (236, 0, 140), (94, 67, 183)
+HOT_PINK, PURPLE = (236, 0, 140), (110, 28, 140)   # was (94, 67, 183): read as blue at the fair
 BLUE, GRASS, YELLOW = (0, 134, 214), (97, 198, 128), (244, 238, 42)
 
 # The robot, printed plate and servo. Its own key because arm.py draws from

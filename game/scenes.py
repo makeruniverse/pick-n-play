@@ -234,6 +234,19 @@ def demo(screen, t):
     arm.draw(screen, ARM_BASE, ARM_SCALE, pose)
 
 
+def park_demo(screen, t):
+    """The arm leaving the treat on the tray and going back to rest: the
+    practice end (29.9., fair). Drawn where the camera panes were, because
+    that's where people were looking, not at the text."""
+    area("demo", DEMO_BOX)
+    pygame.draw.rect(screen, COUNTER,
+                     (DEMO_BOX.left, ARM_BASE[1], DEMO_BOX.width, 6))
+    for name, at in (("tray", DEMO_TRAY), (DEMO_TREAT, treat_at(arm.KEYS[5][:2]))):
+        s = sprite(name, DEMO_SCALE)
+        screen.blit(s, s.get_rect(center=at))
+    arm.draw(screen, ARM_BASE, ARM_SCALE, arm.park(t))
+
+
 @lru_cache(maxsize=4)
 def stripes(w, h, color, period=48):
     """Diagonal stripes for the bar (a candy cane in Sugar Rush), built once. One
@@ -748,11 +761,20 @@ class StoryScene(SceneBase):
         text = ("|".join((self.t("hello", name=name), self.t("help")))
                 if new else self.t("welcome", name=name))
         self.dialog = Dialog(ctx.music, "baker", self.t("baker"), text)
-        self.idle = self.now = 0.0
+        self.idle = self.now = self.confirm = 0.0
         ctx.leds.show("idle")
 
     def handle(self, action):
         self.idle = 0.0
+        # ◀◀ back to idle from the very first screen (29.9., fair): ◀ did
+        # nothing here, so whoever pressed ▶ by mistake was stuck in it.
+        if action == "left":
+            if self.confirm > 0:
+                self.ctx.db.log("quit", self.player, phase="story")
+                self.switch_to(IdleScene(self.ctx))
+            else:
+                self.confirm = CONFIRM_SECONDS
+            return "ok"
         if action != "right":
             return None
         if self.dialog.next():
@@ -762,6 +784,7 @@ class StoryScene(SceneBase):
     def update(self, dt):
         self.idle += dt
         self.now += dt
+        self.confirm = max(0.0, self.confirm - dt)
         self.dialog.update(dt)
         if self.dialog.due:
             self.handle("right")
@@ -780,7 +803,8 @@ class StoryScene(SceneBase):
         self.dialog.draw(screen, f)
         done = self.dialog.last and not self.dialog.typing
         tag(screen, f, self.player)
-        footer(screen, f, right=self.t("go" if done else "next"))
+        footer(screen, f, self.t("quit"), self.t("go" if done else "next"),
+               note=self.t("quit_ok") if self.confirm > 0 else None)
 
 
 class GameScene(SceneBase):
@@ -1131,7 +1155,7 @@ class GameScene(SceneBase):
         # No panes while Oskar orders (29.9., fair): with the image on,
         # people started placing treats before the round. The ladder takes
         # their place instead, big enough to do the sums from.
-        reading = self.phase in ("tut_intro", "read", "order", "go")
+        reading = self.phase in ("tut_intro", "tut_done", "read", "order", "go")
         views = () if reading else zip(self.ctx.views, CAM_POS)
         # The prices only come with the think time (29.9.): shown while
         # Oskar still talks, people stared at them and missed the order.
@@ -1142,6 +1166,9 @@ class GameScene(SceneBase):
         if self.phase == "tut_intro":     # Bella and the arm, as in the story
             stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.clock, 0, 6))
             demo(screen, self.clock)
+        if self.phase == "tut_done":      # ... and the arm going back to rest
+            stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.clock, 0, 6))
+            park_demo(screen, self.clock)
         for view, pos in views:
             cam = view.surface()
             if cam:
@@ -1247,7 +1274,7 @@ class DisplayScoreScene(SceneBase):
         self.place, self.count = ctx.db.rank(player)
         self.shown = 0
         self.done = self.bye = False
-        self.idle = self.now = 0.0
+        self.idle = self.now = self.confirm = 0.0
         self.fx = Sprinkles(960, 300)
         who = ("guest_sweat", "guest", "guest_joy", "guest_joy")[res.stars]
         self.dialog = Dialog(ctx.music, who, self.t("guest"), self.t("react")[res.stars])
@@ -1255,6 +1282,12 @@ class DisplayScoreScene(SceneBase):
 
     def handle(self, action):
         self.idle = 0.0
+        if action == "left":                # ◀◀ straight to idle, like everywhere
+            if self.confirm > 0:
+                self.switch_to(IdleScene(self.ctx))
+            else:
+                self.confirm = CONFIRM_SECONDS
+            return "ok"
         if action != "right":
             return None
         if not self.done or self.dialog.typing:
@@ -1274,6 +1307,7 @@ class DisplayScoreScene(SceneBase):
     def update(self, dt):
         self.idle += dt
         self.now += dt
+        self.confirm = max(0.0, self.confirm - dt)
         self.fx.update(dt)
         # Fast in, slow out: (1-k)**3 is the curve a boxing machine winds
         # down with. Counting up linearly looks like a progress bar.
@@ -1319,7 +1353,8 @@ class DisplayScoreScene(SceneBase):
         # "remember your number" lands better pointing at a spot the player
         # has already seen it in.
         tag(screen, f, self.player)
-        footer(screen, f, right=self.t("next"))
+        footer(screen, f, self.t("quit"), self.t("next"),
+               note=self.t("quit_ok") if self.confirm > 0 else None)
 
 
 if __name__ == "__main__":
@@ -1352,7 +1387,7 @@ if __name__ == "__main__":
         """Covers Music, DB, and Detector -- they all do nothing in the test."""
         tray = {}
         def __getattr__(self, _): return lambda *a, **k: None
-        def top(self, n=5):  return [(f"WW{i}", 999) for i in range(n)]
+        def top(self, n=5):  return [("#999", 999) for i in range(n)]
         def fresh(self):     return self.tray
         def rank(self, p):   return 999, 999
         def new_player(self, name): return 999
@@ -1507,7 +1542,7 @@ if __name__ == "__main__":
             g.update(0.25)
         assert g.phase == "tut_done" and g.dialog.pages[0] == \
             textwrap.wrap(T["tut_fail"], Dialog.COLS), "the practice times out softly"
-        check(f"{lang} tut_fail", g, panes + fuse_)
+        check(f"{lang} tut_fail", g, fuse_)
         assert g.next is g, "no button in practice is no walk-away"
         # Nobody presses anything: every reading page turns itself, then
         # the think time runs out -- the round starts without a button.
@@ -1536,13 +1571,21 @@ if __name__ == "__main__":
         for _ in range(400):
             st.update(0.25)
         assert isinstance(st.next, GameScene), "Bella's pages turn themselves"
+        # ◀◀ leaves from the very first screen, one ◀ only asks
+        st = StoryScene(ctx, 999, "WWW", True)
+        st.handle("left")
+        assert st.next is st and st.confirm > 0
+        check(f"{lang} story quit?", st)
+        st.handle("left")
+        assert isinstance(st.next, IdleScene), "◀◀ on Bella goes back"
         g = GameScene(ctx, 999, "WWW")
         read(g.dialog)
         g.handle("right")
         _s.tray = {9: [(.3, .3)] * 4}
         g.update(0.05)
         assert g.phase == "tut_done" and g.pop and g.first is not None
-        check(f"{lang} tut_done", g, panes + fuse_)
+        for k in range(len(arm.park_loop())):     # every frame of the way to rest
+            check(f"{lang} tut_done park {k}", g, fuse_, clock=k / arm.HZ)
         read(g.dialog)
         g.handle("right")
         assert g.phase == "read" and g.target > g.total
@@ -1602,6 +1645,11 @@ if __name__ == "__main__":
             for _ in range(4 * 25):
                 sc.update(0.25)
             assert isinstance(sc.next, IdleScene), "the score pages turn themselves"
+            sc = DisplayScoreScene(ctx, res, 999)
+            sc.handle("left")
+            check(f"{lang} score quit? {stars}", sc)
+            sc.handle("left")
+            assert isinstance(sc.next, IdleScene), "◀◀ on the score goes back"
 
     # The fuse: full at the start, gone at the end, never outside the screen.
     surf = pygame.Surface((WIDTH, HEIGHT))
