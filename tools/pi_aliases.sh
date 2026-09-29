@@ -145,6 +145,20 @@ pnp-think() {
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "think $1 s, game restarted"
 }
 
+# Camera layout: pnp-layout top (default: top-down big in the center, arm cam
+# small) or pnp-layout split (the two equal panes). Restarts the game.
+pnp-layout() {
+    local d=/etc/systemd/system/pnp-expo.service.d
+    if [ -z "$1" ]; then
+        grep -ho 'PNP_LAYOUT=[a-z]*' $d/layout.conf 2>/dev/null || echo "default (top)"
+        return
+    fi
+    case $1 in top|split) ;; *) echo "pnp-layout top|split"; return 1;; esac
+    sudo mkdir -p $d
+    printf '[Service]\nEnvironment=PNP_LAYOUT=%s\n' "$1" | sudo tee $d/layout.conf >/dev/null
+    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"
+}
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {

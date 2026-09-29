@@ -68,11 +68,11 @@ SAFE_BOTTOM = 920
 
 # ── Timing (seconds) ──────────────────────────────────────────────────────
 WARN_SECONDS  = 5     # from here on the LEDs switch to "hurry" (for the booth team)
-IDLE_TIMEOUT  = 20    # non-idle scenes fall back on their own
+IDLE_TIMEOUT  = 60    # non-idle scenes fall back on their own (20 was too short at the fair)
 CONFIRM_SECONDS = 3   # window for the double-confirm to abort
-# Reading screens (practice announcement, Oskar's order) wait for ▶ with no
-# clock -- this only catches the walk-away (the queue behind them is waiting).
-READ_TIMEOUT  = 30
+# A typed-out page turns itself after this long (29.9., fair): people stood
+# in front of Bella and Oskar and waited instead of pressing ▶.
+PAGE_SECONDS  = 4
 # ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
 # is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
 # letters back without a deploy (drop-in like pnp-time).
@@ -386,8 +386,13 @@ CAM_VIEW      = (736, 414)
 # the arm cam is mirrored against the leader arm and people steered the
 # wrong way by it. 414 px is the height limit between header and bar, so
 # the top-down doesn't grow -- it moves to the center where the eye is.
-CAM_VIEWS     = ((448, 252), CAM_VIEW)     # arm, top-down
-CAM_POS       = ((300, 510), (960, 510))   # centers
+# PNP_LAYOUT=split brings back the two equal panes (pnp-layout on the Pi).
+if os.environ.get("PNP_LAYOUT") == "split":
+    CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960
+else:
+    CAM_VIEWS = ((448, 252), CAM_VIEW)         # arm, top-down
+    CAM_POS   = ((300, 510), (960, 510))       # centers
+    GUEST_X   = 1620                           # Oskar and the pop-up, right of it
 MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # Detection window of the top-down camera, as fractions (x, y, width, height)

@@ -344,7 +344,13 @@ class Dialog:
     def __init__(self, music, who, name, text):
         self.music, self.who, self.name = music, who, name
         self.pages = [textwrap.wrap(p, self.COLS) for p in text.split("|")]
-        self.i, self.n, self.t = 0, 0.0, 0.0
+        self.i, self.n, self.t, self.wait = 0, 0.0, 0.0, 0.0
+
+    @property
+    def due(self):
+        """The page has been sitting there typed out for PAGE_SECONDS: the
+        scene presses ▶ itself."""
+        return self.wait > PAGE_SECONDS
 
     @property
     def typing(self):
@@ -362,6 +368,7 @@ class Dialog:
 
     def update(self, dt):
         self.t += dt
+        self.wait = 0.0 if self.typing else self.wait + dt
         if self.typing:
             before = int(self.n)
             self.n += TALK_CPS * dt
@@ -759,6 +766,8 @@ class StoryScene(SceneBase):
         self.idle += dt
         self.now += dt
         self.dialog.update(dt)
+        if self.dialog.due:
+            self.handle("right")
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
@@ -805,8 +814,8 @@ class GameScene(SceneBase):
     GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
     STRIP_Y = 848               # price strip: sprites here, prices below
     LADDER_Y, LADDER_ROW = 355, 215   # order phase: ladder in two rows, pane area
-    GUEST = (1620, 440)         # the guest stands right of the top-down pane
-    POP = (1620, 610)           # ... and "+2,40" pops up under him
+    GUEST = (GUEST_X, 440)      # the guest stands beside the top-down pane
+    POP = (GUEST_X, 610)        # ... and "+2,40" pops up under him
 
     def __init__(self, ctx, player, name, tutorial=True):
         super().__init__(ctx)
@@ -816,7 +825,7 @@ class GameScene(SceneBase):
         self.marks = dict(ctx.detector.fresh())
         self.total = tray_sum(self.marks)
         self.left = float(ROUND_SECONDS)
-        self.confirm = self.skip = self.hit = self.clock = self.still = self.idle = 0.0
+        self.confirm = self.skip = self.hit = self.clock = self.still = 0.0
         self.tut = float(TUT_SECONDS)
         self.taps = 0
         self.fx = self.pop = self.first = None
@@ -867,7 +876,6 @@ class GameScene(SceneBase):
         self.ctx.music.stage(self.left)
 
     def handle(self, action):
-        self.idle = 0.0
         if action == "left":
             self.taps = 0
             if self.confirm > 0:
@@ -907,15 +915,6 @@ class GameScene(SceneBase):
 
     def update(self, dt):
         self.clock += dt
-        # Only the reading screens count: in practice and round the player
-        # works the arm, not the buttons (29.9.: a practice timeout landed
-        # on "read" with 30 s already on the clock -> straight to idle).
-        reading = self.phase in ("tut_intro", "read")
-        self.idle = self.idle + dt if reading else 0.0
-        if reading and self.idle > READ_TIMEOUT:
-            self.log("quit", why="idle")
-            self.switch_to(IdleScene(self.ctx))
-            return
         self.confirm = max(0.0, self.confirm - dt)
         self.skip = max(0.0, self.skip - dt)
         # One look at the detector per frame: total, overlay, pop-up and
@@ -951,6 +950,11 @@ class GameScene(SceneBase):
                 self.pop = None
         if self.dialog:
             self.dialog.update(dt)
+            # Pages turn themselves -- except in practice, where ▶ means
+            # skip, and in the think time, where it starts the round.
+            if self.dialog.due and self.phase in ("tut_intro", "tut_done", "read"):
+                self.log("auto", page=self.dialog.i)
+                self.handle("right")
         if self.phase == "order":
             self.think -= dt
             if self.think <= 0:
@@ -1444,9 +1448,22 @@ if __name__ == "__main__":
         assert g.phase == "read", "the practice times out"
         g.update(0.1)
         assert g.next is g and g.phase == "read", "no button in practice is no walk-away"
-        # Nobody presses anything on a reading screen: back to idle
-        g.update(READ_TIMEOUT + 0.1)
-        assert isinstance(g.next, IdleScene), "walk-away falls back to idle"
+        # Nobody presses anything: every reading page turns itself, then
+        # the think time runs out -- the round starts without a button.
+        for _ in range(200):
+            g.update(0.25)
+        assert g.phase == "play" and g.next is g
+        # ... but the practice never skips itself
+        g = GameScene(ctx, 999, "WWW")
+        read(g.dialog)
+        g.handle("right")
+        g.update(PAGE_SECONDS + 1)
+        g.update(PAGE_SECONDS + 1)
+        assert g.phase == "tutorial" and g.skip == 0
+        st = StoryScene(ctx, 999, "WWW", True)
+        for _ in range(100):
+            st.update(0.25)
+        assert isinstance(st.next, GameScene), "Bella's pages turn themselves"
         g = GameScene(ctx, 999, "WWW")
         read(g.dialog)
         g.handle("right")
