@@ -123,3 +123,20 @@ above. DB backups: `~/picknplay/scores.backup-*.db`.
 - The idle parade still shows the retired treats (theme `SPRITES`).
 - Harmless noise on every stop: `RuntimeError: cannot schedule new futures
   after shutdown` from the detector thread.
+
+## Branch `standalone` (29.9., not deployed)
+
+Done: voxel pictures of the prints in ladder/strip/pop-up (`tools/treat_pics.py`),
+`settings.json` + `pnp-set` instead of drop-ins (`setup.sh` migrates and removes
+them), settings trial with auto-rollback, crash guard (exception -> idle, 3 in
+60 s -> restart), corrupt `scores.db` -> aside + newest `scores.backup-auto-HH.db`,
+broken `cam.json`/`led_zones.json` -> defaults (`config.BROKEN`), journal 200 MB.
+
+Open, approved by Vadim: secret menu (hold ◀+▶ 3 s, any scene; language follows
+the game; pages status / game / camera / arm / leaderboard / system), arm
+calibration wizard around `lerobot-calibrate` with backup + undo, gripper invert
+via `arm.json` read by `teleop/run.py`, "update now" from a USB stick (git
+bundle, same health check + rollback as `update.sh`), top camera missing ->
+"short technical pause" screen instead of a crash loop, arm camera missing ->
+no arm pane, `update.sh` re-clone must also move `settings.json`/`arm.json`,
+new `expo-card.md`.
