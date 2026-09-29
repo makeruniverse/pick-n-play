@@ -1315,7 +1315,7 @@ if __name__ == "__main__":
 
     # Panes aren't a draw(), but they still count toward overlap.
     panes = [("pane", x - w//2 - 4, y - h//2 - 4, x + w//2 + 4, y + h//2 + 4)
-             for (x, y), (w, h) in zip(CAM_POS, CAM_VIEWS)]
+             for (x, y), (w, h) in zip(CAM_POS, CAM_VIEWS)][0 if ARM_PANE else 1:]
     G = GameScene
     bar = [("bar", G.BAR.x, G.BAR.y - G.GOAL_OVER, G.BAR.right, G.BAR.bottom + G.GOAL_OVER)]
     fuse_ = [("fuse", 0, 0, WIDTH, FUSE_W), ("fuse", 0, HEIGHT - FUSE_W, WIDTH, HEIGHT),

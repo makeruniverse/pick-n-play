@@ -390,8 +390,12 @@ CAM_VIEW      = (736, 414)
 # test 29.9. whether that alone fixes the "arm goes the wrong way" feeling.
 # Display only -- the top-down pane and the detector never see it.
 ARM_MIRROR    = os.environ.get("PNP_ARM_MIRROR") == "1"
+ARM_UD        = os.environ.get("PNP_ARM_UD") == "1"   # upside down; both = 180°
+LAYOUT        = os.environ.get("PNP_LAYOUT", "top")
+# solo = top without the arm pane: A/B whether the arm cam helps at all.
+ARM_PANE      = LAYOUT != "solo"
 # PNP_LAYOUT=split brings back the two equal panes (pnp-layout on the Pi).
-if os.environ.get("PNP_LAYOUT") == "split":
+if LAYOUT == "split":
     CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960
 else:
     CAM_VIEWS = ((448, 252), CAM_VIEW)         # arm, top-down
