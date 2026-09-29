@@ -542,8 +542,18 @@ class IdleScene(SceneBase):
         for i, (name, _) in enumerate(self.top):
             size, color, y = self.PODIUM[i]
             draw_left(screen, f[size], f"{i + 1}. {name}", x, y, color)
-        footer(screen, f, self.t("lang"), self.t("again"),
-               note=self.t("lang_ok") if self.ask > 0 else None)
+        # Three hints, ▶ in the middle (29.9., fair): visitors read the
+        # bottom row and missed the ▶ in the middle of the screen. Left and
+        # right hug the edges so the German "▼ SCHON GESPIELT?" leaves room.
+        if self.ask > 0:
+            footer(screen, f, note=self.t("lang_ok"))
+        else:
+            w = f["small"].size("A")[0]
+            left, mid, right = self.t("lang"), self.t("play"), self.t("again")
+            x0, x1 = 40 + w * len(left), WIDTH - 40 - w * len(right)
+            draw_hint(screen, f["small"], left, x0 - w * len(left) / 2, FOOTER_Y, WHITE)
+            draw_hint(screen, f["small"], mid, (x0 + x1) / 2, FOOTER_Y, ACCENT)
+            draw_hint(screen, f["small"], right, x1 + w * len(right) / 2, FOOTER_Y, WHITE)
         # Right under PRESS: that is the number pressing gets you. tiny fits
         # the gap to BEST, small does not (layout test).
         draw(screen, f["tiny"], self.t("player", no=self.no), 960, 499, ACCENT)

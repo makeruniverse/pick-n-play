@@ -53,7 +53,7 @@ CANDY = ((255, 101, 189),   # ACCENT
 # baker needs their okay first.
 TEXT = {
     "en": dict(
-        press="PRESS ▶", best="TODAY'S BEST",
+        press="PRESS ▶", best="TODAY'S BEST", play="▶ PLAY",
         lang="▲ DEUTSCH", lang_ok="▲ NOCHMAL FÜR DEUTSCH",
         again="▼ PLAYED BEFORE?",
         ask_name="WHAT'S YOUR NAME?", which="WHICH {name} ARE YOU?",
@@ -72,7 +72,8 @@ TEXT = {
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET",
         order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
-              "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?",
+              "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?|"
+              "LOOK AT THE PRICES UP TOP AND PLAN WHICH ONES YOU'LL TAKE!",
         go="▶ START", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
@@ -83,7 +84,7 @@ TEXT = {
                "SPOT ON! BEST BIRTHDAY EVER!"),
     ),
     "de": dict(
-        press="▶ SPIELEN", best="DIE BESTEN VON HEUTE",
+        press="DRÜCK ▶", best="DIE BESTEN VON HEUTE", play="▶ SPIELEN",
         lang="▲ ENGLISH", lang_ok="▲ AGAIN FOR ENGLISH",
         again="▼ SCHON GESPIELT?",
         ask_name="WIE HEIßT DU?", which="WANN WARST DU DA?",
@@ -107,7 +108,8 @@ TEXT = {
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
         order_head="BUDGET",
         order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
-              "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?",
+              "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?|"
+              "SCHAU OBEN AUF DIE PREISE UND PLAN SCHON MAL, WELCHE DU NIMMST!",
         go="▶ LOS GEHT'S", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
         hold="NICHT MEHR ANFASSEN! {n}",
         perfect="PERFEKT", player="SPIELER #{no}",

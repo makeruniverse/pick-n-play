@@ -162,7 +162,18 @@ class DB:
         w.writerows(r for r in self._best() if isinstance(r[0], int))
 
 
-if __name__ == "__main__" and sys.argv[1:] == ["export"]:
+if __name__ == "__main__" and sys.argv[1:2] == ["winners"]:
+    # pnp-winners [n]: the best rounds for handing out the prize. Ties on
+    # score break by who got there first (ts), like the leaderboard.
+    n = int(sys.argv[2]) if sys.argv[2:] else 10
+    rows = DB().con.execute("SELECT player, name, off, dist, secs, first, ts "
+                            "FROM runs WHERE dist IS NOT NULL ORDER BY rowid").fetchall()
+    rows = sorted(rows, key=lambda r: -points(r[2], r[3], r[4] or 0.0))[:n]
+    print(f"{'#':>4} {'name':4} {'score':>5} {'off':>6} {'left s':>6} {'1st s':>5}  ts (Pi clock, UTC)")
+    for player, name, off, dist, secs, first, ts in rows:
+        print(f"{player or '-':>4} {name:4} {points(off, dist, secs or 0.0):>5} "
+              f"{off / 10:>6.2f} {secs or 0:>6.1f} {first or 0:>5.1f}  {ts}")
+elif __name__ == "__main__" and sys.argv[1:] == ["export"]:
     # After the show, on the Pi:  uv run game/db.py export > players.csv
     DB().export(sys.stdout)
 elif __name__ == "__main__":

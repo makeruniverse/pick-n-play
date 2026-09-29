@@ -122,6 +122,11 @@ pnp-time() {
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "round $1 s, game restarted"
 }
 
+# Best rounds for the prize: player no., name, score, EUR off, seconds left
+# (only a perfect ends early, so > 0 means perfect and faster = more), time
+# to first treat. pnp-winners 20 for more rows.
+pnp-winners() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py winners "$@"); }
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {
