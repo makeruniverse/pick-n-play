@@ -73,7 +73,7 @@ TEXT = {
         order_head="BUDGET",
         order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
               "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?|"
-              "LOOK AT THE PRICES UP TOP AND PLAN WHICH ONES YOU'LL TAKE!",
+              "THE CLOCK ISN'T RUNNING YET. DO THE MATH NOW: WHICH TREATS UP TOP MAKE {goal}?",
         go="▶ START", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
@@ -109,7 +109,7 @@ TEXT = {
         order_head="BUDGET",
         order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
               "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?|"
-              "SCHAU OBEN AUF DIE PREISE UND PLAN SCHON MAL, WELCHE DU NIMMST!",
+              "NOCH LÄUFT KEINE ZEIT. RECHNE JETZT: WELCHE SÜßIGKEITEN OBEN ERGEBEN {goal}?",
         go="▶ LOS GEHT'S", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
         hold="NICHT MEHR ANFASSEN! {n}",
         perfect="PERFEKT", player="SPIELER #{no}",
