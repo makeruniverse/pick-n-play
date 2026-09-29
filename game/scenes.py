@@ -777,14 +777,19 @@ class StoryScene(SceneBase):
 class GameScene(SceneBase):
     """Practice, order, round -- one scene, because it's one screen.
 
-    tutorial  Bella: put any treat on the tray. Waits for the camera.
-    tut_done  Bella: that one costs X. The first success, before any clock.
-    order     Oskar names his budget. The target is rolled here, from what's
-              on the tray now -- the practice treat stays and counts.
+    tut_intro "Up next: practice, doesn't count" + the camera rule. No clock.
+    tutorial  Bella: put any treat on the tray. TUT_SECONDS on the fuse.
+    tut_done  Bella: that one costs X. The first success.
+    read      Oskar names his budget, no clock. The target is rolled here,
+              from what's on the tray now -- the practice treat stays.
+    order     think time: ladder, countdown, one line of Oskar.
     play      the round: fuse burning, bar, price strip.
 
-    The camera panes stay the same through all four, so the player never
-    has to find their way around a new screen.
+    The camera panes stay the same through practice and round, so the
+    player never has to find their way around a new screen. The reading
+    screens have none (29.9., fair): with the timer already running under
+    the text, nobody read it and nobody pressed ▶ -- the order came as a
+    cold shower. Every screen is one or two pages, the queue is waiting.
     """
 
     MUSIC = None   # idle music carries on; the round stages start at "play"
@@ -811,7 +816,8 @@ class GameScene(SceneBase):
         self.marks = dict(ctx.detector.fresh())
         self.total = tray_sum(self.marks)
         self.left = float(ROUND_SECONDS)
-        self.confirm = self.skip = self.hit = self.clock = self.still = 0.0
+        self.confirm = self.skip = self.hit = self.clock = self.still = self.idle = 0.0
+        self.tut = float(TUT_SECONDS)
         self.taps = 0
         self.fx = self.pop = self.first = None
         self.target = self.dist = None
@@ -823,27 +829,34 @@ class GameScene(SceneBase):
         self.log("round", tray=sorted(self.marks), total=self.total, lang=ctx.lang,
                  secs=ROUND_SECONDS, tutorial=tutorial)
         if tutorial:
-            self.phase = "tutorial"
-            self.dialog = Dialog(ctx.music, "baker", self.t("baker"), self.t("tut"))
+            self.phase = "tut_intro"
+            self.dialog = Dialog(ctx.music, "baker", self.t("baker"), self.t("tut_intro"))
         else:
-            self.order()
+            self.read()
 
     def log(self, event, **data):
         """Every round event with phase and scene clock, for the analysis."""
         self.ctx.db.log(event, self.player, phase=self.phase,
                         clock=round(self.clock, 2), **data)
 
-    def order(self):
-        self.phase = "order"
+    def read(self):
+        """Oskar's order as a reading screen: no clock until ▶ READY."""
+        self.phase = "read"
         # The target follows what's actually there. Rolled freely, chance
         # would decide whether someone has to bridge EUR 0.30 or EUR 20.
         self.dist = gap(self.marks, up=True)
         self.target = self.total + self.dist
-        self.think = float(THINK_SECONDS)
         self.log("order", tray=sorted(self.marks), total=self.total,
                  dist=self.dist, target=self.target)
         self.dialog = Dialog(self.ctx.music, "guest", self.t("guest"),
-                             self.t("order", goal=euro(self.target)))
+                             self.t("order", goal=euro(self.target), think=THINK_SECONDS))
+
+    def plan(self):
+        """Read -> think time. Not `think`: that's the countdown."""
+        self.phase, self.think = "order", float(THINK_SECONDS)
+        self.log("think", read=round(self.clock, 1))
+        self.dialog = Dialog(self.ctx.music, "guest", self.t("guest"),
+                             self.t("think_q", goal=euro(self.target)))
 
     def start(self, how):
         """Order -> play: by ▶ on Oskar's last page, or when THINK_SECONDS
@@ -854,6 +867,7 @@ class GameScene(SceneBase):
         self.ctx.music.stage(self.left)
 
     def handle(self, action):
+        self.idle = 0.0
         if action == "left":
             self.taps = 0
             if self.confirm > 0:
@@ -865,16 +879,21 @@ class GameScene(SceneBase):
             return "ok"
         if action != "right":
             return None
-        if self.phase == "tutorial":
+        if self.phase == "tut_intro" and self.dialog.next():
+            self.phase = "tutorial"
+            self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"), self.t("tut"))
+        elif self.phase == "tutorial":
             # Double-confirm like ◀: the practice is the only place the
             # player learns what the arm does, one bumped ▶ shouldn't cost it.
             if self.skip > 0:
                 self.log("tut_skip")
-                self.order()
+                self.read()
             else:
                 self.skip = CONFIRM_SECONDS
         elif self.phase == "tut_done" and self.dialog.next():
-            self.order()
+            self.read()
+        elif self.phase == "read" and self.dialog.next():
+            self.plan()
         elif self.phase == "order" and self.dialog.next():
             self.start("button")
             return "start"
@@ -888,6 +907,11 @@ class GameScene(SceneBase):
 
     def update(self, dt):
         self.clock += dt
+        self.idle += dt
+        if self.phase in ("tut_intro", "read") and self.idle > READ_TIMEOUT:
+            self.log("quit", why="idle")
+            self.switch_to(IdleScene(self.ctx))
+            return
         self.confirm = max(0.0, self.confirm - dt)
         self.skip = max(0.0, self.skip - dt)
         # One look at the detector per frame: total, overlay, pop-up and
@@ -928,6 +952,11 @@ class GameScene(SceneBase):
             if self.think <= 0:
                 self.ctx.music.sfx("start")
                 self.start("timer")
+        if self.phase == "tutorial":
+            self.tut -= dt
+            if self.tut <= 0:
+                self.log("tut_timeout")
+                self.read()
         if self.phase != "play":
             if self.fx:
                 self.fx.update(dt)
@@ -1062,9 +1091,13 @@ class GameScene(SceneBase):
         # No panes while Oskar orders (29.9., fair): with the image on,
         # people started placing treats before the round. The ladder takes
         # their place instead, big enough to do the sums from.
-        views = () if self.phase == "order" else zip(self.ctx.views, CAM_POS)
-        if self.phase == "order":
+        reading = self.phase in ("tut_intro", "read", "order")
+        views = () if reading else zip(self.ctx.views, CAM_POS)
+        if self.phase in ("read", "order"):
             self.ladder(screen, f)
+        if self.phase == "tut_intro":     # Bella and the arm, as in the story
+            stamp(screen, self.dialog.face(), 12, 560, 450 + hop(self.clock, 0, 6))
+            demo(screen, self.clock)
         for view, pos in views:
             cam = view.surface()
             if cam:
@@ -1078,9 +1111,14 @@ class GameScene(SceneBase):
         # The top says what to do, with a verb: "ADD 3,20 €", not "OFF BY".
         # Every phase uses the same two lines, so there's one place to look.
         big = f["big"]
-        if self.phase in ("tutorial", "tut_done"):
+        if self.phase == "tut_intro":
+            label, value, big = self.t("up_next"), self.t("just_practice"), f["mid"]
+        elif self.phase == "tutorial":
+            label = self.t("practice_n", n=max(0, math.ceil(self.tut)))
+            value, big = self.t("tut_head"), f["mid"]
+        elif self.phase == "tut_done":
             label, value, big = self.t("practice"), self.t("tut_head"), f["mid"]
-        elif self.phase == "order":
+        elif self.phase in ("read", "order"):
             label, value = self.t("order_head"), euro(self.target)
         elif self.hit > 0:
             label = self.t("hold", n=int(PERFECT_HOLD - self.hit) + 1)
@@ -1095,7 +1133,7 @@ class GameScene(SceneBase):
         tag(screen, f, self.player)
         if self.phase == "play":    # in "order" his face is in the dialog
             stamp(screen, self.mood(), 6, *self.GUEST)
-        if self.pop and self.phase != "order":    # would sit on the ladder
+        if self.pop and not reading:    # would sit on the ladder / Bella
             name, text, age = self.pop
             rise = round(age * 20)
             stamp(screen, name, 4, self.POP[0], self.POP[1] - rise)
@@ -1103,6 +1141,9 @@ class GameScene(SceneBase):
         if self.phase == "order":
             fuse(screen, max(0.0, self.think / THINK_SECONDS) if THINK_SECONDS else 0.0,
                  WHITE, self.clock)
+        if self.phase == "tutorial":
+            fuse(screen, max(0.0, self.tut / TUT_SECONDS) if TUT_SECONDS else 0.0,
+                 ACCENT, self.clock)
         if self.dialog:
             self.dialog.draw(screen, f)
         else:
@@ -1117,8 +1158,9 @@ class GameScene(SceneBase):
         if self.phase == "tutorial":
             right = self.t("skip")
         elif self.dialog:
-            done = self.phase == "order" and self.dialog.last and not self.dialog.typing
-            right = self.t("go" if done else "next")
+            done = self.dialog.last and not self.dialog.typing
+            right = self.t(dict(tut_intro="go", read="ready", order="go")
+                           .get(self.phase, "next") if done else "next")
         footer(screen, f, self.t("quit"), right,
                note=self.t("quit_ok") if self.confirm > 0
                else self.t("skip_ok") if self.skip > 0 and self.phase == "tutorial"
@@ -1322,13 +1364,13 @@ if __name__ == "__main__":
                 assert _am.overlap_area(_tm, (_off[0] + _d, _off[1])), \
                     f"demo {_k}: no jaw on the {'left' if _d < 0 else 'right'}"
 
-    widest = dict(name="#999", no=999, goal=euro(88), price=euro(52))
+    widest = dict(name="#999", no=999, goal=euro(88), price=euro(52), think=99)
     for lang in TEXT:
         ctx.lang = lang
         T = TEXT[lang]
         # Every speech line fits the box: at most three lines per page.
-        for key in ("hello", "help", "welcome", "tut", "tut_done", "order",
-                    "remember"):
+        for key in ("hello", "help", "welcome", "tut_intro", "tut", "tut_done",
+                    "order", "think_q", "remember"):
             for page in T[key].format(**widest).split("|"):
                 n = len(textwrap.wrap(page, Dialog.COLS))
                 assert n <= 3, f"{lang}.{key}: {n} lines: {page!r}"
@@ -1370,34 +1412,61 @@ if __name__ == "__main__":
                     check(f"{lang} story new={new} page {i} demo {k}", st,
                           now=k / arm.HZ)
 
-        # The phases of a round: empty tray -> practice, a treat lands ->
-        # tut_done, ▶ -> order, ▶▶ -> play.
+        # The phases of a round: announcement -> ▶ -> practice, a treat
+        # lands -> tut_done, ▶ -> read, ▶ -> order (think), ▶ -> play.
+        # tutorial has exactly one page: ▶ there means skip, not next page.
+        assert "|" not in T["tut"]
         _s.tray = {}
         g = GameScene(ctx, 999, "WWW")
+        assert g.phase == "tut_intro"
+        for k in range(len(arm.loop())):
+            check(f"{lang} tut_intro demo {k}", g, clock=k / arm.HZ)
+        read(g.dialog)
+        g.handle("right")
         assert g.phase == "tutorial"
-        check(f"{lang} tutorial", g, panes)
+        check(f"{lang} tutorial", g, panes + fuse_)
         g.handle("right")
         assert g.phase == "tutorial" and g.skip > 0, "one ▶ only asks"
-        check(f"{lang} tutorial skip?", g, panes)
+        check(f"{lang} tutorial skip?", g, panes + fuse_)
         g.update(CONFIRM_SECONDS + 0.1)
         g.handle("right")
         assert g.phase == "tutorial", "the question times out"
         g.handle("right")
-        assert g.phase == "order", "▶▶ skips"
+        assert g.phase == "read", "▶▶ skips"
+        # Nobody manages the practice: its clock ends it
         g = GameScene(ctx, 999, "WWW")
+        read(g.dialog)
+        g.handle("right")
+        g.update(TUT_SECONDS + 0.1)
+        assert g.phase == "read", "the practice times out"
+        # Nobody presses anything on a reading screen: back to idle
+        g.update(READ_TIMEOUT + 0.1)
+        assert isinstance(g.next, IdleScene), "walk-away falls back to idle"
+        g = GameScene(ctx, 999, "WWW")
+        read(g.dialog)
+        g.handle("right")
         _s.tray = {9: [(.3, .3)] * 4}
         g.update(0.05)
         assert g.phase == "tut_done" and g.pop and g.first is not None
         check(f"{lang} tut_done", g, panes)
         read(g.dialog)
         g.handle("right")
-        assert g.phase == "order" and g.target > g.total
-        check(f"{lang} order", g, [])    # own screen, no panes
+        assert g.phase == "read" and g.target > g.total
+        g.update(THINK_SECONDS + 0.1)
+        assert g.phase == "read", "no clock while reading"
+        for i, _ in enumerate(read(g.dialog)):
+            g.dialog.i, g.dialog.n = i, 1e9
+            check(f"{lang} read page {i}", g, [])    # own screen, no panes
+        g.handle("right")
+        assert g.phase == "order"
+        check(f"{lang} order", g, fuse_)
         read(g.dialog)
         assert g.handle("right") == "start" and g.phase == "play"
         # Nobody presses ▶: the think time runs out and the round starts itself
         g2 = GameScene(ctx, 999, "WWW", tutorial=False)
-        assert g2.phase == "order"
+        assert g2.phase == "read"
+        read(g2.dialog)
+        g2.handle("right")
         g2.update(THINK_SECONDS + 0.1)
         assert g2.phase == "play" and g2.dialog is None
         # Four treats off the actual price list, not four literal IDs: which

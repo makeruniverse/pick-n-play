@@ -102,19 +102,31 @@ def shots(out):
         d.i, d.n, d.t = page, 1e9, 0.4
         return d
 
+    def on(scene, presses):
+        """`presses` × ▶, each on a fully typed page."""
+        for _ in range(presses):
+            typed(scene.dialog, scene.dialog.i)
+            scene.handle("right")
+        return scene
+
     story = scenes.StoryScene(ctx, 42, "MAX", new=True)
-    tut = scenes.GameScene(ctx, 42, "MAX")
+    intro = scenes.GameScene(ctx, 42, "MAX")
+    typed(intro.dialog)
+    tut = on(scenes.GameScene(ctx, 42, "MAX"), 1)
+    tut.update(scenes.TUT_SECONDS * 0.3)
     typed(tut.dialog)
     # The practice treat lands: the scene goes through the same update()
     # as on the cabinet, so pop-up, sprinkles and Bella's line are real.
-    done_tut = scenes.GameScene(ctx, 42, "MAX")
+    done_tut = on(scenes.GameScene(ctx, 42, "MAX"), 1)
     stub.tray = {0: quad(.45)}
     done_tut.update(0.3)
     typed(done_tut.dialog)
-    game = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
-    typed(game.dialog)
-    order = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
-    typed(order.dialog, 1)
+    game = on(scenes.GameScene(ctx, 42, "MAX", tutorial=False), 2)
+    reading = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
+    typed(reading.dialog, 1)
+    order = on(scenes.GameScene(ctx, 42, "MAX", tutorial=False), 2)
+    order.update(scenes.THINK_SECONDS * 0.4)
+    typed(order.dialog)
     # A round that landed just off: EUR 0.30 short at EUR 6.60, time ran
     # out. Gives a score with three digits and two stars. Target and total
     # are both really reachable with the six printed treats -- bar + cake
@@ -139,8 +151,10 @@ def shots(out):
         ("2b-pick",        scenes.PickScene(ctx, "MAX", stub.players_named("MAX")),
                            dict(cursor=1)),
         ("3-story",        story, dict(dialog=typed(story.dialog, 1))),
+        ("4a-tut-intro",   intro,                                     {}),
         ("4-tutorial",     tut,                                       {}),
         ("5-tutorial-done", done_tut,                                 {}),
+        ("6a-read",        reading,                                   {}),
         ("6-order",        order,                                     {}),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
                                       marks={9: quad(.45)}, total=V[9], target=66,

@@ -68,13 +68,16 @@ TEXT = {
              "EVERY TREAT HAS ITS PRICE. THE BIGGER IT IS, THE MORE IT COSTS.",
         welcome="{name}, YOU'RE BACK! READY TO BEAT YOUR SCORE?",
         practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
-        tut="WARM-UP: PUT ANY TREAT ON THE TRAY, CODE FACING UP SO THE TOP CAMERA SEES IT.",
+        tut="PUT ANY TREAT ON THE TRAY, CODE UP. THEN MOVE THE ARM AWAY FROM THE CAMERA!",
+        up_next="UP NEXT: PRACTICE ROUND", just_practice="DOESN'T COUNT!",
+        practice_n="PRACTICE: {n}",
+        tut_intro="IMPORTANT: THE ARM MUST NOT BLOCK THE CAMERA. MOVE IT AWAY AFTER YOU DROP A TREAT!",
         tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET", think="TIME TO PLAN: {n}",
-        order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
-              "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?|"
-              "THE CLOCK ISN'T RUNNING YET. DO THE MATH NOW: WHICH TREATS UP TOP MAKE {goal}?",
+        order="HI! IT'S MY BIRTHDAY. PICK ME TREATS THAT ADD UP TO EXACTLY {goal}!|"
+              "YOU GET {think} SECONDS TO DO THE MATH, THEN THE CLOCK STARTS FOR THE ARM.",
+        think_q="WHICH TREATS MAKE {goal}?", ready="▶ READY",
         go="▶ START", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
@@ -102,16 +105,20 @@ TEXT = {
         welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! KNACKST DU DEINEN "
                 "REKORD?",
         practice="PROBERUNDE", tut_head="1 SÜßIGKEIT AUFLEGEN",
-        tut="ZUM ÜBEN: LEG EINE SÜßIGKEIT AUFS TABLETT. CODE NACH OBEN "
-            "ZUR KAMERA!",
+        tut="LEG EINE SÜßIGKEIT AUFS TABLETT, CODE NACH OBEN. DANN ARM "
+            "WEG VON DER KAMERA!",
+        up_next="GLEICH: PROBERUNDE", just_practice="ZÄHLT NICHT!",
+        practice_n="PROBERUNDE: {n}",
+        tut_intro="WICHTIG: DER ARM DARF DIE KAMERA NICHT VERDECKEN. NACH "
+                  "DEM ABLEGEN ARM WEG!",
         tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
         order_head="BUDGET", think="RECHENZEIT: {n}",
-        order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
-              "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?|"
-              "NOCH LÄUFT KEINE ZEIT. RECHNE JETZT: WELCHE SÜßIGKEITEN OBEN ERGEBEN {goal}?",
+        order="HALLO! ICH HAB GEBURTSTAG. SUCH MIR SÜßIGKEITEN FÜR GENAU {goal} AUS!|"
+              "DU HAST {think} SEKUNDEN ZUM RECHNEN, DANN LÄUFT DIE UHR FÜR DEN ARM.",
+        think_q="{goal}: WELCHE SÜßIGKEITEN PASSEN?", ready="▶ BEREIT",
         go="▶ LOS GEHT'S", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
         hold="NICHT MEHR ANFASSEN! {n}",
         perfect="PERFEKT", player="SPIELER #{no}",

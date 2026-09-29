@@ -70,6 +70,9 @@ SAFE_BOTTOM = 920
 WARN_SECONDS  = 5     # from here on the LEDs switch to "hurry" (for the booth team)
 IDLE_TIMEOUT  = 20    # non-idle scenes fall back on their own
 CONFIRM_SECONDS = 3   # window for the double-confirm to abort
+# Reading screens (practice announcement, Oskar's order) wait for ▶ with no
+# clock -- this only catches the walk-away (the queue behind them is waiting).
+READ_TIMEOUT  = 30
 # ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
 # is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
 # letters back without a deploy (drop-in like pnp-time).
@@ -231,7 +234,7 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 #                this price set, the self-test in balance.py prints the
 #                number on every run.
 MODES = {
-    "normal": dict(ROUND_SECONDS=90, THINK_SECONDS=20, PERFECT_HOLD=3.0, GAP_MOVES=2,
+    "normal": dict(ROUND_SECONDS=90, THINK_SECONDS=20, TUT_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
 }
 MODE = os.environ.get("PNP_MODE", "normal")
@@ -252,6 +255,9 @@ ROUND_SECONDS = _mode("ROUND_SECONDS")
 # Oskar's order: time to do the sums, panes off, then the round starts on
 # its own (29.9., fair). ▶ starts it earlier. pnp-think on the Pi.
 THINK_SECONDS = _mode("THINK_SECONDS")
+# The practice round has a clock too (29.9.): it's the place to learn the
+# fuse, and it can't hang forever on a treat the camera never sees.
+TUT_SECONDS   = _mode("TUT_SECONDS")
 PERFECT_HOLD  = _mode("PERFECT_HOLD")
 GAP_MOVES     = _mode("GAP_MOVES")
 GAP_MIN       = _mode("GAP_MIN")
