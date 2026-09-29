@@ -131,6 +131,20 @@ pnp-winners() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py winn
 # (events table in scores.db). pnp-events 200 for more; SQL for the rest.
 pnp-events() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py events "$@"); }
 
+# Think time during Oskar's order (panes off, then the round starts itself):
+# pnp-think 30 sets it and restarts the game, pnp-think alone shows it.
+pnp-think() {
+    local d=/etc/systemd/system/pnp-expo.service.d
+    if [ -z "$1" ]; then
+        grep -ho 'PNP_THINK_SECONDS=[0-9]*' $d/think.conf 2>/dev/null || echo "default (config.py MODES)"
+        return
+    fi
+    case $1 in *[!0-9]*) echo "seconds, e.g. pnp-think 30"; return 1;; esac
+    sudo mkdir -p $d
+    printf '[Service]\nEnvironment=PNP_THINK_SECONDS=%s\n' "$1" | sudo tee $d/think.conf >/dev/null
+    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "think $1 s, game restarted"
+}
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {

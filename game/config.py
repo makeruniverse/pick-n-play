@@ -226,7 +226,7 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 #                this price set, the self-test in balance.py prints the
 #                number on every run.
 MODES = {
-    "normal": dict(ROUND_SECONDS=90, PERFECT_HOLD=3.0, GAP_MOVES=2,
+    "normal": dict(ROUND_SECONDS=90, THINK_SECONDS=20, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
 }
 MODE = os.environ.get("PNP_MODE", "normal")
@@ -244,6 +244,9 @@ def _mode(key):
 
 
 ROUND_SECONDS = _mode("ROUND_SECONDS")
+# Oskar's order: time to do the sums, panes off, then the round starts on
+# its own (29.9., fair). ▶ starts it earlier. pnp-think on the Pi.
+THINK_SECONDS = _mode("THINK_SECONDS")
 PERFECT_HOLD  = _mode("PERFECT_HOLD")
 GAP_MOVES     = _mode("GAP_MOVES")
 GAP_MIN       = _mode("GAP_MIN")

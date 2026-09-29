@@ -70,7 +70,7 @@ TEXT = {
         tut="WARM-UP: PUT ANY TREAT ON THE TRAY, CODE FACING UP SO THE TOP CAMERA SEES IT.",
         tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
-        order_head="BUDGET",
+        order_head="BUDGET", think="TIME TO PLAN: {n}",
         order="HI! IT'S MY BIRTHDAY, AND I'VE GOT EXACTLY {goal}.|"
               "CAN YOU PICK ME TREATS THAT ADD UP TO EXACTLY {goal}?|"
               "THE CLOCK ISN'T RUNNING YET. DO THE MATH NOW: WHICH TREATS UP TOP MAKE {goal}?",
@@ -106,7 +106,7 @@ TEXT = {
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
-        order_head="BUDGET",
+        order_head="BUDGET", think="RECHENZEIT: {n}",
         order="HALLO! ICH HAB HEUTE GEBURTSTAG UND GENAU {goal} DABEI.|"
               "SUCHST DU MIR SÜßIGKEITEN FÜR GENAU {goal} AUS?|"
               "NOCH LÄUFT KEINE ZEIT. RECHNE JETZT: WELCHE SÜßIGKEITEN OBEN ERGEBEN {goal}?",

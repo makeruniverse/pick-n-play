@@ -787,7 +787,7 @@ class GameScene(SceneBase):
     SCALE = GAP_MAX + max(VALUES.values())
     GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
     STRIP_Y = 848               # price strip: sprites here, prices below
-    LADDER_Y = 150              # order phase: the ladder on top, above the panes
+    LADDER_Y, LADDER_ROW = 355, 215   # order phase: ladder in two rows, pane area
     GUEST = (960, 440)          # the guest stands between the panes
     POP = (960, 610)            # ... and "+2,40" pops up under him
 
@@ -827,10 +827,19 @@ class GameScene(SceneBase):
         # would decide whether someone has to bridge EUR 0.30 or EUR 20.
         self.dist = gap(self.marks, up=True)
         self.target = self.total + self.dist
+        self.think = float(THINK_SECONDS)
         self.log("order", tray=sorted(self.marks), total=self.total,
                  dist=self.dist, target=self.target)
         self.dialog = Dialog(self.ctx.music, "guest", self.t("guest"),
                              self.t("order", goal=euro(self.target)))
+
+    def start(self, how):
+        """Order -> play: by ▶ on Oskar's last page, or when THINK_SECONDS
+        run out. `how` goes to the log, it says who reads the text at all."""
+        self.phase, self.dialog = "play", None
+        self.log("play", how=how, think=round(THINK_SECONDS - self.think, 1),
+                 tray=sorted(self.marks), total=self.total, target=self.target)
+        self.ctx.music.stage(self.left)
 
     def handle(self, action):
         if action == "left":
@@ -855,9 +864,7 @@ class GameScene(SceneBase):
         elif self.phase == "tut_done" and self.dialog.next():
             self.order()
         elif self.phase == "order" and self.dialog.next():
-            self.phase, self.dialog = "play", None
-            self.log("play", tray=sorted(self.marks), total=self.total, target=self.target)
-            self.ctx.music.stage(self.left)
+            self.start("button")
             return "start"
         elif self.phase == "play" and CHEAT_TAPS:
             # ponytail: developer shortcut. Doesn't jump into the round, but
@@ -904,6 +911,11 @@ class GameScene(SceneBase):
                 self.pop = None
         if self.dialog:
             self.dialog.update(dt)
+        if self.phase == "order":
+            self.think -= dt
+            if self.think <= 0:
+                self.ctx.music.sfx("start")
+                self.start("timer")
         if self.phase != "play":
             if self.fx:
                 self.fx.update(dt)
@@ -1013,13 +1025,18 @@ class GameScene(SceneBase):
             draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, self.STRIP_Y + 54, color)
 
     def ladder(self, screen, f):
-        """The order screen: every treat big with its price, cheap to dear.
-        Full screen width, not the bar's; "small" prices ran into each other."""
-        for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
-            x = 40 + (WIDTH - 80) * (i + 0.5) / len(VALUES)
-            stamp(screen, SPRITE[k], 5, x, self.LADDER_Y)
-            draw(screen, f["tiny"], euro(VALUES[k], sign=False), x,
-                 self.LADDER_Y + 92, WHITE)
+        """Oskar's order: every treat with its price, cheap to dear, in two
+        rows where the panes usually are -- one row left the prices too
+        small to read from the leader arm."""
+        order = sorted(VALUES, key=VALUES.get)
+        per = (len(order) + 1) // 2
+        for i, k in enumerate(order):
+            row, col = divmod(i, per)
+            n = per if row == 0 else len(order) - per
+            x = WIDTH * (col + 0.5) / n
+            y = self.LADDER_Y + row * self.LADDER_ROW
+            stamp(screen, SPRITE[k], 5, x, y)
+            draw(screen, f["small"], euro(VALUES[k], sign=False), x, y + 90, WHITE)
 
     def _x(self, value):
         """Price -> x in the bar. Clamped so nothing runs out."""
@@ -1030,7 +1047,13 @@ class GameScene(SceneBase):
         # Priority is the camera images: the player steers the arm by them.
         f = self.ctx.fonts
         screen.fill(BG)
-        for view, pos in zip(self.ctx.views, CAM_POS):
+        # No panes while Oskar orders (29.9., fair): with the image on,
+        # people started placing treats before the round. The ladder takes
+        # their place instead, big enough to do the sums from.
+        views = () if self.phase == "order" else zip(self.ctx.views, CAM_POS)
+        if self.phase == "order":
+            self.ladder(screen, f)
+        for view, pos in views:
             cam = view.surface()
             if cam:
                 r = cam.get_rect(center=pos)
@@ -1054,23 +1077,20 @@ class GameScene(SceneBase):
             diff = self.target - self.total
             label, value = self.t("add" if diff > 0 else "over"), euro(abs(diff))
         if self.phase == "order":
-            # Oskar's order is the time to do the sums (29.9., booth ask):
-            # the price ladder takes the top, the budget shrinks to one line
-            # above it. The panes stay, the player maps where each treat
-            # lies. No fuse -- the clock only runs in "play".
-            draw(screen, f["small"], f"{label} {value}", 960, 44, ACCENT)
-            self.ladder(screen, f)
-        else:
-            draw(screen, f["small"], label, 960, 64, GREY)
-            draw(screen, big, value, 960, 196, ACCENT)
+            label = self.t("think", n=max(0, math.ceil(self.think)))
+        draw(screen, f["small"], label, 960, 64, GREY)
+        draw(screen, big, value, 960, 196, ACCENT)
         tag(screen, f, self.player)
-        if self.phase in ("order", "play"):
+        if self.phase == "play":    # in "order" his face is in the dialog
             stamp(screen, self.mood(), 6, *self.GUEST)
-        if self.pop:
+        if self.pop and self.phase != "order":    # would sit on the ladder
             name, text, age = self.pop
             rise = round(age * 20)
             stamp(screen, name, 4, self.POP[0], self.POP[1] - rise)
             draw(screen, f["tiny"], text, self.POP[0], self.POP[1] + 58 - rise, ACCENT)
+        if self.phase == "order":
+            fuse(screen, max(0.0, self.think / THINK_SECONDS) if THINK_SECONDS else 0.0,
+                 WHITE, self.clock)
         if self.dialog:
             self.dialog.draw(screen, f)
         else:
@@ -1351,9 +1371,14 @@ if __name__ == "__main__":
         read(g.dialog)
         g.handle("right")
         assert g.phase == "order" and g.target > g.total
-        check(f"{lang} order", g, panes)
+        check(f"{lang} order", g, [])    # own screen, no panes
         read(g.dialog)
         assert g.handle("right") == "start" and g.phase == "play"
+        # Nobody presses ▶: the think time runs out and the round starts itself
+        g2 = GameScene(ctx, 999, "WWW", tutorial=False)
+        assert g2.phase == "order"
+        g2.update(THINK_SECONDS + 0.1)
+        assert g2.phase == "play" and g2.dialog is None
         # Four treats off the actual price list, not four literal IDs: which
         # markers exist is print-day data since 2026-09-25.
         _s.tray = {i: [(.3, .3)] * 4 for i in sorted(VALUES)[:4]}
