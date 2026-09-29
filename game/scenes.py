@@ -1158,7 +1158,9 @@ class GameScene(SceneBase):
             label = self.t("practice_n", n=max(0, math.ceil(self.tut)))
             value, big = self.t("tut_head"), f["mid"]
         elif self.phase == "tut_done":
-            label, value, big = self.t("practice"), self.t("tut_head"), f["mid"]
+            # The practice is over and the hand has to leave the arm: said
+            # big, not only in the box (29.9., floor).
+            label, value, big = self.t("tut_over"), self.t("let_go"), f["mid"]
         elif self.phase in ("read", "order", "go"):
             label, value = self.t("order_head"), euro(self.target)
         elif self.hit > 0:
@@ -1185,6 +1187,10 @@ class GameScene(SceneBase):
         if self.phase == "tutorial":
             fuse(screen, max(0.0, self.tut / TUT_SECONDS) if TUT_SECONDS else 0.0,
                  ACCENT, self.clock)
+        if self.phase == "tut_done":
+            # Burns down until Oskar comes: the next screen is announced,
+            # not a surprise (29.9., floor). One page, so the page clock is it.
+            fuse(screen, 1 - min(1.0, self.dialog.wait / PAGE_SECONDS), WHITE, self.clock)
         if self.phase == "go":
             # The budget stays on top, the countdown takes the pane area:
             # the one thing to see before the arm starts to count.
@@ -1466,6 +1472,8 @@ if __name__ == "__main__":
         # lands -> tut_done, ▶ -> read, ▶ -> order (think), ▶ -> play.
         # tutorial has exactly one page: ▶ there means skip, not next page.
         assert "|" not in T["tut"]
+        # ... and so has the practice end: its fuse is the page clock
+        assert "|" not in T["tut_done"] + T["tut_fail"]
         _s.tray = {}
         g = GameScene(ctx, 999, "WWW")
         assert g.phase == "tut_intro"
@@ -1495,7 +1503,7 @@ if __name__ == "__main__":
             g.update(0.25)
         assert g.phase == "tut_done" and g.dialog.pages[0] == \
             textwrap.wrap(T["tut_fail"], Dialog.COLS), "the practice times out softly"
-        check(f"{lang} tut_fail", g, panes)
+        check(f"{lang} tut_fail", g, panes + fuse_)
         assert g.next is g, "no button in practice is no walk-away"
         # Nobody presses anything: every reading page turns itself, then
         # the think time runs out -- the round starts without a button.
@@ -1530,7 +1538,7 @@ if __name__ == "__main__":
         _s.tray = {9: [(.3, .3)] * 4}
         g.update(0.05)
         assert g.phase == "tut_done" and g.pop and g.first is not None
-        check(f"{lang} tut_done", g, panes)
+        check(f"{lang} tut_done", g, panes + fuse_)
         read(g.dialog)
         g.handle("right")
         assert g.phase == "read" and g.target > g.total

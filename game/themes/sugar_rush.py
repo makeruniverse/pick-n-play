@@ -67,13 +67,14 @@ TEXT = {
              "EVERY MOVE.|"
              "EVERY TREAT HAS ITS PRICE. THE BIGGER IT IS, THE MORE IT COSTS.",
         welcome="{name}, YOU'RE BACK! READY TO BEAT YOUR SCORE?",
-        practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
-        tut="PUT ANY TREAT ON THE TRAY, CODE UP. THEN MOVE THE ARM AWAY FROM THE CAMERA!",
+        practice="PRACTICE", tut_head="GRAB THE ARM!",
+        tut="GRAB THE ARM IN FRONT OF YOU AND PUT ANY TREAT ON THE TRAY, CODE UP!",
         up_next="UP NEXT: PRACTICE ROUND", just_practice="DOESN'T COUNT!",
         practice_n="PRACTICE: {n}",
-        tut_intro="IMPORTANT: THE ARM MUST NOT BLOCK THE CAMERA. MOVE IT AWAY AFTER YOU DROP A TREAT!",
-        tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
-        tut_fail="NO WORRIES, THAT WAS JUST PRACTICE! OH, HERE COMES A CUSTOMER!",
+        tut_intro="AFTER EVERY DROP: ARM AWAY FROM THE TRAY, OR THE CAMERA CAN'T READ THE CODES!",
+        tut_done="NICE, THAT ONE IS {price}! NOW LET GO OF THE ARM, OR THE CAMERA CAN'T READ THE CODES.",
+        tut_over="PRACTICE DONE!", let_go="LET GO OF THE ARM!",
+        tut_fail="NO WORRIES, THAT WAS JUST PRACTICE! LET GO OF THE ARM, A CUSTOMER IS COMING.",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET", think="TIME TO PLAN: {n}",
         order="HI! IT'S MY BIRTHDAY. PICK ME TREATS THAT ADD UP TO EXACTLY {goal}!|"
@@ -105,15 +106,16 @@ TEXT = {
              "JEDE SÜßIGKEIT HAT IHREN PREIS. JE GRÖßER, DESTO TEURER.",
         welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! KNACKST DU DEINEN "
                 "REKORD?",
-        practice="PROBERUNDE", tut_head="1 SÜßIGKEIT AUFLEGEN",
-        tut="LEG EINE SÜßIGKEIT AUFS TABLETT, CODE NACH OBEN. DANN ARM "
-            "WEG VON DER KAMERA!",
+        practice="PROBERUNDE", tut_head="NIMM DEN ARM!",
+        tut="NIMM DEN ARM VOR DIR UND LEG EINE SÜßIGKEIT AUFS TABLETT, "
+            "CODE NACH OBEN!",
         up_next="GLEICH: PROBERUNDE", just_practice="ZÄHLT NICHT!",
         practice_n="PROBERUNDE: {n}",
-        tut_intro="WICHTIG: DER ARM DARF DIE KAMERA NICHT VERDECKEN. NACH "
-                  "DEM ABLEGEN ARM WEG!",
-        tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
-        tut_fail="KEIN PROBLEM, WAR JA NUR ZUM ÜBEN! OH, DA KOMMT SCHON KUNDSCHAFT!",
+        tut_intro="NACH JEDEM ABLEGEN: ARM WEG VOM TABLETT, SONST SIEHT DIE "
+                  "KAMERA DIE CODES NICHT!",
+        tut_done="SUPER, DIE KOSTET {price}! ARM LOSLASSEN, SONST SIEHT DIE KAMERA DIE CODES NICHT.",
+        tut_over="PROBERUNDE VORBEI!", let_go="ARM LOSLASSEN!",
+        tut_fail="KEIN PROBLEM, WAR NUR ZUM ÜBEN! ARM LOSLASSEN, GLEICH KOMMT KUNDSCHAFT.",
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
