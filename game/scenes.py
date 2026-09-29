@@ -1,4 +1,5 @@
 import math
+import os
 import random
 import textwrap
 import pygame
@@ -113,6 +114,46 @@ def stamp(screen, name, scale, x, y):
     layout self-test can intercept it the same way and check for overlap."""
     s = sprite(name, scale)
     screen.blit(s, s.get_rect(center=(round(x), round(y))))
+
+
+TREAT_DIR = os.path.join(os.path.dirname(__file__), "assets", "treats")
+
+
+@lru_cache(maxsize=None)
+def _prints():
+    """The printed treats as voxel pictures (tools/treat_pics.py), by marker id."""
+    out = {}
+    for k in SPRITE:
+        try:
+            out[k] = pygame.image.load(os.path.join(TREAT_DIR, f"{k}.png"))
+        except (pygame.error, FileNotFoundError):
+            pass     # pic() falls back to the sprite
+    return out
+
+
+@lru_cache(maxsize=64)
+def _print(k, w, h):
+    """Picture #k, scaled by the ONE factor that fits the largest print of
+    the set into w x h. A shared factor keeps the torte bigger than the
+    macaron -- heavier is dearer, readable without the price."""
+    imgs = _prints()
+    f = min(w / max(i.get_width() for i in imgs.values()),
+            h / max(i.get_height() for i in imgs.values()))
+    i = imgs[k]
+    return pygame.transform.smoothscale(i, (round(i.get_width() * f), round(i.get_height() * f)))
+
+
+def pic(screen, k, w, h, x, bottom, scale):
+    """Treat #k standing on the line `bottom`, centered on x: the printed
+    object, where the visitor has to find it on the table (price ladder,
+    strip, pop-up). The sprite at `scale` if its picture is missing."""
+    if k not in _prints():
+        n = len(SHAPES[SPRITES[SPRITE[k]][0]]) * scale
+        return stamp(screen, SPRITE[k], scale, x, bottom - n / 2)
+    s = _print(k, w, h)
+    r = s.get_rect(midbottom=(round(x), round(bottom)))
+    screen.blit(s, r)
+    area(SPRITE[k], r)
 
 
 def area(name, rect):
@@ -964,7 +1005,7 @@ class GameScene(SceneBase):
             # One pop-up per change, with the net price: two treats at once
             # show "+5,10", not two boxes on top of each other.
             v = sum(VALUES[i] for i in new) - sum(VALUES[i] for i in gone)
-            self.pop = [SPRITE[min(new or gone)],
+            self.pop = [min(new or gone),
                         ("+" if v >= 0 else "-") + euro(abs(v), sign=False), 0.0]
             self.still = 0.0
             self.log("tray", add=sorted(new), off=sorted(gone), total=tray_sum(marks),
@@ -1120,8 +1161,8 @@ class GameScene(SceneBase):
         blink = int(self.clock * 4) % 2
         for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
             x = self.BAR.x + self.BAR.w * (i + 0.5) / len(VALUES)
-            stamp(screen, SPRITE[k], 4, x,
-                  self.STRIP_Y + (hop(self.clock, 0, 8) if k == hint else 0))
+            pic(screen, k, 190, 68, x, self.STRIP_Y + 32
+                + (hop(self.clock, 0, 8) if k == hint else 0), 4)
             # The hinted price blinks along with the hop: 8 px alone was too
             # subtle to catch from the leader arm.
             color = ACCENT if k in self.marks else WHITE
@@ -1140,7 +1181,8 @@ class GameScene(SceneBase):
             n = per if row == 0 else len(order) - per
             x = WIDTH * (col + 0.5) / n
             y = self.LADDER_Y + row * self.LADDER_ROW
-            stamp(screen, SPRITE[k], 5, x, y)
+            # Standing on one line, so bigger print = bigger picture reads
+            pic(screen, k, 300, 110, x, y + 40, 5)
             draw(screen, f["small"], euro(VALUES[k], sign=False), x, y + 90, WHITE)
 
     def _x(self, value):
@@ -1208,9 +1250,9 @@ class GameScene(SceneBase):
         if self.phase == "play":    # in "order" his face is in the dialog
             stamp(screen, self.mood(), 6, *self.GUEST)
         if self.pop and not reading:    # would sit on the ladder / Bella
-            name, text, age = self.pop
+            k, text, age = self.pop
             rise = round(age * 20)
-            stamp(screen, name, 4, self.POP[0], self.POP[1] - rise)
+            pic(screen, k, 120, 80, self.POP[0], self.POP[1] + 32 - rise, 4)
             draw(screen, f["tiny"], text, self.POP[0], self.POP[1] + 58 - rise, ACCENT)
         if self.phase == "order":
             fuse(screen, max(0.0, self.think / THINK_SECONDS) if THINK_SECONDS else 0.0,

@@ -168,7 +168,7 @@ def shots(out):
         ("6b-go",          order, dict(phase="go", dialog=None, go=2.4)),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
                                       marks={9: quad(.45)}, total=V[9], target=66,
-                                      pop=[SPRITE[9], "+" + scenes.euro(V[9], sign=False), 0.4])),
+                                      pop=[9, "+" + scenes.euro(V[9], sign=False), 0.4])),
         ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
                                       clock=0.3)),
         ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,
