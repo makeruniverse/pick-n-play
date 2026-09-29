@@ -146,7 +146,8 @@ pnp-think() {
 }
 
 # Camera layout: pnp-layout top (default: top-down big in the center, arm cam
-# small), split (the two equal panes) or solo (top-down only, no arm cam).
+# small), split (the two equal panes), solo (top-down only, no arm cam) or
+# fpv (arm cam big, top-down cropped to the tray small).
 # Restarts the game.
 pnp-layout() {
     local d=/etc/systemd/system/pnp-expo.service.d
@@ -154,7 +155,7 @@ pnp-layout() {
         grep -ho 'PNP_LAYOUT=[a-z]*' $d/layout.conf 2>/dev/null || echo "default (top)"
         return
     fi
-    case $1 in top|split|solo) ;; *) echo "pnp-layout top|split|solo"; return 1;; esac
+    case $1 in top|split|solo|fpv) ;; *) echo "pnp-layout top|split|solo|fpv"; return 1;; esac
     sudo mkdir -p $d
     printf '[Service]\nEnvironment=PNP_LAYOUT=%s\n' "$1" | sudo tee $d/layout.conf >/dev/null
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"

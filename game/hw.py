@@ -386,8 +386,9 @@ class CameraView:
     the Pi.
     """
 
-    def __init__(self, cam, det=None, size=CAM_VIEW, mirror=False, ud=False):
-        self.cam, self.mirror, self.ud = cam, mirror, ud
+    def __init__(self, cam, det=None, size=CAM_VIEW, mirror=False, ud=False,
+                 crop=(0.0, 0.0, 1.0, 1.0)):
+        self.cam, self.mirror, self.ud, self.crop = cam, mirror, ud, crop
         self.det = det      # only the top-down pane has one: the arm image is
         self.size = size    # a pure passthrough, there'd be nothing to show
         self.seq = -1
@@ -398,6 +399,10 @@ class CameraView:
         # The camera delivers 30 frames/s, rendering happens at 60: without
         # this comparison, every frame gets converted twice, for nothing.
         if seq != self.seq and frame is not None:
+            if self.crop != (0.0, 0.0, 1.0, 1.0):
+                h, w = frame.shape[:2]
+                cx, cy, cw, ch = self.crop
+                frame = frame[int(cy * h):int((cy + ch) * h), int(cx * w):int((cx + cw) * w)]
             small = cv2.resize(frame, self.size, interpolation=cv2.INTER_LINEAR)
             if self.mirror or self.ud:     # flip code: 1 = l/r, 0 = u/d, -1 = both
                 small = cv2.flip(small, -1 if self.mirror and self.ud else int(self.mirror))
@@ -717,6 +722,9 @@ if __name__ == "__main__":
     assert v.get_at((5, 5))[:3] != (0, 0, 0) and v.get_at((35, 5))[:3] == (0, 0, 0)
     v = CameraView(_Cam(), size=(40, 20), mirror=True, ud=True).surface()   # 180°
     assert v.get_at((35, 5))[:3] != (0, 0, 0) and v.get_at((5, 5))[:3] == (0, 0, 0)
+    # Crop to the left quarter: the white stripe fills the whole pane
+    v = CameraView(_Cam(), size=(40, 20), crop=(0.0, 0.0, 0.25, 1.0)).surface()
+    assert v.get_at((35, 5))[:3] != (0, 0, 0) and v.get_at((5, 5))[:3] != (0, 0, 0)
     # Without a device, silent instead of crashing -- that's how the game runs on the Mac
     q = Leds(dev="/nonexistent")
     q.show("game", 0.3)

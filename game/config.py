@@ -394,13 +394,6 @@ ARM_UD        = os.environ.get("PNP_ARM_UD") == "1"   # upside down; both = 180�
 LAYOUT        = os.environ.get("PNP_LAYOUT", "top")
 # solo = top without the arm pane: A/B whether the arm cam helps at all.
 ARM_PANE      = LAYOUT != "solo"
-# PNP_LAYOUT=split brings back the two equal panes (pnp-layout on the Pi).
-if LAYOUT == "split":
-    CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960
-else:
-    CAM_VIEWS = ((448, 252), CAM_VIEW)         # arm, top-down
-    CAM_POS   = ((300, 510), (960, 510))       # centers
-    GUEST_X   = 1620                           # Oskar and the pop-up, right of it
 MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # Detection window of the top-down camera, as fractions (x, y, width, height)
@@ -411,6 +404,28 @@ DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # drawn into the image, so it's set in the hall while aligning the camera and
 # the result is visible immediately.
 TRAY_ROI      = (0.37, 0.50, 0.30, 0.35)
+# Part of the top-down image its pane shows, (x, y, w, h) like TRAY_ROI.
+# Whole image, except in the fpv layout.
+TOP_CROP      = (0.0, 0.0, 1.0, 1.0)
+# PNP_LAYOUT (pnp-layout on the Pi): top = top-down big, arm cam small;
+# split = the two equal panes; solo = top without the arm cam;
+# fpv = arm cam big, top-down cropped to the tray as the small pane.
+if LAYOUT == "split":
+    CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960
+elif LAYOUT == "fpv":
+    _x0, _y0 = max(0.0, TRAY_ROI[0] - 0.05), max(0.0, TRAY_ROI[1] - 0.05)
+    _x1 = min(1.0, TRAY_ROI[0] + TRAY_ROI[2] + 0.05)
+    _y1 = min(1.0, TRAY_ROI[1] + TRAY_ROI[3] + 0.05)
+    TOP_CROP = (_x0, _y0, _x1 - _x0, _y1 - _y0)
+    # 216 px high, width from the crop's own ratio (the frame is 16:9)
+    _w = round(216 * TOP_CROP[2] * 16 / (TOP_CROP[3] * 9)) // 2 * 2
+    CAM_VIEWS = (CAM_VIEW, (_w, 216))          # arm, top-down
+    CAM_POS   = ((960, 510), (300, 510))
+    GUEST_X   = 1620
+else:
+    CAM_VIEWS = ((448, 252), CAM_VIEW)         # arm, top-down
+    CAM_POS   = ((300, 510), (960, 510))       # centers
+    GUEST_X   = 1620                           # Oskar and the pop-up, right of it
 MARK_WIDTH    = 5         # line width of the detection window and of the
                           # outline around every detected marker
 # ── Buttons ───────────────────────────────────────────────────────────────

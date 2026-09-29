@@ -1032,12 +1032,16 @@ class GameScene(SceneBase):
         player is looking anyway -- without covering the treat the way a
         price label did.
         """
+        # Image fractions -> pane pixels, through the crop (fpv layout)
+        cx, cy, cw, ch = TOP_CROP
+        px = lambda x, y: (r.x + (x - cx) / cw * r.w, r.y + (y - cy) / ch * r.h)
         rx, ry, rw, rh = TRAY_ROI
-        pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
-                                        rw * r.w, rh * r.h), MARK_WIDTH)
+        screen.set_clip(r)
+        pygame.draw.rect(screen, GREY, (*px(rx, ry), rw / cw * r.w, rh / ch * r.h),
+                         MARK_WIDTH)
         for quad in self.marks.values():
-            pygame.draw.polygon(screen, ACCENT, [(r.x + x * r.w, r.y + y * r.h)
-                                                 for x, y in quad], MARK_WIDTH)
+            pygame.draw.polygon(screen, ACCENT, [px(x, y) for x, y in quad], MARK_WIDTH)
+        screen.set_clip(None)
 
     def bar(self, screen):
         """Where the total stands and where it needs to go, as one image.
