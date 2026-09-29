@@ -184,15 +184,15 @@ def hop(t, i=0, px=8):
     return -px if int(t * 4 + i) % 2 else 0
 
 
-def parade(screen, t, y, speed, font=None, scale=5, gap=160):
+def parade(screen, t, y, speed, scale=5, gap=160):
     """Conveyor belt of all sprites across the screen, attract-mode decoration.
 
     Blits directly instead of via stamp(): the belt deliberately runs off
     the left and right edge of the image, and that's exactly what the
     self-test would flag as a bug.
     """
-    # The treats on the table, with their prices (30.9.): the queue learns
-    # the set while it waits. Sprites of retired treats are gone from here.
+    # The treats on the table (30.9.): the queue sees the real set while it
+    # waits. Sprites of retired treats are gone from here.
     keys = sorted(VALUES, key=VALUES.get)
     # The belt length must be a whole number of slots: with span = WIDTH + gap
     # and one slot too many, the last sprite sat exactly on the first.
@@ -208,9 +208,7 @@ def parade(screen, t, y, speed, font=None, scale=5, gap=160):
         else:
             s = sprite(SPRITE[k], scale)
             screen.blit(s, s.get_rect(center=(round(x), y + hop(t, i, scale))))
-        if font:
-            p = render(font, euro(VALUES[k], sign=False), GREY)
-            screen.blit(p, p.get_rect(center=(round(x), y + 52)))
+
 
 
 # The demo loop on the story screen: the robot picks a treat off the table
@@ -642,7 +640,7 @@ class IdleScene(SceneBase):
         screen.fill(BG)
         # The display scrolls by at the top -- that's the attract mode. From
         # 8 m you see motion before you read text.
-        parade(screen, self.now, 96, 60, f["tiny"])
+        parade(screen, self.now, 96, 60)
         # Title character by character: every letter in a candy color, as a
         # wave. Monospace, one character width is the step like in draw_hint().
         title = "PICK'N'PLAY"
@@ -1213,17 +1211,16 @@ class GameScene(SceneBase):
         """Every treat with its price, cheap to expensive -- which is also
         small to big. What's on the tray is pink; the hint hops."""
         hint = self.hint()
-        blink = int(self.clock * 2) % 2
-        cell = self.BAR.w / len(VALUES)
+        blink = int(self.clock * 4) % 2
         for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
-            x = self.BAR.x + cell * (i + 0.5)
-            # The hint (30.9.): a glowing card around treat and price that
-            # blinks, instead of a hop -- the hop read as noise.
-            if k == hint and blink:
-                glow(screen, pygame.Rect(round(x - cell / 2 + 8), self.STRIP_Y - 40,
-                                         round(cell - 16), 110), WHITE, 90)
-            pic(screen, k, 190, 68, x, self.STRIP_Y + 32, 4)
+            x = self.BAR.x + self.BAR.w * (i + 0.5) / len(VALUES)
+            pic(screen, k, 190, 68, x, self.STRIP_Y + 32
+                + (hop(self.clock, 0, 8) if k == hint else 0), 4)
+            # The hinted price blinks along with the hop: 8 px alone was too
+            # subtle to catch from the leader arm.
             color = ACCENT if k in self.marks else WHITE
+            if k == hint and blink:
+                color = BG
             draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, self.STRIP_Y + 54, color)
 
     def ladder(self, screen, f):
@@ -1303,7 +1300,9 @@ class GameScene(SceneBase):
         if self.phase == "order":
             label = self.t("think", n=max(0, math.ceil(self.think)))
         if self.phase == "order":     # the countdown IS the message here (30.9.)
-            draw(screen, f["mid"], label, 960, 60, WHITE)
+            draw(screen, f["small"], label, 960, 64, WHITE)
+            n = max(0, math.ceil(self.think))
+            draw(screen, f["mid"], n, 1700, 196, ORANGE if n <= 5 else WHITE)
         else:
             draw(screen, f["small"], label, 960, 64, GREY)
         draw(screen, big, value, 960, 196, ACCENT)

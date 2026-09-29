@@ -153,3 +153,7 @@ Live: voxel ladder, settings.json + staff menu (hold red + green 3 s), self-heal
 (Vadim's UX test must not use #100); after the next power cycle numbering starts at 100.
 Open: arm calibration wizard in the menu (lerobot-calibrate prompts: "c"+Enter,
 middle pose Enter, move all joints, Enter), USB-stick update, expo card (not wanted).
+`set-environment` survives every restart of pnp-expo (crash, watchdog, staff menu),
+only a reboot clears it. If the Pi stays on overnight, reset it after closing:
+`sudo systemctl unset-environment PNP_PLAYER_FIRST && sudo systemctl restart pnp-expo`,
+then `systemctl show-environment | grep PLAYER` must be empty and next_player 100.
