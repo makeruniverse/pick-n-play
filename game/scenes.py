@@ -149,11 +149,23 @@ def pic(screen, k, w, h, x, bottom, scale):
     strip, pop-up). The sprite at `scale` if its picture is missing."""
     if k not in _prints():
         n = len(SHAPES[SPRITES[SPRITE[k]][0]]) * scale
-        return stamp(screen, SPRITE[k], scale, x, bottom - n / 2)
+        stamp(screen, SPRITE[k], scale, x, bottom - n / 2)
+        return pygame.Rect(0, 0, n, n).move(round(x - n / 2), round(bottom - n))
     s = _print(k, w, h)
     r = s.get_rect(midbottom=(round(x), round(bottom)))
     screen.blit(s, r)
     area(SPRITE[k], r)
+    return r
+
+
+def glow(screen, rect, color, alpha=70):
+    """A soft card behind a treat: see-through fill plus a frame. What the
+    hint and "already on the tray" put around a picture instead of making
+    it hop -- a moving target is hard to read from the leader arm."""
+    card = pygame.Surface(rect.size, pygame.SRCALPHA)
+    card.fill((*color, alpha))
+    screen.blit(card, rect)
+    pygame.draw.rect(screen, color, rect, 4, border_radius=12)
 
 
 def area(name, rect):
@@ -172,22 +184,33 @@ def hop(t, i=0, px=8):
     return -px if int(t * 4 + i) % 2 else 0
 
 
-def parade(screen, t, y, speed, scale=5, gap=160):
+def parade(screen, t, y, speed, font=None, scale=5, gap=160):
     """Conveyor belt of all sprites across the screen, attract-mode decoration.
 
     Blits directly instead of via stamp(): the belt deliberately runs off
     the left and right edge of the image, and that's exactly what the
     self-test would flag as a bug.
     """
-    names = list(SPRITES)
+    # The treats on the table, with their prices (30.9.): the queue learns
+    # the set while it waits. Sprites of retired treats are gone from here.
+    keys = sorted(VALUES, key=VALUES.get)
     # The belt length must be a whole number of slots: with span = WIDTH + gap
     # and one slot too many, the last sprite sat exactly on the first.
     n = -(-(WIDTH + gap) // gap)
+    n += -n % len(keys)          # whole rounds of the set, no seam in the order
     span = n * gap
     for i in range(n):
         x = (i * gap + t * speed) % span - gap / 2
-        s = sprite(names[i % len(names)], scale)
-        screen.blit(s, s.get_rect(center=(round(x), y + hop(t, i, scale))))
+        k = keys[i % len(keys)]
+        if k in _prints():
+            s = _print(k, gap - 30, 80)
+            screen.blit(s, s.get_rect(midbottom=(round(x), y + 30 + hop(t, i, scale))))
+        else:
+            s = sprite(SPRITE[k], scale)
+            screen.blit(s, s.get_rect(center=(round(x), y + hop(t, i, scale))))
+        if font:
+            p = render(font, euro(VALUES[k], sign=False), GREY)
+            screen.blit(p, p.get_rect(center=(round(x), y + 52)))
 
 
 # The demo loop on the story screen: the robot picks a treat off the table
@@ -588,9 +611,10 @@ class IdleScene(SceneBase):
             if ASK_NAME:
                 self.switch_to(EntryScene(self.ctx))
             else:
-                name = f"#{self.ctx.db.next_player()}"
-                no = self.ctx.db.new_player(name)
-                self.switch_to(StoryScene(self.ctx, no, name, new=True))
+                # The player is created on the first ▶ in the story (30.9.):
+                # every ▶ here used to make one, even for a kid just mashing.
+                no = self.ctx.db.next_player()
+                self.switch_to(StoryScene(self.ctx, no, f"#{no}", new=True, made=False))
         elif action == "down":
             if ASK_NAME:
                 self.switch_to(EntryScene(self.ctx, again=True))
@@ -618,7 +642,7 @@ class IdleScene(SceneBase):
         screen.fill(BG)
         # The display scrolls by at the top -- that's the attract mode. From
         # 8 m you see motion before you read text.
-        parade(screen, self.now, 96, 60)
+        parade(screen, self.now, 96, 60, f["tiny"])
         # Title character by character: every letter in a candy color, as a
         # wave. Monospace, one character width is the step like in draw_hint().
         title = "PICK'N'PLAY"
@@ -628,8 +652,9 @@ class IdleScene(SceneBase):
                  250 + round(14 * math.sin(self.now * 3 - i * 0.6)),
                  CANDY[i % len(CANDY)])
         # The cheapest and the most expensive piece -- from the theme, not named here.
-        stamp(screen, LADDER[0], 8, 330, 430 + hop(self.now, 0, 8))
-        stamp(screen, LADDER[-1], 8, 1590, 430 + hop(self.now, 1, 8))
+        keys = sorted(VALUES, key=VALUES.get)
+        pic(screen, keys[0], 260, 150, 330, 510 + hop(self.now, 0, 8), 8)
+        pic(screen, keys[-1], 260, 150, 1590, 510 + hop(self.now, 1, 8), 8)
         # Mostly on, briefly off: it has to be read, the blink only draws the eye.
         if self.now % 2 < 1.6:
             draw_hint(screen, f["mid"], self.t("press"), 960, 430, WHITE)
@@ -823,9 +848,9 @@ class StoryScene(SceneBase):
 
     MUSIC_IN = (0.0, 800)
 
-    def __init__(self, ctx, player, name, new):
+    def __init__(self, ctx, player, name, new, made=True):
         super().__init__(ctx)
-        self.player, self.name, self.new = player, name, new
+        self.player, self.name, self.new, self.made = player, name, new, made
         text = ("|".join((self.t("hello", name=name), self.t("help")))
                 if new else self.t("welcome", name=name))
         self.dialog = Dialog(ctx.music, "baker", self.t("baker"), text)
@@ -845,6 +870,10 @@ class StoryScene(SceneBase):
             return "ok"
         if action != "right":
             return None
+        if not self.made:
+            # Now it's a player. Normally the same number the screen shows.
+            self.player = self.ctx.db.new_player(self.name)
+            self.name, self.made = f"#{self.player}", True
         if self.dialog.next():
             self.switch_to(GameScene(self.ctx, self.player, self.name, tutorial=self.new))
         return "ok"
@@ -908,7 +937,8 @@ class GameScene(SceneBase):
     GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
     STRIP_Y = 848               # price strip: sprites here, prices below
     LADDER_Y, LADDER_ROW = 355, 215   # order phase: ladder in two rows, pane area
-    GUEST = (GUEST_X, 440)      # the guest stands beside the top-down pane
+    GUEST = (GUEST_X, 480)      # the guest stands beside the top-down pane
+    COUNT_Y, COUNT_FROM = 340, 20   # last seconds as a number above him (30.9.)
     POP = (GUEST_X, 610)        # ... and "+2,40" pops up under him
 
     def __init__(self, ctx, player, name, tutorial=True):
@@ -1183,16 +1213,17 @@ class GameScene(SceneBase):
         """Every treat with its price, cheap to expensive -- which is also
         small to big. What's on the tray is pink; the hint hops."""
         hint = self.hint()
-        blink = int(self.clock * 4) % 2
+        blink = int(self.clock * 2) % 2
+        cell = self.BAR.w / len(VALUES)
         for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
-            x = self.BAR.x + self.BAR.w * (i + 0.5) / len(VALUES)
-            pic(screen, k, 190, 68, x, self.STRIP_Y + 32
-                + (hop(self.clock, 0, 8) if k == hint else 0), 4)
-            # The hinted price blinks along with the hop: 8 px alone was too
-            # subtle to catch from the leader arm.
-            color = ACCENT if k in self.marks else WHITE
+            x = self.BAR.x + cell * (i + 0.5)
+            # The hint (30.9.): a glowing card around treat and price that
+            # blinks, instead of a hop -- the hop read as noise.
             if k == hint and blink:
-                color = BG
+                glow(screen, pygame.Rect(round(x - cell / 2 + 8), self.STRIP_Y - 40,
+                                         round(cell - 16), 110), WHITE, 90)
+            pic(screen, k, 190, 68, x, self.STRIP_Y + 32, 4)
+            color = ACCENT if k in self.marks else WHITE
             draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, self.STRIP_Y + 54, color)
 
     def ladder(self, screen, f):
@@ -1206,9 +1237,16 @@ class GameScene(SceneBase):
             n = per if row == 0 else len(order) - per
             x = WIDTH * (col + 0.5) / n
             y = self.LADDER_Y + row * self.LADDER_ROW
+            # What's already on the tray (30.9.): 18 of 43 rounds started
+            # with leftovers, and people did the sums from zero.
+            on = k in self.marks
+            if on:
+                glow(screen, pygame.Rect(round(x - 190), y - 70, 380, 210), ACCENT)
             # Standing on one line, so bigger print = bigger picture reads
             pic(screen, k, 300, 110, x, y + 40, 5)
-            draw(screen, f["small"], euro(VALUES[k], sign=False), x, y + 90, WHITE)
+            draw(screen, f["small"], euro(VALUES[k], sign=False), x, y + 80, ACCENT if on else WHITE)
+            if on:
+                draw(screen, f["tiny"], self.t("on_tray"), x, y + 122, ACCENT)
 
     def _x(self, value):
         """Price -> x in the bar. Clamped so nothing runs out."""
@@ -1264,11 +1302,19 @@ class GameScene(SceneBase):
             label, value = self.t("add" if diff > 0 else "over"), euro(abs(diff))
         if self.phase == "order":
             label = self.t("think", n=max(0, math.ceil(self.think)))
-        draw(screen, f["small"], label, 960, 64, GREY)
+        if self.phase == "order":     # the countdown IS the message here (30.9.)
+            draw(screen, f["mid"], label, 960, 60, WHITE)
+        else:
+            draw(screen, f["small"], label, 960, 64, GREY)
         draw(screen, big, value, 960, 196, ACCENT)
         tag(screen, f, self.player)
         if self.phase == "play":    # in "order" his face is in the dialog
-            stamp(screen, self.mood(), 6, *self.GUEST)
+            stamp(screen, self.mood(), 5, *self.GUEST)
+            if self.left <= self.COUNT_FROM:
+                # The fuse alone was missed: 8 of 25 rounds ended empty.
+                n = max(0, math.ceil(self.left))
+                draw(screen, f["mid"], n, self.GUEST[0], self.COUNT_Y,
+                     RED if n <= 5 else ORANGE if n <= 10 else WHITE)
         if self.pop and not reading:    # would sit on the ladder / Bella
             k, text, age = self.pop
             rise = round(age * 20)
@@ -1305,8 +1351,10 @@ class GameScene(SceneBase):
             right = self.t("skip")
         elif self.dialog:
             done = self.dialog.last and not self.dialog.typing
-            right = self.t(dict(read="ready", order="go")
+            right = self.t(dict(read="ready", order="done_go")
                            .get(self.phase, "next") if done else "next")
+            if self.phase == "order" and done and int(self.clock * 2) % 2:
+                right = None      # blinks: the one button that saves time
         footer(screen, f, self.t("quit"), right,
                note=self.t("quit_ok") if self.confirm > 0
                else self.t("skip_ok") if self.skip > 0 and self.phase == "tutorial"
@@ -1335,11 +1383,14 @@ class DisplayScoreScene(SceneBase):
         self.player = player
         self.place, self.count = ctx.db.rank(player)
         self.shown = 0
-        self.done = self.bye = False
+        self.done = False
         self.idle = self.now = self.confirm = 0.0
         self.fx = Sprinkles(960, 300)
         who = ("guest_sweat", "guest", "guest_joy", "guest_joy")[res.stars]
-        self.dialog = Dialog(ctx.music, who, self.t("guest"), self.t("react")[res.stars])
+        # One page (30.9.): thanks + "treats to the side". The number stands
+        # under the stars the whole time instead of on a second page.
+        self.dialog = Dialog(ctx.music, who, self.t("guest"),
+                             self.t("react")[res.stars] + " " + self.t("aside"))
         ctx.leds.show("score")
 
     def handle(self, action):
@@ -1355,13 +1406,6 @@ class DisplayScoreScene(SceneBase):
         if not self.done or self.dialog.typing:
             self.now = max(self.now, self.COUNT)     # skip the count-up
             self.dialog.next()
-        elif not self.bye:
-            # Oskar has said his thanks; now Bella hands over the number.
-            # Last page of the evening, and the only place it's spoken --
-            # here it answers a question the player actually has.
-            self.bye = True
-            self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"),
-                                 self.t("remember", no=self.player))
         else:
             self.switch_to(IdleScene(self.ctx))
         return "ok"
@@ -1401,14 +1445,11 @@ class DisplayScoreScene(SceneBase):
                 on = i < self.res.stars
                 stamp(screen, "star_on" if on else "star_off", 6, x,
                       460 + (hop(self.now, i, 8) if on else 0))
-            # The place has been read by the time Bella speaks; the number
-            # takes its line, bigger and pink -- it's the one thing worth
-            # taking home from this screen.
-            if self.bye:
-                draw(screen, f["mid"], self.t("player", no=self.player), 960, 600, ACCENT)
-            else:
-                draw(screen, f["small"],
-                     self.t("rank", place=self.place, count=self.count), 960, 600, WHITE)
+            # Place and number together: the number is the one thing worth
+            # taking home from this screen, so it's bigger and pink.
+            draw(screen, f["tiny"], self.t("rank", place=self.place, count=self.count),
+                 960, 560, WHITE)
+            draw(screen, f["mid"], self.t("player", no=self.player), 960, 640, ACCENT)
             self.dialog.draw(screen, f)
         # Also in the corner, even on the page where Bella says it out loud:
         # the corner is where it has stood since the entry screen, and
@@ -1527,11 +1568,12 @@ if __name__ == "__main__":
         T = TEXT[lang]
         # Every speech line fits the box: at most three lines per page.
         for key in ("hello", "help", "welcome", "tut", "tut_done",
-                    "tut_fail", "order", "think_q", "remember"):
+                    "tut_fail", "order", "think_q"):
             for page in T[key].format(**widest).split("|"):
                 n = len(textwrap.wrap(page, Dialog.COLS))
                 assert n <= 3, f"{lang}.{key}: {n} lines: {page!r}"
         for line in T["react"]:
+            line += " " + T["aside"]
             assert len(textwrap.wrap(line, Dialog.COLS)) <= 3, (lang, line)
 
         check(f"{lang} idle", IdleScene(ctx))
@@ -1683,6 +1725,8 @@ if __name__ == "__main__":
         # Edge cases of the bar: nothing on it, and the widest number that
         # can ever appear in the header (the sum of all prices).
         check(f"{lang} play full", g, panes + bar + fuse_, total=sum(VALUES.values()))
+        for left in (19.5, 9.5, 4.5):       # the number above Oskar, three colours
+            check(f"{lang} play countdown {left}", g, panes + bar + fuse_, total=0, left=left)
         assert g.hint() is not None
 
         for stars, res in enumerate((
@@ -1695,9 +1739,8 @@ if __name__ == "__main__":
             sc = DisplayScoreScene(ctx, res, 999)
             check(f"{lang} score done {stars}", sc, shown=res.score, done=True, now=2.5)
             read(sc.dialog)
-            sc.handle("right")                  # Oskar done -> Bella, the number
-            assert sc.bye, "the last ▶ hands over to Bella, not to idle"
-            check(f"{lang} score bye {stars}", sc, shown=res.score, done=True, now=2.5)
+            sc.handle("right")                  # one page: ▶ goes back to idle
+            assert isinstance(sc.next, IdleScene), "one score page, then idle"
             sc = DisplayScoreScene(ctx, res, 999)
             for _ in range(4 * 25):
                 sc.update(0.25)

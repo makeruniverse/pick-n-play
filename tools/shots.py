@@ -123,8 +123,8 @@ def shots(out):
     typed(done_tut.dialog)
     game = on(scenes.GameScene(ctx, 42, "MAX", tutorial=False), 2)
     reading = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
-    typed(reading.dialog, 1)
-    order = on(scenes.GameScene(ctx, 42, "MAX", tutorial=False), 2)
+    typed(reading.dialog)
+    order = on(scenes.GameScene(ctx, 42, "MAX", tutorial=False), 1)
     order.update(scenes.THINK_SECONDS * 0.4)
     typed(order.dialog)
     # A round that landed just off: EUR 0.30 short at EUR 6.60, time ran
@@ -136,11 +136,6 @@ def shots(out):
                          marks={0: 1, 9: 1})
     score = scenes.DisplayScoreScene(ctx, done, 42)
     typed(score.dialog)
-    # The last page: Oskar has said thanks, Bella hands over the number.
-    again = scenes.DisplayScoreScene(ctx, done, 42)
-    again.done = True
-    again.handle(typed(again.dialog) and "right")   # Oskar read, ▶ -> Bella
-    typed(again.dialog)
     # Nobody got a treat on the tray: Bella's soft landing instead. Built
     # last: its dialog draws random talk blips, which would shift the
     # targets rolled for the screens above.
@@ -169,7 +164,7 @@ def shots(out):
                                       marks={9: quad(.45)}, total=V[9], target=66,
                                       pop=[9, "+" + scenes.euro(V[9], sign=False), 0.4])),
         ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
-                                      clock=0.3)),
+                                      clock=0.6)),     # glow on, countdown in orange
         ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,
                                       marks={2: quad(.35), 9: quad(.55)}, total=V[2] + V[9])),
         ("10-game-perfect", game, dict(left=ROUND_SECONDS * 0.3, total=66, hit=1.0,
@@ -179,8 +174,6 @@ def shots(out):
         # tenth of a second of the count-up.
         ("11-score",       score, dict(shown=done.score, done=True, now=2.5,
                                        fx=burst(960, 300, 2.5))),
-        ("12-score-number", again, dict(shown=done.score, done=True, now=2.5,
-                                        fx=burst(960, 300, 2.5))),
     ]
 
     gain = crt_gain(WIDTH, HEIGHT, BARREL_K) if CRT else None
