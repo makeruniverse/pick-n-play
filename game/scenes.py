@@ -776,6 +776,7 @@ class GameScene(SceneBase):
     SCALE = GAP_MAX + max(VALUES.values())
     GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
     STRIP_Y = 848               # price strip: sprites here, prices below
+    LADDER_Y = 150              # order phase: the ladder on top, above the panes
     GUEST = (960, 440)          # the guest stands between the panes
     POP = (960, 610)            # ... and "+2,40" pops up under him
 
@@ -974,6 +975,15 @@ class GameScene(SceneBase):
                 color = BG
             draw(screen, f["tiny"], euro(VALUES[k], sign=False), x, self.STRIP_Y + 54, color)
 
+    def ladder(self, screen, f):
+        """The order screen: every treat big with its price, cheap to dear.
+        Full screen width, not the bar's; "small" prices ran into each other."""
+        for i, k in enumerate(sorted(VALUES, key=VALUES.get)):
+            x = 40 + (WIDTH - 80) * (i + 0.5) / len(VALUES)
+            stamp(screen, SPRITE[k], 5, x, self.LADDER_Y)
+            draw(screen, f["tiny"], euro(VALUES[k], sign=False), x,
+                 self.LADDER_Y + 92, WHITE)
+
     def _x(self, value):
         """Price -> x in the bar. Clamped so nothing runs out."""
         r = self.BAR
@@ -1006,8 +1016,16 @@ class GameScene(SceneBase):
         else:
             diff = self.target - self.total
             label, value = self.t("add" if diff > 0 else "over"), euro(abs(diff))
-        draw(screen, f["small"], label, 960, 64, GREY)
-        draw(screen, big, value, 960, 196, ACCENT)
+        if self.phase == "order":
+            # Oskar's order is the time to do the sums (29.9., booth ask):
+            # the price ladder takes the top, the budget shrinks to one line
+            # above it. The panes stay, the player maps where each treat
+            # lies. No fuse -- the clock only runs in "play".
+            draw(screen, f["small"], f"{label} {value}", 960, 44, ACCENT)
+            self.ladder(screen, f)
+        else:
+            draw(screen, f["small"], label, 960, 64, GREY)
+            draw(screen, big, value, 960, 196, ACCENT)
         tag(screen, f, self.player)
         if self.phase in ("order", "play"):
             stamp(screen, self.mood(), 6, *self.GUEST)

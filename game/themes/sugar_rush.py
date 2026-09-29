@@ -67,7 +67,7 @@ TEXT = {
              "EVERY TREAT HAS ITS PRICE. THE BIGGER IT IS, THE MORE IT COSTS.",
         welcome="{name}, YOU'RE BACK! READY TO BEAT YOUR SCORE?",
         practice="PRACTICE", tut_head="1 TREAT ON THE TRAY",
-        tut="LET'S WARM UP FIRST. PUT ANY TREAT ON THE TRAY IN THE MIDDLE.",
+        tut="WARM-UP: PUT ANY TREAT ON THE TRAY, CODE FACING UP SO THE TOP CAMERA SEES IT.",
         tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET",
@@ -99,8 +99,8 @@ TEXT = {
         welcome="SCHÖN, DASS DU WIEDER DA BIST, {name}! KNACKST DU DEINEN "
                 "REKORD?",
         practice="PROBERUNDE", tut_head="1 SÜßIGKEIT AUFLEGEN",
-        tut="ERST MAL ZUM ÜBEN: LEG IRGENDEINE SÜßIGKEIT AUFS TABLETT IN "
-            "DER MITTE.",
+        tut="ZUM ÜBEN: LEG EINE SÜßIGKEIT AUFS TABLETT. CODE NACH OBEN "
+            "ZUR KAMERA!",
         tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
