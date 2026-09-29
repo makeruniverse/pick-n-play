@@ -107,6 +107,14 @@ pnp-update-now() {
     echo "HEAD $(git -C $PNP log --oneline -1) -- updater: $(systemctl is-active pnp-update)"
 }
 
+# Empty the leaderboard: backup next to it, then runs + players deleted.
+# The game keeps its connection, the next round reads the empty tables.
+pnp-db-reset() {
+    local b=$PNP/scores.backup-$(date +%Y%m%d-%H%M%S).db
+    $PNP_PY -c "import sqlite3,sys; c=sqlite3.connect('$PNP/scores.db'); c.backup(sqlite3.connect('$b'))
+c.execute('DELETE FROM runs'); c.execute('DELETE FROM players'); c.commit(); print('empty, backup', sys.argv[1])" "$b"
+}
+
 # Camera exposure/zoom live while the game runs, saved to cam.json (tools/cam.py)
 pnp-cam() { PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY $PNP/tools/cam.py "$@"; }
 

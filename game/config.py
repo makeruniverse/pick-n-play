@@ -188,7 +188,9 @@ DUCK_RELEASE = 0.35   # seconds back to full
 #
 # The pink petit four from the first CMYK test also carries #2. It stays off
 # the tray: two #2 on it count once.
-VALUES = {4: 14, 1: 17, 0: 21, 10: 24, 6: 28, 2: 32,
+# Bonbon (#4) and cup_mini (#10) are off since the fair (29.9.): no
+# detector setting reads them under the hall light.
+VALUES = {1: 17, 0: 21, 6: 28, 2: 32,
           11: 36, 7: 41, 5: 46, 9: 52, 8: 62}
 CENTS  = 10        # one VALUES step in cents. Only read by euro().
 

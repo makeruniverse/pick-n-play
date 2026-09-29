@@ -198,7 +198,9 @@ class ArucoDetector:
         # base G 3, loose gray 3-4, loose G 4 of 4 every time. B never helps.
         # 7 + 15 + 17 ms, about 20 ms wall time in the pool.
         G = lambda c: c[:, :, 1]
-        self.variants = [(mk(), G), (mk(**loose), gray), (mk(**loose), G)]
+        # base G dropped (29.9.): loose G finds all it finds, and the game hit
+        # 2 cores with three variants next to teleop.
+        self.variants = [(mk(**loose), gray), (mk(**loose), G)]
         self.pool = ThreadPoolExecutor(len(self.variants))
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -366,6 +368,10 @@ class VideoView:
         self.cap.release()
 
 
+VIEW_GAMMA = float(os.environ.get("PNP_VIEW_GAMMA", "0.55"))   # <1 = brighter
+VIEW_LUT = np.array([255 * (i / 255) ** VIEW_GAMMA for i in range(256)], np.uint8)
+
+
 class CameraView:
     """Passthrough: newest camera frame as a pygame surface at inset size.
 
@@ -393,6 +399,9 @@ class CameraView:
         # this comparison, every frame gets converted twice, for nothing.
         if seq != self.seq and frame is not None:
             small = cv2.resize(frame, self.size, interpolation=cv2.INTER_LINEAR)
+            # Brighter for the player only: the exposure stays where the
+            # detector reads best (29.9., hall too dark on screen).
+            small = cv2.LUT(small, VIEW_LUT)
             self.surf = pygame.image.frombuffer(small.tobytes(), self.size, "BGR")
             self.seq = seq
         return self.surf
