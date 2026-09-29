@@ -111,6 +111,7 @@ class DB:
 
     def players_named(self, name):
         """[(number, weekday 0=Sunday, "HH:MM")] for a name, newest first.
+        name None = every player (no-name mode, see ASK_NAME).
 
         Everything the pick list needs to tell three MAX apart -- and
         nothing else: a score next to the number would turn picking your
@@ -124,7 +125,7 @@ class DB:
         return [(no, int(wd), hhmm) for no, wd, hhmm in self.con.execute(
             "SELECT id, strftime('%w', ts, 'localtime'), "
             "       strftime('%H:%M', ts, 'localtime') "
-            "FROM players WHERE name = ? ORDER BY id DESC", (name,))]
+            "FROM players WHERE ? IS NULL OR name = ? ORDER BY id DESC", (name, name))]
 
     def log(self, event, player=None, **data):
         """One row in events. Never raises: a full disk or a locked file
@@ -255,6 +256,7 @@ elif __name__ == "__main__":
     assert [r[0] for r in named] == [2, 1], named
     assert all(0 <= wd <= 6 and len(hhmm) == 5 for _, wd, hhmm in named), named
     assert p.players_named("ZZZ") == []
+    assert [r[0] for r in p.players_named(None)] == [3, 2, 1]
     p.add("MAX", 30, dist=50, player=a, first=12.5)
     p.add("MAX", 10, dist=50, player=b)
     p.add("MAX", 0, dist=50, player=a)          # second try, perfect

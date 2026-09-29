@@ -70,6 +70,10 @@ SAFE_BOTTOM = 920
 WARN_SECONDS  = 5     # from here on the LEDs switch to "hurry" (for the booth team)
 IDLE_TIMEOUT  = 20    # non-idle scenes fall back on their own
 CONFIRM_SECONDS = 3   # window for the double-confirm to abort
+# ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
+# is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
+# letters back without a deploy (drop-in like pnp-time).
+ASK_NAME = os.environ.get("PNP_ASK_NAME", "0") != "0"
 # ROUND_SECONDS and PERFECT_HOLD depend on difficulty and therefore live in
 # the game mode section further below, not here.
 

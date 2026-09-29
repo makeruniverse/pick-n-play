@@ -497,9 +497,19 @@ class IdleScene(SceneBase):
 
     def handle(self, action):
         if action == "right":
-            self.switch_to(EntryScene(self.ctx))
+            if ASK_NAME:
+                self.switch_to(EntryScene(self.ctx))
+            else:
+                name = f"#{self.ctx.db.next_player()}"
+                no = self.ctx.db.new_player(name)
+                self.switch_to(StoryScene(self.ctx, no, name, new=True))
         elif action == "down":
-            self.switch_to(EntryScene(self.ctx, again=True))
+            if ASK_NAME:
+                self.switch_to(EntryScene(self.ctx, again=True))
+            elif rows := self.ctx.db.players_named(None):
+                self.switch_to(PickScene(self.ctx, None, rows))
+            else:
+                return None     # nobody has played yet
         elif action == "up":
             if self.ask > 0:
                 self.ctx.lang = "de" if self.ctx.lang == "en" else "en"
@@ -681,10 +691,11 @@ class PickScene(SceneBase):
             step = 1 if action == "down" else -1
             self.cursor = (self.cursor + step) % len(self.rows)
         elif action == "left":
-            self.switch_to(EntryScene(self.ctx, again=True))
+            self.switch_to(EntryScene(self.ctx, again=True) if ASK_NAME
+                           else IdleScene(self.ctx))
         elif action == "right":
             no = self.rows[self.cursor][0]
-            self.switch_to(StoryScene(self.ctx, no, self.name, new=False))
+            self.switch_to(StoryScene(self.ctx, no, self.name or f"#{no}", new=False))
         else:
             return None
         return "ok"
@@ -698,7 +709,8 @@ class PickScene(SceneBase):
     def render(self, screen):
         f = self.ctx.fonts
         screen.fill(BG)
-        draw(screen, f["mid"], self.t("which", name=self.name), 960, 150, ACCENT)
+        draw(screen, f["mid"], self.t("which", name=self.name) if self.name
+             else self.t("when"), 960, 150, ACCENT)
         days = self.t("days")
         for i in range(self.start, min(self.start + self.ROWS, len(self.rows))):
             no, wd, hhmm = self.rows[i]
@@ -1310,7 +1322,7 @@ if __name__ == "__main__":
                 assert _am.overlap_area(_tm, (_off[0] + _d, _off[1])), \
                     f"demo {_k}: no jaw on the {'left' if _d < 0 else 'right'}"
 
-    widest = dict(name="WWW", no=999, goal=euro(88), price=euro(52))
+    widest = dict(name="#999", no=999, goal=euro(88), price=euro(52))
     for lang in TEXT:
         ctx.lang = lang
         T = TEXT[lang]
@@ -1325,6 +1337,14 @@ if __name__ == "__main__":
 
         check(f"{lang} idle", IdleScene(ctx))
         check(f"{lang} idle ask", IdleScene(ctx), ask=2.0)
+        if not ASK_NAME:        # ▶ skips the name, ▼ lists every number
+            idle = IdleScene(ctx)
+            idle.handle("right")
+            assert isinstance(idle.next, StoryScene) and idle.next.name == "#999"
+            idle.handle("down")
+            assert isinstance(idle.next, PickScene) and idle.next.name is None
+            idle.next.handle("right")
+            assert idle.next.next.name == "#999", "returning player keeps the #"
         for again in (False, True):
             for cur in range(3):
                 check(f"{lang} entry {again} {cur}", EntryScene(ctx, again), cursor=cur)
@@ -1334,6 +1354,7 @@ if __name__ == "__main__":
         # to scroll with the cursor instead of drawing past the hint line.
         rows = [(n, n % 7, "14:20") for n in range(999, 989, -1)]
         check(f"{lang} pick one", PickScene(ctx, "WWW", rows[:1]))
+        check(f"{lang} pick all", PickScene(ctx, None, rows))
         for cur in (0, 4, 9):
             check(f"{lang} pick {cur}", PickScene(ctx, "WWW", rows), cursor=cur)
 
