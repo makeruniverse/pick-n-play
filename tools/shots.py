@@ -159,7 +159,6 @@ def shots(out):
         ("2b-pick",        scenes.PickScene(ctx, "MAX", stub.players_named("MAX")),
                            dict(cursor=1)),
         ("3-story",        story, dict(dialog=typed(story.dialog, 1))),
-        ("4a-tut-intro",   intro,                                     {}),
         ("4-tutorial",     tut,                                       {}),
         ("5-tutorial-done", done_tut,                                 {}),
         ("5b-tutorial-fail", fail_tut,                                {}),

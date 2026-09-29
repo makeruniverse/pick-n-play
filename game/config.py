@@ -116,7 +116,7 @@ _theme = importlib.import_module(f"themes.{THEME}")
 # Language at startup. The idle screen switches it at runtime (▲ twice), and
 # it stays switched until someone switches back -- a school class is one
 # language for an hour, not per visitor.
-LANG = env("LANG", "en")
+LANG = env("LANG", "de")
 
 # ── Colors ────────────────────────────────────────────────────────────────
 # Six colors as a ladder from quiet to loud, each with exactly one job:
