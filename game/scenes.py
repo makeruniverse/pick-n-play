@@ -907,8 +907,12 @@ class GameScene(SceneBase):
 
     def update(self, dt):
         self.clock += dt
-        self.idle += dt
-        if self.phase in ("tut_intro", "read") and self.idle > READ_TIMEOUT:
+        # Only the reading screens count: in practice and round the player
+        # works the arm, not the buttons (29.9.: a practice timeout landed
+        # on "read" with 30 s already on the clock -> straight to idle).
+        reading = self.phase in ("tut_intro", "read")
+        self.idle = self.idle + dt if reading else 0.0
+        if reading and self.idle > READ_TIMEOUT:
             self.log("quit", why="idle")
             self.switch_to(IdleScene(self.ctx))
             return
@@ -1439,6 +1443,8 @@ if __name__ == "__main__":
         g.handle("right")
         g.update(TUT_SECONDS + 0.1)
         assert g.phase == "read", "the practice times out"
+        g.update(0.1)
+        assert g.next is g and g.phase == "read", "no button in practice is no walk-away"
         # Nobody presses anything on a reading screen: back to idle
         g.update(READ_TIMEOUT + 0.1)
         assert isinstance(g.next, IdleScene), "walk-away falls back to idle"
