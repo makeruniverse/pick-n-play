@@ -121,7 +121,7 @@ def shots(out):
     # (1.40 + 5.20) would have been it, macaron + cupcake (1.70 + 4.60) is
     # what the player picked.
     done = scenes.Result(target=66, total=63, dist=66, left=0.0,
-                         marks={0: 1, 11: 1})
+                         marks={0: 1, 9: 1})
     score = scenes.DisplayScoreScene(ctx, done, 42)
     typed(score.dialog)
     # The last page: Oskar has said thanks, Bella hands over the number.
@@ -143,8 +143,8 @@ def shots(out):
         ("5-tutorial-done", done_tut,                                 {}),
         ("6-order",        order,                                     {}),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
-                                      marks={11: quad(.45)}, total=V[11], target=66,
-                                      pop=[SPRITE[11], "+" + scenes.euro(V[11], sign=False), 0.4])),
+                                      marks={9: quad(.45)}, total=V[9], target=66,
+                                      pop=[SPRITE[9], "+" + scenes.euro(V[9], sign=False), 0.4])),
         ("8-game-hint",    game, dict(pop=None, still=99.0, left=FUSE_PULSE * 0.6,
                                       clock=0.3)),
         ("9-game-over",    game, dict(still=0.0, left=ROUND_SECONDS * 0.4,

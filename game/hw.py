@@ -608,8 +608,8 @@ if __name__ == "__main__":
     # 1b · Inverted marker (light cells on dark) is detected the same way.
     # Plate 2 printed no such treat -- the chocolate ones carry them -- but
     # detectInvertedMarker stays on, so this path stays tested.
-    det_inv = ArucoDetector(_Still(255 - _tray({11: (260, 160)})), roi=(0, 0, 1, 1))
-    assert sorted(_settle(det_inv)) == [11], det_inv.fresh()
+    det_inv = ArucoDetector(_Still(255 - _tray({9: (260, 160)})), roi=(0, 0, 1, 1))
+    assert sorted(_settle(det_inv)) == [9], det_inv.fresh()
 
     # 2 · Window filters out what lies outside
     det_roi = ArucoDetector(_Still(_tray(spots)), roi=(0.0, 0.0, 0.6, 0.5))
