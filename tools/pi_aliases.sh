@@ -107,6 +107,21 @@ pnp-update-now() {
     echo "HEAD $(git -C $PNP log --oneline -1) -- updater: $(systemctl is-active pnp-update)"
 }
 
+# Round length for the expo service: pnp-time 150 sets it and restarts the
+# game (a running round is lost), pnp-time alone shows it. systemd drop-in,
+# so it survives reboots and auto-updates; config.py reads PNP_ROUND_SECONDS.
+pnp-time() {
+    local d=/etc/systemd/system/pnp-expo.service.d
+    if [ -z "$1" ]; then
+        grep -ho 'PNP_ROUND_SECONDS=[0-9]*' $d/time.conf 2>/dev/null || echo "default (config.py MODES)"
+        return
+    fi
+    case $1 in *[!0-9]*) echo "seconds, e.g. pnp-time 150"; return 1;; esac
+    sudo mkdir -p $d
+    printf '[Service]\nEnvironment=PNP_ROUND_SECONDS=%s\n' "$1" | sudo tee $d/time.conf >/dev/null
+    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "round $1 s, game restarted"
+}
+
 # Empty the leaderboard: backup next to it, then runs + players deleted.
 # The game keeps its connection, the next round reads the empty tables.
 pnp-db-reset() {
