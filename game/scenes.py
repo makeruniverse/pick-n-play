@@ -492,6 +492,8 @@ class IdleScene(SceneBase):
         self.now = 0.0
         self.ask = 0.0
         self.top = ctx.db.top(len(self.PODIUM))
+        # The number a new player gets, before any name (29.9., booth ask)
+        self.next = ctx.db.next_player()
 
     def handle(self, action):
         if action == "right":
@@ -542,6 +544,9 @@ class IdleScene(SceneBase):
             draw_left(screen, f[size], f"{i + 1}. {name}", x, y, color)
         footer(screen, f, self.t("lang"), self.t("again"),
                note=self.t("lang_ok") if self.ask > 0 else None)
+        # Right under PRESS: that is the number pressing gets you. tiny fits
+        # the gap to BEST, small does not (layout test).
+        draw(screen, f["tiny"], self.t("player", no=self.next), 960, 499, ACCENT)
 
 
 class EntryScene(SceneBase):
@@ -787,9 +792,10 @@ class GameScene(SceneBase):
         self.fx = self.pop = self.first = None
         self.target = self.dist = None
         ctx.leds.show("idle")
-        # A treat left over from the last round: no practice needed, the
-        # tray already shows what the camera sees.
-        if tutorial and not self.marks:
+        # Practice even with treats already on the tray (29.9.): a leftover
+        # or one stray detection skipped it for new players at the fair.
+        # It ends on a NEWLY seen marker, so leftovers can't finish it.
+        if tutorial:
             self.phase = "tutorial"
             self.dialog = Dialog(ctx.music, "baker", self.t("baker"), self.t("tut"))
         else:

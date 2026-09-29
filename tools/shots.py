@@ -110,9 +110,9 @@ def shots(out):
     stub.tray = {0: quad(.45)}
     done_tut.update(0.3)
     typed(done_tut.dialog)
-    game = scenes.GameScene(ctx, 42, "MAX")
+    game = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
     typed(game.dialog)
-    order = scenes.GameScene(ctx, 42, "MAX")
+    order = scenes.GameScene(ctx, 42, "MAX", tutorial=False)
     typed(order.dialog, 1)
     # A round that landed just off: EUR 0.30 short at EUR 6.60, time ran
     # out. Gives a score with three digits and two stars. Target and total
