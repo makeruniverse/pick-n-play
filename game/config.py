@@ -3,6 +3,20 @@ import json
 import os
 import sys
 import pygame
+import settings
+
+# ── Switches ──────────────────────────────────────────────────────────────
+# Every PNP_* switch below comes through env(): the environment first
+# (development, one-off runs over SSH), then settings.json (the secret menu
+# and the pnp-* commands on the Pi, see settings.py), then the default here.
+SETTINGS = settings.load()
+# Machine files that were there but unreadable, for the menu's status page.
+BROKEN = []
+
+
+def env(key, default=None):
+    return os.environ.get("PNP_" + key, SETTINGS.get(key, default))
+
 
 # ── Display ───────────────────────────────────────────────────────────────
 # Design resolution = panel resolution of the Asus MB169CK, native and
@@ -26,7 +40,7 @@ WIDTH, HEIGHT = 1920, 1080
 # distortion, and hard pixel edges, not from the frame rate. Half the render
 # load is also half the heat, and the Pi throttles together with teleop.
 FPS = 30
-IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "15"))
+IDLE_FPS = int(env("IDLE_FPS", "15"))
                      # half of FPS, so the cadence stays even.
                      # The idle screen changes twice a second -- anything
                      # more is six hours of heat for nothing.
@@ -45,17 +59,17 @@ IDLE_FPS = int(os.environ.get("PNP_IDLE_FPS", "15"))
 # branch -- that would drift away from the cabinet. The cabinet is Linux, so
 # none of this changes anything there.
 MAC        = sys.platform == "darwin"
-FULLSCREEN = os.environ.get("PNP_FULLSCREEN", "0" if MAC else "1") != "0"
-FPSLOG     = os.environ.get("PNP_FPSLOG") == "1"
+FULLSCREEN = env("FULLSCREEN", "0" if MAC else "1") != "0"
+FPSLOG     = env("FPSLOG") == "1"
 # Measured to cost 12 to 19% at 60 Hz. At 30 fps the budget is there, and
 # tearing running through a pixel font is visible instantly from 8 m. Stays on.
-VSYNC      = os.environ.get("PNP_VSYNC", "1") != "0"
+VSYNC      = env("VSYNC", "1") != "0"
 
 # OpenCV threads for remap and multiply in the render path. Three, not four:
 # the fourth core belongs to the teleop process (CPUAffinity=3 in its unit).
 # Without this line OpenCV grabs all cores and crowds out exactly the loop
 # that's the only one on a deadline.
-CV_THREADS = int(os.environ.get("PNP_CV_THREADS", "3"))
+CV_THREADS = int(env("CV_THREADS", "3"))
 
 # The one line that says what the four buttons do -- in the same place in
 # every scene. Scene content ends above SAFE_BOTTOM, so a growing list
@@ -78,7 +92,7 @@ GO_SECONDS    = 3     # "GET READY! 3-2-1" between think time and round (29.9.)
 # ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
 # is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
 # letters back without a deploy (drop-in like pnp-time).
-ASK_NAME = os.environ.get("PNP_ASK_NAME", "0") != "0"
+ASK_NAME = env("ASK_NAME", "0") != "0"
 # ROUND_SECONDS and PERFECT_HOLD depend on difficulty and therefore live in
 # the game mode section further below, not here.
 
@@ -92,7 +106,7 @@ CHEAT_TAPS = 5
 # The names below are the contract -- every theme supplies exactly these,
 # and `uv run game/sprites.py` checks that for every file in themes/.
 # New theme: copy sugar_rush.py, the file's header says what to do.
-THEME = os.environ.get("PNP_THEME", "sugar_rush")
+THEME = env("THEME", "sugar_rush")
 THEME_KEYS = ("BG", "GREY", "WHITE", "ACCENT", "CANDY", "TEXT", "LED_A",
               "LED_B", "BASE", "SHAPES", "SPRITES", "EXTRAS", "SPRITE", "ARM")
 _theme = importlib.import_module(f"themes.{THEME}")
@@ -102,7 +116,7 @@ _theme = importlib.import_module(f"themes.{THEME}")
 # Language at startup. The idle screen switches it at runtime (▲ twice), and
 # it stays switched until someone switches back -- a school class is one
 # language for an hour, not per visitor.
-LANG = os.environ.get("PNP_LANG", "en")
+LANG = env("LANG", "en")
 
 # ── Colors ────────────────────────────────────────────────────────────────
 # Six colors as a ladder from quiet to loud, each with exactly one job:
@@ -136,10 +150,10 @@ FONT_SIZES = {"big": 168, "title": 144, "mid": 88, "small": 48, "tiny": 32}
 # ── CRT overlay ───────────────────────────────────────────────────────────
 # PNP_CRT=0 and PNP_BARREL=0 turn the two off for measuring, without touching
 # the file. Meant for A/B runs on the Pi, the cabinet uses the defaults.
-CRT            = os.environ.get("PNP_CRT", "1") != "0"
+CRT            = env("CRT", "1") != "0"
 SCANLINE_STEP  = 3     # darken every third row
 SCANLINE_ALPHA = 60    # tune at the venue, lower it if in doubt
-BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
+BARREL_K       = float(env("BARREL", "0.05"))
                        # distortion of the scanlines and nothing more: they
                        # curve as if on a tube and draw together toward the
                        # edge. Costs nothing at runtime, the map is built at
@@ -154,7 +168,7 @@ BARREL_K       = float(os.environ.get("PNP_BARREL", "0.05"))
 # Overall level, music and effects alike. The Pi's ALSA PCM is already at
 # 100 %, so louder only goes through the samples. 2.0 = +6 dB; the loudest
 # piece peaks at 20942 of 32767 then (measured), SDL clips anything above.
-VOLUME       = float(os.environ.get("PNP_VOLUME", "2.0"))
+VOLUME       = float(env("VOLUME", "2.0"))
 DUCK         = 0.55   # music level during an effect (~-5 dB)
 DUCK_RELEASE = 0.35   # seconds back to full
 
@@ -241,7 +255,8 @@ MODES = {
     "normal": dict(ROUND_SECONDS=120, THINK_SECONDS=20, TUT_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
 }
-MODE = os.environ.get("PNP_MODE", "normal")
+MODE = env("MODE", "normal")
+MODE = MODE if MODE in MODES else "normal"
 
 
 def _mode(key):
@@ -252,7 +267,13 @@ def _mode(key):
     maintain a table of types here.
     """
     default = MODES[MODE][key]
-    return type(default)(os.environ.get("PNP_" + key, default))
+    try:
+        # int("150.0") fails, so through float for the ints
+        v = env(key, default)
+        return type(default)(float(v)) if type(default) is int else type(default)(v)
+    except ValueError as e:     # a typo in settings.json must not be a crash loop
+        BROKEN.append(f"{key}: {e}")
+        return default
 
 
 ROUND_SECONDS = _mode("ROUND_SECONDS")
@@ -323,7 +344,7 @@ ARROWS = {"▲": "up", "▼": "down", "◀": "left", "▶": "right"}
 KEY_REPEAT = (400, 60)
 
 # ── Hardware ──────────────────────────────────────────────────────────────
-CAMERA        = os.environ.get("PNP_CAMERA", "1") != "0"   # 0 = FakeDetector
+CAMERA        = env("CAMERA", "1") != "0"   # 0 = FakeDetector
 # (arm camera, top-down). Same index twice = one webcam in both panes,
 # that's the layout mock.
 # The detector always attaches to the second, the top-down, camera.
@@ -380,6 +401,10 @@ try:
                 CAM_CTRLS[_k].pop("exposure_time_absolute", None)
 except FileNotFoundError:
     pass
+except (OSError, ValueError, KeyError, TypeError, AttributeError) as _e:
+    # A broken file used to crash the import: a restart loop until someone
+    # deleted it over SSH. The defaults are a playable picture.
+    BROKEN.append(f"cam.json: {_e}")
 # 736 x 414 is exactly 16:9 (736 * 9/16 = 414) — a different ratio distorts.
 # 1.8 times the area of the earlier 544 x 306: the player steers the arm by
 # these images, so they get priority. The instruction sits above, the bar
@@ -397,7 +422,7 @@ FLIP_FILE     = os.path.join(os.path.dirname(__file__), "..", "flip.json")
 # split (default since the 29.9. evening): two equal panes, top-down left,
 # arm cam right. top: top-down big in the center, arm cam a small inset on
 # the left. The big arm cam in the center (fpv) stuttered and was dropped.
-LAYOUT        = os.environ.get("PNP_LAYOUT", "split")
+LAYOUT        = env("LAYOUT", "split")
 # 1.0 since 29.9.: at 0.5 the arm passing over the tray made treats blink
 # out and back ~3x a round -- a pop-up, a blip and a reset PERFECT hold each.
 MARKER_HOLD   = 1.0    # hysteresis: marker keeps counting while occluded for less than this
@@ -442,7 +467,7 @@ MLG_CHORD     = {"up", "down"}   # blue + yellow held MLG_HOLD s -> MLG mode (ml
 MLG_HOLD      = 4.0
 CAM_STALE     = 5.0    # no new camera frame for this long -> stop the watchdog, systemd restarts
 # Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
-BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
+BUTTONS       = env("BUTTONS", "0" if MAC else "1") != "0"
 
 # ── LED strip ─────────────────────────────────────────────────────────────
 # WS2812 protocol over SPI5, data on GPIO 14 (header 8). The RP1 on the Pi 5
@@ -454,9 +479,9 @@ BUTTONS       = os.environ.get("PNP_BUTTONS", "0" if MAC else "1") != "0"
 LED_DEV     = "/dev/spidev5.0"
 # Count and brightness via environment, so the first test on the strip needs
 # no file change on the Pi: PNP_LED_COUNT=60 PNP_LED_BRIGHT=0.1
-LED_COUNT   = int(os.environ.get("PNP_LED_COUNT", 800))   # 5 m x 160/m
+LED_COUNT   = int(env("LED_COUNT", 800))   # 5 m x 160/m
 LED_ORDER   = "GRB"   # WS2812B. WS2811 strips (12/24 V) are often RGB -- check on the strip
-LED_BRIGHT  = float(os.environ.get("PNP_LED_BRIGHT", 1.0))
+LED_BRIGHT  = float(env("LED_BRIGHT", 1.0))
                       # power budget: 5 m FCOB at full white ~14 A at 5 V, 18 A PSU.
                       # The patterns are never full white; tested at 1.0 on 2026-09-16.
                       # That's a PSU and heat question in one number, not taste.
@@ -483,9 +508,12 @@ LED_ZONES   = os.path.join(os.path.dirname(__file__), "..", "led_zones.json")
 try:
     with open(LED_ZONES) as _f:
         _z = json.load(_f)
-    LED_SIDES, LED_CENTER = _z["side"], _z["center"]
+    LED_SIDES, LED_CENTER = list(_z["side"]), list(_z["center"])
 except FileNotFoundError:
     LED_SIDES, LED_CENTER = [], []
+except (OSError, ValueError, KeyError, TypeError) as _e:
+    LED_SIDES, LED_CENTER = [], []     # the strip as before zones, see above
+    BROKEN.append(f"led_zones.json: {_e}")
 
 # ── MLG mode ──────────────────────────────────────────────────────────────
 # Optional clip under the text spam, its sound as video.wav next to it. Not

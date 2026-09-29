@@ -107,20 +107,20 @@ pnp-update-now() {
     echo "HEAD $(git -C $PNP log --oneline -1) -- updater: $(systemctl is-active pnp-update)"
 }
 
-# Round length for the expo service: pnp-time 150 sets it and restarts the
-# game (a running round is lost), pnp-time alone shows it. systemd drop-in,
-# so it survives reboots and auto-updates; config.py reads PNP_ROUND_SECONDS.
-pnp-time() {
-    local d=/etc/systemd/system/pnp-expo.service.d
-    if [ -z "$1" ]; then
-        grep -ho 'PNP_ROUND_SECONDS=[0-9]*' $d/time.conf 2>/dev/null || echo "default (config.py MODES)"
-        return
-    fi
-    case $1 in *[!0-9]*) echo "seconds, e.g. pnp-time 150"; return 1;; esac
-    sudo mkdir -p $d
-    printf '[Service]\nEnvironment=PNP_ROUND_SECONDS=%s\n' "$1" | sudo tee $d/time.conf >/dev/null
-    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "round $1 s, game restarted"
+# Settings of the game live in settings.json (game/settings.py), the same
+# file the secret menu writes (hold red + green 3 s on the cabinet). The
+# game reads it at start, so a change restarts it: a running round is lost.
+#   pnp-set                    everything that's set
+#   pnp-set ROUND_SECONDS 150  set and restart the game
+#   pnp-set ROUND_SECONDS -    back to the default in config.py
+pnp-set() {
+    (cd $PNP && $PNP_PY game/settings.py "$@") || return
+    [ $# = 2 ] && sudo systemctl restart pnp-expo && echo "game restarted"
 }
+# The three that get used most, by name. Alone they show the value.
+pnp-time()   { pnp-set ROUND_SECONDS "$@"; }   # round length, s
+pnp-think()  { pnp-set THINK_SECONDS "$@"; }   # think time during Oskar's order, s
+pnp-layout() { pnp-set LAYOUT "$@"; }          # split | top | solo | fpv
 
 # Best rounds for the prize: player no., name, score, EUR off, seconds left
 # (only a perfect ends early, so > 0 means perfect and faster = more), time
@@ -131,34 +131,7 @@ pnp-winners() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py winn
 # (events table in scores.db). pnp-events 200 for more; SQL for the rest.
 pnp-events() { (cd $PNP && PYGAME_HIDE_SUPPORT_PROMPT=1 $PNP_PY game/db.py events "$@"); }
 
-# Think time during Oskar's order (panes off, then the round starts itself):
-# pnp-think 30 sets it and restarts the game, pnp-think alone shows it.
-pnp-think() {
-    local d=/etc/systemd/system/pnp-expo.service.d
-    if [ -z "$1" ]; then
-        grep -ho 'PNP_THINK_SECONDS=[0-9]*' $d/think.conf 2>/dev/null || echo "default (config.py MODES)"
-        return
-    fi
-    case $1 in *[!0-9]*) echo "seconds, e.g. pnp-think 30"; return 1;; esac
-    sudo mkdir -p $d
-    printf '[Service]\nEnvironment=PNP_THINK_SECONDS=%s\n' "$1" | sudo tee $d/think.conf >/dev/null
-    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "think $1 s, game restarted"
-}
 
-# Camera layout: pnp-layout split (default: two equal panes, top-down left,
-# arm cam right) or top (top-down big in the center, arm cam small).
-# Restarts the game.
-pnp-layout() {
-    local d=/etc/systemd/system/pnp-expo.service.d
-    if [ -z "$1" ]; then
-        grep -ho 'PNP_LAYOUT=[a-z]*' $d/layout.conf 2>/dev/null || echo "default (split)"
-        return
-    fi
-    case $1 in top|split) ;; *) echo "pnp-layout split|top"; return 1;; esac
-    sudo mkdir -p $d
-    printf '[Service]\nEnvironment=PNP_LAYOUT=%s\n' "$1" | sudo tee $d/layout.conf >/dev/null
-    sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"
-}
 
 # Pane orientation, live without a restart: pnp-cam arm flip mirror|ud|180|off
 # (same for top). Test: turn the leader arm left -> the arm cam image should

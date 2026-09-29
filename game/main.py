@@ -3,11 +3,14 @@ import signal
 import subprocess
 import time
 
+import settings
+settings.boot()     # before config: rolls back a settings change that keeps crashing
+
 import cv2
 import pygame
 from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS,
                     CAM_INDEXES, CAM_ZOOM, CAM_FLIP, DEMO_VIDEO, CV_THREADS, BUTTONS,
-                    CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC)
+                    CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC, DB_PATH)
 from app import Ctx, run_game
 from db import DB
 from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
@@ -63,10 +66,19 @@ def main():
     # The scene name goes to a file so the updater only restarts between
     # rounds; the watchdog ping only goes out while every camera delivers.
     run_dir = os.environ.get("RUNTIME_DIRECTORY")
-    last, polled = None, 0.0
+    last, polled, t0, saved = None, 0.0, time.monotonic(), time.monotonic()
 
     def beat(scene):
-        nonlocal last, polled
+        nonlocal last, polled, t0, saved
+        now = time.monotonic()
+        if t0 and now - t0 > settings.TRIAL_OK:
+            settings.ok()      # ran long enough: a settings change sticks
+            t0 = None
+        # Hourly copy of the scores, only between rounds (it blocks a moment).
+        # One file per hour of the day, so there are never more than 24.
+        if now - saved > 3600 and type(scene).__name__ == "IdleScene":
+            saved = now
+            ctx.db.backup(DB_PATH.replace(".db", "") + time.strftime(".backup-auto-%H.db"))
         # pnp-cam <role> flip ...: re-read once a second, no restart
         if ctx.views and time.monotonic() - polled > 1.0:
             polled = time.monotonic()
@@ -82,7 +94,7 @@ def main():
             notify("WATCHDOG=1")
 
     notify("READY=1")
-    run_game(IdleScene(ctx), WIDTH, HEIGHT, FPS, beat)
+    run_game(IdleScene(ctx), WIDTH, HEIGHT, FPS, beat, home=IdleScene)
     ctx.leds.close()
     for c in cams.values():
         c.close()

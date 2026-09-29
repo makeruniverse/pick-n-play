@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import pygame
 
-from config import (VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ, FLIPS, FLIP_DEFAULT, FLIP_FILE,
+from config import (env, VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ, FLIPS, FLIP_DEFAULT, FLIP_FILE,
                     TRAY_ROI, DEMO_SIZE, BUTTON_PINS, KEY_REPEAT, HOLD_QUIT,
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
                     LED_STRIPES, LED_A, LED_B, LED_RED, LED_SIDES,
@@ -369,7 +369,7 @@ class VideoView:
         self.cap.release()
 
 
-VIEW_GAMMA = float(os.environ.get("PNP_VIEW_GAMMA", "0.55"))   # <1 = brighter
+VIEW_GAMMA = float(env("VIEW_GAMMA", "0.55"))   # <1 = brighter
 VIEW_LUT = np.array([255 * (i / 255) ** VIEW_GAMMA for i in range(256)], np.uint8)
 
 

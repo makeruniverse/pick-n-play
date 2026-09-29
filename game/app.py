@@ -110,7 +110,7 @@ def px(s):
         s.get_height(), s.get_width(), 4)
 
 
-def run_game(scene, width, height, fps, beat=None):
+def run_game(scene, width, height, fps, beat=None, home=None):
     pygame.init()
     # No more pygame.SCALED: the design resolution *is* the panel resolution,
     # there's nothing to scale. vsync without SCALED is backend-dependent --
@@ -137,57 +137,77 @@ def run_game(scene, width, height, fps, beat=None):
     gain  = crt_gain(width, height, BARREL_K) if CRT else None
     ticks = 0
 
+    # Crash guard: an exception in one screen sends the machine back to
+    # `home` (the idle screen) instead of killing the process -- a restart
+    # is 5+ s of black and re-opened cameras. Three in a minute is not one
+    # bad screen any more: then it raises, and systemd restarts cleanly.
+    fails = []
     while scene is not None:
-        # Keyboard and GPIO come together at exactly one place. After that
-        # the scene only sees four strings and can't know where they came
-        # from -- that's why wiring up the buttons in scenes.py never
-        # changes a line here. dt is that of the last frame: the same number
-        # the round counts down with, so also for key repeat.
-        actions = [a for e in pygame.event.get() if (a := action_of(e))]
-        if scene.ctx.buttons:
-            actions += scene.ctx.buttons.pump(dt)
-        for action in actions:
-            if action == "quit":
-                scene = None
-                break
-            if action == "mlg":            # staff easter egg, from any scene
-                from mlg import MlgScene   # lazy: mlg imports this module
-                scene.switch_to(MlgScene(scene.ctx))
-                continue
-            # Every button press makes a sound: "ok" if the scene took it,
-            # otherwise "nope". handle() returns the name, None means nope.
-            scene.ctx.music.sfx(scene.handle(action) or "nope")
-        if scene is None:
-            break
+      try:
+          # Keyboard and GPIO come together at exactly one place. After that
+          # the scene only sees four strings and can't know where they came
+          # from -- that's why wiring up the buttons in scenes.py never
+          # changes a line here. dt is that of the last frame: the same number
+          # the round counts down with, so also for key repeat.
+          actions = [a for e in pygame.event.get() if (a := action_of(e))]
+          if scene.ctx.buttons:
+              actions += scene.ctx.buttons.pump(dt)
+          for action in actions:
+              if action == "quit":
+                  scene = None
+                  break
+              if action == "mlg":            # staff easter egg, from any scene
+                  from mlg import MlgScene   # lazy: mlg imports this module
+                  scene.switch_to(MlgScene(scene.ctx))
+                  continue
+              # Every button press makes a sound: "ok" if the scene took it,
+              # otherwise "nope". handle() returns the name, None means nope.
+              scene.ctx.music.sfx(scene.handle(action) or "nope")
+          if scene is None:
+              break
 
-        scene.ctx.music.update()
-        if beat:
-            beat(scene)    # expo heartbeat, see main.py
-        # A scene that handle() already replaced gets no more update: the
-        # next one's __init__ has set music and LEDs, and a stage() from the
-        # old round would start its music right back up over the idle screen.
-        if scene.next is scene:
-            scene.update(dt)
-        scene.render(screen)
-        if gain is not None:
-            # The px() views lock their surface. As arguments directly in the
-            # call they die with the line -- otherwise the flip below would
-            # fail on a locked surface.
-            cv2.multiply(px(screen), gain, px(screen), 1 / 255)
-        if screen is not window:
-            window = pygame.display.get_surface()    # new one after a resize
-            pygame.transform.smoothscale(screen, window.get_size(), window)
-        pygame.display.flip()
+          scene.ctx.music.update()
+          if beat:
+              beat(scene)    # expo heartbeat, see main.py
+          # A scene that handle() already replaced gets no more update: the
+          # next one's __init__ has set music and LEDs, and a stage() from the
+          # old round would start its music right back up over the idle screen.
+          if scene.next is scene:
+              scene.update(dt)
+          scene.render(screen)
+          if gain is not None:
+              # The px() views lock their surface. As arguments directly in the
+              # call they die with the line -- otherwise the flip below would
+              # fail on a locked surface.
+              cv2.multiply(px(screen), gain, px(screen), 1 / 255)
+          if screen is not window:
+              window = pygame.display.get_surface()    # new one after a resize
+              pygame.transform.smoothscale(screen, window.get_size(), window)
+          pygame.display.flip()
 
-        # Tick rate of the scene that just ran — before the switch, so the
-        # transition isn't clocked at the next scene's rate.
-        dt = clock.tick(scene.TICK or fps) / 1000
-        # Without output, a measurement on the Pi is blind: no developer is
-        # watching a screen there, just an SSH session on stdout.
-        ticks += 1
-        if FPSLOG and ticks % fps == 0:
-            print(f"{clock.get_fps():5.1f} fps  {type(scene).__name__}", flush=True)
-        scene = scene.next
+          # Tick rate of the scene that just ran — before the switch, so the
+          # transition isn't clocked at the next scene's rate.
+          dt = clock.tick(scene.TICK or fps) / 1000
+          # Without output, a measurement on the Pi is blind: no developer is
+          # watching a screen there, just an SSH session on stdout.
+          ticks += 1
+          if FPSLOG and ticks % fps == 0:
+              print(f"{clock.get_fps():5.1f} fps  {type(scene).__name__}", flush=True)
+          scene = scene.next
+
+      except Exception:
+        if home is None:
+            raise
+        import time, traceback
+        traceback.print_exc()
+        now = time.monotonic()
+        fails = [t for t in fails if now - t < 60] + [now]
+        if len(fails) >= 3:
+            raise
+        ctx = scene.ctx
+        ctx.db.log("crash", None, scene=type(scene).__name__,
+                   err=traceback.format_exc(limit=3)[-300:])
+        scene = home(ctx)
 
     pygame.quit()
 

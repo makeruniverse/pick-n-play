@@ -1,11 +1,16 @@
 import csv
+import glob
 import json
+import os
 import sqlite3
 import time
 import sys
 
 from balance import points
 from config import DB_PATH, TOP_N
+
+# Hourly copies (main.py), one per hour of the day: 24 at most, no cleanup.
+BACKUP_GLOB = DB_PATH.replace(".db", "") + ".backup-auto-*.db"
 
 
 class DB:
@@ -43,7 +48,51 @@ class DB:
     """
 
     def __init__(self, path=DB_PATH):
+        # None, or what went wrong -- shown on the menu's status page
+        self.broken = None
+        try:
+            self._open(path)
+        except sqlite3.DatabaseError as e:
+            # A pulled plug at the wrong moment, or a bad SD block. The game
+            # used to die here on every start. Now the file goes aside (it
+            # stays, for rescuing by hand), the newest automatic backup that
+            # checks out takes its place, and the day goes on.
+            self.broken = f"scores.db unreadable ({e}), " + self._restore(path)
+            print(self.broken, flush=True)
+            self._open(path)
+
+    def _restore(self, path):
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        for ext in ("", "-wal", "-shm"):
+            if os.path.exists(path + ext):
+                os.replace(path + ext, f"{path}.corrupt-{stamp}{ext}")
+        for b in sorted(glob.glob(BACKUP_GLOB), key=os.path.getmtime, reverse=True):
+            try:
+                con = sqlite3.connect(b)
+                good = con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+                if good:
+                    con.backup(sqlite3.connect(path))
+                con.close()
+                if good:
+                    return f"restored from {b}"
+            except sqlite3.Error:
+                pass
+        return "started empty"
+
+    def backup(self, path):
+        """Copy the live database to `path`, consistent even mid-write."""
+        try:
+            with sqlite3.connect(path) as out:
+                self.con.backup(out)
+        except sqlite3.Error as e:
+            print("backup failed:", e, flush=True)
+
+    def _open(self, path):
         self.con = sqlite3.connect(path)
+        # Corruption inside a page doesn't show on CREATE IF NOT EXISTS
+        if self.con.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+            self.con.close()
+            raise sqlite3.DatabaseError("quick_check failed")
         # WAL: a pulled plug loses at most the last round, never the file.
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("""CREATE TABLE IF NOT EXISTS runs (
@@ -140,11 +189,26 @@ class DB:
 
     def add(self, name, off, goal=None, total=None, dist=None, secs=0.0,
             player=None, first=None):
-        self.con.execute(
-            "INSERT INTO runs (name, off, goal, total, dist, secs, player, first) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, off, goal, total, dist, secs, player, first))
-        self.con.commit()
+        """The round, stored. Doesn't raise either: a full disk costs this
+        round its place on the board, not the visitor their score screen."""
+        try:
+            self.con.execute(
+                "INSERT INTO runs (name, off, goal, total, dist, secs, player, first) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (name, off, goal, total, dist, secs, player, first))
+            self.con.commit()
+        except sqlite3.Error as e:
+            self.broken = f"round not saved: {e}"
+            print(self.broken, flush=True)
+
+    def winners(self, n=10):
+        """The best rounds for the prize: [(player, name, score, off, secs, ts)].
+        Ties on score break by who got there first, like the leaderboard."""
+        rows = self.con.execute("SELECT player, name, off, dist, secs, ts "
+                                "FROM runs WHERE dist IS NOT NULL ORDER BY rowid").fetchall()
+        rows = sorted(rows, key=lambda r: -points(r[2], r[3], r[4] or 0.0))[:n]
+        return [(pl, nm, points(off, d, secs or 0.0), off, secs or 0.0, ts)
+                for pl, nm, off, d, secs, ts in rows]
 
     def _best(self):
         """[(key, name, best score, rounds)], best first.
@@ -307,4 +371,20 @@ elif __name__ == "__main__":
     assert v.top() == []
     v.add("NEU", 1, dist=50, player=v.new_player("NEU"))
     assert v.top() == [("#1", points(1, 50))], v.top()
+
+    # A corrupt file: aside, and the newest good backup comes back.
+    d = tempfile.mkdtemp()
+    live = os.path.join(d, "scores.db")
+    good = DB(live)
+    good.add("KEEP", 1, dist=50)
+    BACKUP_GLOB = os.path.join(d, "scores.backup-auto-*.db")
+    good.backup(os.path.join(d, "scores.backup-auto-07.db"))
+    good.con.close()
+    with open(live, "r+b") as f:
+        f.write(b"garbage" * 200)
+    r = DB(live)
+    assert r.broken and "restored" in r.broken, r.broken
+    assert [x[0] for x in r.top()] == ["KEEP"], r.top()
+    assert any(".corrupt-" in f for f in os.listdir(d)), "the broken file stays"
+    assert r.winners(1)[0][1] == "KEEP"
     print("ok")

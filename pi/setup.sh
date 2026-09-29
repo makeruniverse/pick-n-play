@@ -61,6 +61,19 @@ TimeoutStartSec=60
 WantedBy=multi-user.target
 EOF
 rm -rf $U/teleop.service.d   # old StartLimitBurst / StandardOutput=null override
+# The game's settings moved from drop-ins (pnp-time etc. until 29.9.) to
+# settings.json, which the secret menu can write without root. Carry over
+# what the drop-ins said, unless settings.json already says otherwise, then
+# drop them: an Environment= line would beat the menu forever.
+for f in $U/pnp-expo.service.d/*.conf; do
+    [ -e "$f" ] || continue
+    sed -n 's/^Environment=PNP_\([A-Z_]*\)=\(.*\)/\1 \2/p' "$f" | while read -r k v; do
+        if [ "$(sudo -u ubuntu $R/.venv/bin/python $R/game/settings.py "$k")" = default ]; then
+            sudo -u ubuntu $R/.venv/bin/python $R/game/settings.py "$k" "$v"
+        fi
+    done
+    rm "$f"
+done
 
 # ── Layer 2: the Pi itself ────────────────────────────────────────────────
 mkdir -p /etc/systemd/system.conf.d /etc/systemd/logind.conf.d \
@@ -92,6 +105,9 @@ fi
 # in dmesg. The supply holds 5.07 V under load. Takes effect after a reboot.
 grep -q '^usb_max_current_enable=1' /boot/firmware/config.txt ||
     echo usb_max_current_enable=1 >> /boot/firmware/config.txt
+# The journal can't fill the SD card over a week of fair days
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/pnp.conf
 # git: fsync on write, so a pulled plug doesn't leave half-written objects
 sudo -u ubuntu git -C $R config core.fsync committed
 
