@@ -144,3 +144,12 @@ bundle, same health check + rollback as `update.sh`), top camera missing ->
 "short technical pause" screen instead of a crash loop, arm camera missing ->
 no arm pane, `update.sh` re-clone must also move `settings.json`/`arm.json`,
 new `expo-card.md`.
+
+## State 29.9. late (3b25e7e on the Pi)
+
+Live: voxel ladder, settings.json + staff menu (hold red + green 3 s), self-healing
+(crash guard, DB restore, camera pause, settings trial), UX pass 1 + 2, player-100.
+`PNP_PLAYER_FIRST=1` is set with `systemctl set-environment` for this boot only
+(Vadim's UX test must not use #100); after the next power cycle numbering starts at 100.
+Open: arm calibration wizard in the menu (lerobot-calibrate prompts: "c"+Enter,
+middle pose Enter, move all joints, Enter), USB-stick update, expo card (not wanted).
