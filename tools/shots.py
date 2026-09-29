@@ -28,7 +28,7 @@ import cv2                                                      # noqa: E402
 import pygame                                                   # noqa: E402
 from app import Ctx, crt_gain, px                               # noqa: E402
 from config import (WIDTH, HEIGHT, FONT_PATH, FONT_SIZES, CRT,  # noqa: E402
-                    BARREL_K, CAM_VIEW, GREY, BG, ROUND_SECONDS, FUSE_PULSE)
+                    BARREL_K, CAM_VIEWS, GREY, BG, ROUND_SECONDS, FUSE_PULSE)
 import scenes                                                   # noqa: E402
 from config import VALUES as V, SPRITE                           # noqa: E402
 
@@ -65,8 +65,8 @@ class StubView:
 
     det = None
 
-    def __init__(self, label, font):
-        self.surf = pygame.Surface(CAM_VIEW)
+    def __init__(self, label, font, size):
+        self.surf = pygame.Surface(size)
         self.surf.fill((28, 28, 28))
         pygame.draw.rect(self.surf, GREY, self.surf.get_rect(), 2)
         t = font.render(label, False, GREY)
@@ -89,8 +89,8 @@ def shots(out):
     fonts = {k: pygame.font.Font(FONT_PATH, s) for k, s in FONT_SIZES.items()}
     stub = Stub()
     ctx = Ctx(detector=stub, db=stub, fonts=fonts, music=stub, leds=stub,
-              views=(StubView("ARM CAM", fonts["tiny"]),
-                     StubView("TOP-DOWN CAM", fonts["tiny"])))
+              views=(StubView("ARM CAM", fonts["tiny"], CAM_VIEWS[0]),
+                     StubView("TOP-DOWN CAM", fonts["tiny"], CAM_VIEWS[1])))
 
     # The top-down pane gets the overlay, so the marker frames show up.
     ctx.views[1].det = True

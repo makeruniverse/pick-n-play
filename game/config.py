@@ -382,7 +382,12 @@ except FileNotFoundError:
 # below, the timer pie in the 224 px gap between the two. 768 x 432 left the
 # pie 8 px from the frames and the instruction no room to its label.
 CAM_VIEW      = (736, 414)
-CAM_POS       = ((480, 510), (1440, 510))   # centers, left is the arm
+# Top-down is THE screen, the arm cam a small inset on the left (29.9., fair):
+# the arm cam is mirrored against the leader arm and people steered the
+# wrong way by it. 414 px is the height limit between header and bar, so
+# the top-down doesn't grow -- it moves to the center where the eye is.
+CAM_VIEWS     = ((448, 252), CAM_VIEW)     # arm, top-down
+CAM_POS       = ((300, 510), (960, 510))   # centers
 MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # Detection window of the top-down camera, as fractions (x, y, width, height)

@@ -805,8 +805,8 @@ class GameScene(SceneBase):
     GOAL_W, GOAL_OVER = 9, 12   # width and overhang of the goal line
     STRIP_Y = 848               # price strip: sprites here, prices below
     LADDER_Y, LADDER_ROW = 355, 215   # order phase: ladder in two rows, pane area
-    GUEST = (960, 440)          # the guest stands between the panes
-    POP = (960, 610)            # ... and "+2,40" pops up under him
+    GUEST = (1620, 440)         # the guest stands right of the top-down pane
+    POP = (1620, 610)           # ... and "+2,40" pops up under him
 
     def __init__(self, ctx, player, name, tutorial=True):
         super().__init__(ctx)
@@ -1306,9 +1306,8 @@ if __name__ == "__main__":
                              leds=_s, views=(), lang="en"))()
 
     # Panes aren't a draw(), but they still count toward overlap.
-    panes = [("pane", x - CAM_VIEW[0]//2 - 4, y - CAM_VIEW[1]//2 - 4,
-                      x + CAM_VIEW[0]//2 + 4, y + CAM_VIEW[1]//2 + 4)
-             for x, y in CAM_POS]
+    panes = [("pane", x - w//2 - 4, y - h//2 - 4, x + w//2 + 4, y + h//2 + 4)
+             for (x, y), (w, h) in zip(CAM_POS, CAM_VIEWS)]
     G = GameScene
     bar = [("bar", G.BAR.x, G.BAR.y - G.GOAL_OVER, G.BAR.right, G.BAR.bottom + G.GOAL_OVER)]
     fuse_ = [("fuse", 0, 0, WIDTH, FUSE_W), ("fuse", 0, HEIGHT - FUSE_W, WIDTH, HEIGHT),
