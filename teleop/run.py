@@ -126,7 +126,14 @@ def leader():
     # Set here, not in the calibration json: lerobot-calibrate writes
     # drive_mode 0 every time, and a recalibration flipped it back once.
     # Set, not toggled, so a json that already says 1 stays correct.
-    arm.bus.calibration["gripper"].drive_mode = 1
+    # arm.json (staff menu, GRIPPER INVERT) flips it back in an emergency.
+    try:
+        import json
+        with open(os.path.join(os.path.dirname(__file__), "..", "arm.json")) as f:
+            inv = bool(json.load(f).get("grip_invert"))
+    except (OSError, ValueError, AttributeError):
+        inv = False
+    arm.bus.calibration["gripper"].drive_mode = 0 if inv else 1
     return arm
 
 

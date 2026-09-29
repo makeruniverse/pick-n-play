@@ -156,6 +156,11 @@ def run_game(scene, width, height, fps, beat=None, home=None):
               if action == "quit":
                   scene = None
                   break
+              if action == "menu":           # staff menu, from any scene
+                  from menu import MenuScene     # lazy: menu imports scenes
+                  if not isinstance(scene, MenuScene):
+                      scene.switch_to(MenuScene(scene.ctx))
+                  continue
               if action == "mlg":            # staff easter egg, from any scene
                   from mlg import MlgScene   # lazy: mlg imports this module
                   scene.switch_to(MlgScene(scene.ctx))

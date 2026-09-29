@@ -17,7 +17,7 @@ from config import (env, VALUES, CAM_SIZE, CAM_VIEW, MARKER_HOLD, DETECT_HZ, FLI
                     LED_DEV, LED_COUNT, LED_ORDER, LED_BRIGHT, LED_FPS,
                     LED_STRIPES, LED_A, LED_B, LED_RED, LED_SIDES,
                     LED_CENTER, LED_ROPE, LED_SPARK, LED_EMBER, LED_WORK,
-                    MLG_CHORD, MLG_HOLD)
+                    MLG_CHORD, MLG_HOLD, MENU_CHORD, MENU_HOLD)
 
 
 def notify(msg):
@@ -277,6 +277,7 @@ class Buttons:
         self.wait = {}     # action -> seconds until the next repeat
         self.held = 0.0    # all four pressed for this long, see pump()
         self.mlg = 0.0     # MLG_CHORD pressed for this long
+        self.menu = 0.0    # MENU_CHORD pressed for this long
 
     def pump(self, dt):
         """Actions that have fired since the last frame."""
@@ -293,6 +294,10 @@ class Buttons:
         if self.mlg >= MLG_HOLD:
             self.mlg = float("-inf")
             return ["mlg"]
+        self.menu = self.menu + dt if set(pressed) == MENU_CHORD else 0.0
+        if self.menu >= MENU_HOLD:
+            self.menu = float("-inf")
+            return ["menu"]
         # More than one button at a time is nobody playing -- it's the escape
         # hatch being pressed. Without this the four buttons repeated at
         # KEY_REPEAT for five seconds, which walked the game through its

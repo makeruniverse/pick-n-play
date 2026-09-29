@@ -328,6 +328,7 @@ KEYMAP = {
     pygame.K_UP:   "up",   pygame.K_DOWN:  "down",
     pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
     pygame.K_q:    "quit",   # ponytail: development only, doesn't exist on the cabinet
+    pygame.K_F1:   "menu",   # on the cabinet: MENU_CHORD
     pygame.K_m:    "mlg",    # on the cabinet: MLG_CHORD, see below
 }
 
@@ -465,6 +466,8 @@ BUTTON_PINS   = {25: "up", 1: "down", 7: "left", 8: "right"}   # blue, yellow, r
 HOLD_QUIT     = 5.0    # all four buttons held this long -> game exits (expo: systemd restarts it)
 MLG_CHORD     = {"up", "down"}   # blue + yellow held MLG_HOLD s -> MLG mode (mlg.py), red ends it
 MLG_HOLD      = 4.0
+MENU_CHORD    = {"left", "right"}   # red + green held MENU_HOLD s -> staff menu (menu.py)
+MENU_HOLD     = 3.0
 CAM_STALE     = 5.0    # no new camera frame for this long -> stop the watchdog, systemd restarts
 # Like CAMERA: default is the cabinet, PNP_BUTTONS=0 for developing without GPIO.
 BUTTONS       = env("BUTTONS", "0" if MAC else "1") != "0"
