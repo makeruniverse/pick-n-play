@@ -53,8 +53,9 @@ if __name__ == "__main__":
             used = set("".join(t.SHAPES[shape])) - {"."}
             missing = used - {**t.BASE, **colors}.keys()
             assert not missing, (path, name, missing)
-        # Every marker needs a sprite, otherwise the price reveal dies
-        assert set(t.SPRITE) == set(VALUES), (path, set(VALUES) ^ set(t.SPRITE))
+        # Every marker needs a sprite, otherwise the price reveal dies. More is
+        # fine: treats taken off at the fair (29.9.) keep theirs for a comeback.
+        assert set(VALUES) <= set(t.SPRITE), (path, set(VALUES) - set(t.SPRITE))
         assert set(t.SPRITE.values()) <= t.SPRITES.keys(), path
     assert sprite(next(iter(SPRITES)), 2).get_size() == (32, 32)
     if len(sys.argv) > 1:
