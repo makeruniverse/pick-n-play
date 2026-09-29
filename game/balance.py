@@ -81,6 +81,30 @@ def gap(on, up=False):
     return random.choice(ok or band or [GAP_MIN])
 
 
+def next_move(on, target):
+    """First treat of a SHORTEST way from tray `on` to sum `target`, or None.
+
+    The hint used to be greedy -- the one treat that got closest in a single
+    move. That one is often not part of any solution (5.30 missing -> 5.20,
+    then 0.10 is left and nothing costs 0.10), and a player who followed it
+    needed three or four moves for a two-move round (29.9., at the fair).
+    Breadth-first over whole trays instead: 2^len(VALUES) states, 512 for
+    nine treats, microseconds. Returns the ID to add (not on the tray) or
+    to take off (on it); the caller tells them apart by `in on`.
+    """
+    start = frozenset(on)
+    first, todo = {start: None}, [start]
+    for tray in todo:            # grows while iterating: that's the BFS queue
+        if sum(VALUES[i] for i in tray) == target:
+            return first[tray]
+        for i in VALUES:
+            nxt = tray ^ {i}
+            if nxt not in first:
+                first[nxt] = first[tray] if first[tray] is not None else i
+                todo.append(nxt)
+    return None                  # target isn't any subset's sum
+
+
 def points(off, distance, left=0.0):
     """Score 0..1000 from distance, starting distance, and time left.
 
@@ -166,7 +190,20 @@ if __name__ == "__main__":
     # The knob for that is GAP_ONE_MAX, see config.py.
     assert len(goals) >= 10, len(goals)
 
-    # 5 · Scoring. Order and bounds, not the curve itself.
+    # 5 · The hint walks a shortest way: following it from the round start
+    #     closes every round in at most GAP_MOVES moves.
+    for _ in range(300):
+        tray = set(rng.sample(sorted(VALUES), rng.randrange(0, 3)))
+        goal = sum(VALUES[i] for i in tray) + gap(tray, up=True)
+        for n in range(GAP_MOVES + 1):
+            i = next_move(tray, goal)
+            if i is None:
+                break
+            tray ^= {i}
+        assert sum(VALUES[i] for i in tray) == goal and n <= GAP_MOVES, (tray, goal, n)
+    assert next_move(set(), 0) is None and next_move(set(), -1) is None
+
+    # 6 · Scoring. Order and bounds, not the curve itself.
     span = ROUND_SECONDS - PERFECT_HOLD
     assert points(0, 50, span) == SCORE_MAX + SCORE_TIME == 1000
     assert points(0, 50) == SCORE_MAX          # perfect in the last second

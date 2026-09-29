@@ -5,7 +5,7 @@ import pygame
 from functools import lru_cache
 from typing import NamedTuple
 import arm
-from balance import gap, points
+from balance import gap, next_move, points
 from config import *
 from app import SceneBase
 from sprites import sprite
@@ -912,14 +912,13 @@ class GameScene(SceneBase):
             self.switch_to(DisplayScoreScene(self.ctx, res, self.player))
 
     def hint(self):
-        """The treat that gets closest in one move -- once the tray has sat
-        still for HINT_SECONDS. A hop instead of a sentence: it points at the
+        """The next treat to move on a shortest way to the target -- once the
+        tray has sat still for HINT_SECONDS. A hop instead of a sentence: it points at the
         answer without reading it out."""
-        diff = (self.target or 0) - self.total
-        if self.phase != "play" or self.still < HINT_SECONDS or not diff:
+        if self.phase != "play" or self.still < HINT_SECONDS or self.total == self.target:
             return None
-        pool = [i for i in VALUES if (i in self.marks) == (diff < 0)]
-        return min(pool, key=lambda i: abs(abs(diff) - VALUES[i]), default=None)
+        # First step of a shortest way, not the greedy closest treat (29.9.)
+        return next_move(self.marks, self.target)
 
     def mood(self):
         """Oskar's face: sweating when over budget, beaming when it's exact."""
