@@ -4,7 +4,7 @@ import subprocess
 
 import cv2
 import pygame
-from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS, ARM_MIRROR, ARM_UD, ARM_PANE, TOP_CROP,
+from config import (WIDTH, HEIGHT, FPS, FONT_PATH, FONT_SIZES, CAMERA, CAM_VIEWS, ARM_MIRROR, ARM_UD,
                     CAM_INDEXES, CAM_ZOOM, CAM_FLIP, DEMO_VIDEO, CV_THREADS, BUTTONS,
                     CAM_STALE, CAM_CTRLS, TRAY_ROI, MAC)
 from app import Ctx, run_game
@@ -13,12 +13,6 @@ from hw import (ArucoDetector, Buttons, Camera, CameraView, FakeDetector,
                 Leds, VideoView, notify)
 from music import Music, SR, BUF
 from scenes import IdleScene
-
-
-class NoView:
-    """pnp-layout solo: the arm pane draws nothing (scenes skip a None surface)."""
-    det = None
-    def surface(self): return None
 
 
 def main():
@@ -60,9 +54,8 @@ def main():
     # Left is plain passthrough, right is the same image plus overlay. Only
     # the top-down pane gets the detector.
     ctx = Ctx(detector=det, db=DB(), fonts=fonts, music=Music(), leds=Leds(),
-              views=(CameraView(cams[arm], size=CAM_VIEWS[0], mirror=ARM_MIRROR, ud=ARM_UD)
-                     if ARM_PANE else NoView(),
-                     CameraView(cams[top], det, size=CAM_VIEWS[1], crop=TOP_CROP)) if cams else (),
+              views=(CameraView(cams[arm], size=CAM_VIEWS[0], mirror=ARM_MIRROR, ud=ARM_UD),
+                     CameraView(cams[top], det, size=CAM_VIEWS[1])) if cams else (),
               demo=VideoView(DEMO_VIDEO) if DEMO_VIDEO else None,
               buttons=Buttons() if BUTTONS else None)
     # Expo mode (pi/setup.sh): systemd sets RUNTIME_DIRECTORY and NOTIFY_SOCKET.

@@ -141,6 +141,14 @@ def shots(out):
     again.done = True
     again.handle(typed(again.dialog) and "right")   # Oskar read, ▶ -> Bella
     typed(again.dialog)
+    # Nobody got a treat on the tray: Bella's soft landing instead. Built
+    # last: its dialog draws random talk blips, which would shift the
+    # targets rolled for the screens above.
+    stub.tray = {}
+    fail_tut = on(scenes.GameScene(ctx, 42, "MAX"), 1)
+    fail_tut.tut, fail_tut.dialog.wait = 0.0, 99.0
+    fail_tut.update(0.01)
+    typed(fail_tut.dialog)
     play = dict(phase="play", dialog=None, pop=None, hit=0.0, confirm=0.0)
     # (filename, scene, state). The state gets written into __dict__ -- same
     # technique as in the self-test, so the in-between states that are hard to
@@ -154,8 +162,10 @@ def shots(out):
         ("4a-tut-intro",   intro,                                     {}),
         ("4-tutorial",     tut,                                       {}),
         ("5-tutorial-done", done_tut,                                 {}),
+        ("5b-tutorial-fail", fail_tut,                                {}),
         ("6a-read",        reading,                                   {}),
         ("6-order",        order,                                     {}),
+        ("6b-go",          order, dict(phase="go", dialog=None, go=2.4)),
         ("7-game-add",     game, dict(play, left=ROUND_SECONDS * 0.7, clock=0.3,
                                       marks={9: quad(.45)}, total=V[9], target=66,
                                       pop=[SPRITE[9], "+" + scenes.euro(V[9], sign=False), 0.4])),

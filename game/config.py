@@ -73,6 +73,8 @@ CONFIRM_SECONDS = 3   # window for the double-confirm to abort
 # A typed-out page turns itself after this long (29.9., fair): people stood
 # in front of Bella and Oskar and waited instead of pressing ▶.
 PAGE_SECONDS  = 6     # 4 was too sudden after the practice
+TUT_GRACE     = 2     # practice fuse waits for Bella's line + this long (29.9.)
+GO_SECONDS    = 3     # "GET READY! 3-2-1" between think time and round (29.9.)
 # ponytail: fair queue (2026-09-29) -- ▶ goes straight to Bella and the name
 # is the player number, ▼ lists every number. PNP_ASK_NAME=1 brings the three
 # letters back without a deploy (drop-in like pnp-time).
@@ -218,6 +220,8 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 #                the 30 from the scoring meeting were far too short, the
 #                game is harder than expected. The scoring scale stays; the
 #                time bonus and the music stages scale with this value.
+#                120 since the fair (29.9.): the first treat lands after a
+#                median 29 s, one round in six saw no treat at all.
 # PERFECT_HOLD   how long the total has to be right before the round ends
 #                early. MARKER_HOLD is enough against flicker anyway.
 # GAP_MOVES      how many moves the perfect solution may cost. A
@@ -234,7 +238,7 @@ CENTS  = 10        # one VALUES step in cents. Only read by euro().
 #                this price set, the self-test in balance.py prints the
 #                number on every run.
 MODES = {
-    "normal": dict(ROUND_SECONDS=90, THINK_SECONDS=20, TUT_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
+    "normal": dict(ROUND_SECONDS=120, THINK_SECONDS=20, TUT_SECONDS=30, PERFECT_HOLD=3.0, GAP_MOVES=2,
                    GAP_MIN=25, GAP_MAX=98, GAP_ONE_MISS=2, GAP_ONE_MAX=25),
 }
 MODE = os.environ.get("PNP_MODE", "normal")
@@ -382,19 +386,19 @@ except FileNotFoundError:
 # below, the timer pie in the 224 px gap between the two. 768 x 432 left the
 # pie 8 px from the frames and the instruction no room to its label.
 CAM_VIEW      = (736, 414)
-# Top-down is THE screen, the arm cam a small inset on the left (29.9., fair):
-# the arm cam is mirrored against the leader arm and people steered the
-# wrong way by it. 414 px is the height limit between header and bar, so
-# the top-down doesn't grow -- it moves to the center where the eye is.
-# PNP_ARM_MIRROR=1 mirrors the arm cam left/right (pnp-mirror on the Pi):
-# test 29.9. whether that alone fixes the "arm goes the wrong way" feeling.
-# Display only -- the top-down pane and the detector never see it.
-ARM_MIRROR    = os.environ.get("PNP_ARM_MIRROR") == "1"
+# The arm cam is mirrored left/right by default (29.9., fair): unmirrored it
+# ran against the leader arm and people steered the wrong way by it.
+# PNP_ARM_MIRROR=0 turns it off (pnp-mirror). Display only -- the top-down
+# pane and the detector never see it.
+ARM_MIRROR    = os.environ.get("PNP_ARM_MIRROR", "1") == "1"
 ARM_UD        = os.environ.get("PNP_ARM_UD") == "1"   # upside down; both = 180°
-LAYOUT        = os.environ.get("PNP_LAYOUT", "top")
-# solo = top without the arm pane: A/B whether the arm cam helps at all.
-ARM_PANE      = LAYOUT != "solo"
-MARKER_HOLD   = 0.5    # hysteresis: marker keeps counting while occluded for less than this
+# split (default since the 29.9. evening): two equal panes, top-down left,
+# arm cam right. top: top-down big in the center, arm cam a small inset on
+# the left. The big arm cam in the center (fpv) stuttered and was dropped.
+LAYOUT        = os.environ.get("PNP_LAYOUT", "split")
+# 1.0 since 29.9.: at 0.5 the arm passing over the tray made treats blink
+# out and back ~3x a round -- a pop-up, a blip and a reset PERFECT hold each.
+MARKER_HOLD   = 1.0    # hysteresis: marker keeps counting while occluded for less than this
 DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # Detection window of the top-down camera, as fractions (x, y, width, height)
 # of the ZOOMED image. Only what's inside this window is detected. Since
@@ -404,24 +408,9 @@ DETECT_HZ     = 15     # detection rate, decoupled from the 60 FPS
 # drawn into the image, so it's set in the hall while aligning the camera and
 # the result is visible immediately.
 TRAY_ROI      = (0.37, 0.50, 0.30, 0.35)
-# Part of the top-down image its pane shows, (x, y, w, h) like TRAY_ROI.
-# Whole image, except in the fpv layout.
-TOP_CROP      = (0.0, 0.0, 1.0, 1.0)
-# PNP_LAYOUT (pnp-layout on the Pi): top = top-down big, arm cam small;
-# split = the two equal panes; solo = top without the arm cam;
-# fpv = arm cam big, top-down cropped to the tray as the small pane.
+# Both tuples are (arm, top-down).
 if LAYOUT == "split":
-    CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((480, 510), (1440, 510)), 960
-elif LAYOUT == "fpv":
-    _x0, _y0 = max(0.0, TRAY_ROI[0] - 0.05), max(0.0, TRAY_ROI[1] - 0.05)
-    _x1 = min(1.0, TRAY_ROI[0] + TRAY_ROI[2] + 0.05)
-    _y1 = min(1.0, TRAY_ROI[1] + TRAY_ROI[3] + 0.05)
-    TOP_CROP = (_x0, _y0, _x1 - _x0, _y1 - _y0)
-    # 216 px high, width from the crop's own ratio (the frame is 16:9)
-    _w = round(216 * TOP_CROP[2] * 16 / (TOP_CROP[3] * 9)) // 2 * 2
-    CAM_VIEWS = (CAM_VIEW, (_w, 216))          # arm, top-down
-    CAM_POS   = ((960, 510), (300, 510))
-    GUEST_X   = 1620
+    CAM_VIEWS, CAM_POS, GUEST_X = (CAM_VIEW, CAM_VIEW), ((1440, 510), (480, 510)), 960
 else:
     CAM_VIEWS = ((448, 252), CAM_VIEW)         # arm, top-down
     CAM_POS   = ((300, 510), (960, 510))       # centers

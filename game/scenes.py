@@ -787,11 +787,14 @@ class GameScene(SceneBase):
     """Practice, order, round -- one scene, because it's one screen.
 
     tut_intro "Up next: practice, doesn't count" + the camera rule. No clock.
-    tutorial  Bella: put any treat on the tray. TUT_SECONDS on the fuse.
-    tut_done  Bella: that one costs X. The first success.
+    tutorial  Bella: put any treat on the tray. TUT_SECONDS on the fuse,
+              which only burns once her line is typed out.
+    tut_done  Bella: that one costs X -- or, on timeout, "no problem, it
+              was only practice". Either way a soft landing, never a cut.
     read      Oskar names his budget, no clock. The target is rolled here,
               from what's on the tray now -- the practice treat stays.
     order     think time: ladder, countdown, one line of Oskar.
+    go        GET READY 3-2-1, the same for ▶ and for the timer.
     play      the round: fuse burning, bar, price strip.
 
     The camera panes stay the same through practice and round, so the
@@ -827,6 +830,11 @@ class GameScene(SceneBase):
         self.left = float(ROUND_SECONDS)
         self.confirm = self.skip = self.hit = self.clock = self.still = 0.0
         self.tut = float(TUT_SECONDS)
+        self.go, self.how = 0.0, None
+        # Every marker seen since the scene started. Practice ends on one
+        # that was never seen (29.9.): a leftover blinking back in after the
+        # arm passed over it was "new" and ended practice at second 0.
+        self.seen = set(self.marks)
         self.taps = 0
         self.fx = self.pop = self.first = None
         self.target = self.dist = None
@@ -868,11 +876,19 @@ class GameScene(SceneBase):
                              self.t("think_q", goal=euro(self.target)))
 
     def start(self, how):
-        """Order -> play: by ▶ on Oskar's last page, or when THINK_SECONDS
-        run out. `how` goes to the log, it says who reads the text at all."""
-        self.phase, self.dialog = "play", None
-        self.log("play", how=how, think=round(THINK_SECONDS - self.think, 1),
+        """Order -> go: by ▶ on Oskar's last page, or when THINK_SECONDS
+        run out. `how` goes to the log, it says who reads the text at all.
+        Both land on the same 3-2-1 (29.9.): the timer path used to drop
+        people into the round without a word."""
+        self.phase, self.dialog, self.how, self.go = "go", None, how, float(GO_SECONDS)
+        self.ctx.music.sfx("blip")
+
+    def play(self):
+        """Go -> play: the fuse starts burning."""
+        self.phase = "play"
+        self.log("play", how=self.how, think=round(THINK_SECONDS - self.think, 1),
                  tray=sorted(self.marks), total=self.total, target=self.target)
+        self.ctx.music.sfx("start")
         self.ctx.music.stage(self.left)
 
     def handle(self, action):
@@ -904,7 +920,6 @@ class GameScene(SceneBase):
             self.plan()
         elif self.phase == "order" and self.dialog.next():
             self.start("button")
-            return "start"
         elif self.phase == "play" and CHEAT_TAPS:
             # ponytail: developer shortcut. Doesn't jump into the round, but
             # into its end -- update() handles sound, music, and switch as usual.
@@ -935,13 +950,14 @@ class GameScene(SceneBase):
             self.ctx.music.sfx("blip")
             if self.first is None:
                 self.first = self.clock
-            if self.phase == "tutorial":
-                self.log("tut_done", treat=min(new))
+            if self.phase == "tutorial" and (placed := new - self.seen):
+                self.log("tut_done", treat=min(placed))
                 self.phase = "tut_done"
                 self.fx = Sprinkles(*self.POP)
                 self.ctx.music.sfx("ok")
                 self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"),
-                                     self.t("tut_done", price=euro(VALUES[min(new)])))
+                                     self.t("tut_done", price=euro(VALUES[min(placed)])))
+        self.seen |= marks.keys()
         self.marks = marks
         self.total = tray_sum(marks)
         if self.pop:
@@ -958,13 +974,26 @@ class GameScene(SceneBase):
         if self.phase == "order":
             self.think -= dt
             if self.think <= 0:
-                self.ctx.music.sfx("start")
                 self.start("timer")
+        elif self.phase == "go":
+            n = math.ceil(self.go)
+            self.go -= dt
+            if self.go <= 0:
+                self.play()
+            elif math.ceil(self.go) < n:
+                self.ctx.music.sfx("blip")      # one tick per number
         if self.phase == "tutorial":
-            self.tut -= dt
+            # The fuse waits until Bella's line stands (29.9., floor: it
+            # burned while she was still typing).
+            if self.dialog.wait > TUT_GRACE:
+                self.tut -= dt
             if self.tut <= 0:
+                # A soft landing instead of a cut straight to Oskar: failing
+                # the practice has to feel fine (29.9., floor).
                 self.log("tut_timeout")
-                self.read()
+                self.phase = "tut_done"
+                self.dialog = Dialog(self.ctx.music, "baker", self.t("baker"),
+                                     self.t("tut_fail"))
         if self.phase != "play":
             if self.fx:
                 self.fx.update(dt)
@@ -1032,16 +1061,12 @@ class GameScene(SceneBase):
         player is looking anyway -- without covering the treat the way a
         price label did.
         """
-        # Image fractions -> pane pixels, through the crop (fpv layout)
-        cx, cy, cw, ch = TOP_CROP
-        px = lambda x, y: (r.x + (x - cx) / cw * r.w, r.y + (y - cy) / ch * r.h)
         rx, ry, rw, rh = TRAY_ROI
-        screen.set_clip(r)
-        pygame.draw.rect(screen, GREY, (*px(rx, ry), rw / cw * r.w, rh / ch * r.h),
-                         MARK_WIDTH)
+        pygame.draw.rect(screen, GREY, (r.x + rx * r.w, r.y + ry * r.h,
+                                        rw * r.w, rh * r.h), MARK_WIDTH)
         for quad in self.marks.values():
-            pygame.draw.polygon(screen, ACCENT, [px(x, y) for x, y in quad], MARK_WIDTH)
-        screen.set_clip(None)
+            pygame.draw.polygon(screen, ACCENT, [(r.x + x * r.w, r.y + y * r.h)
+                                                 for x, y in quad], MARK_WIDTH)
 
     def bar(self, screen):
         """Where the total stands and where it needs to go, as one image.
@@ -1103,7 +1128,7 @@ class GameScene(SceneBase):
         # No panes while Oskar orders (29.9., fair): with the image on,
         # people started placing treats before the round. The ladder takes
         # their place instead, big enough to do the sums from.
-        reading = self.phase in ("tut_intro", "read", "order")
+        reading = self.phase in ("tut_intro", "read", "order", "go")
         views = () if reading else zip(self.ctx.views, CAM_POS)
         # The prices only come with the think time (29.9.): shown while
         # Oskar still talks, people stared at them and missed the order.
@@ -1134,7 +1159,7 @@ class GameScene(SceneBase):
             value, big = self.t("tut_head"), f["mid"]
         elif self.phase == "tut_done":
             label, value, big = self.t("practice"), self.t("tut_head"), f["mid"]
-        elif self.phase in ("read", "order"):
+        elif self.phase in ("read", "order", "go"):
             label, value = self.t("order_head"), euro(self.target)
         elif self.hit > 0:
             label = self.t("hold", n=int(PERFECT_HOLD - self.hit) + 1)
@@ -1160,7 +1185,13 @@ class GameScene(SceneBase):
         if self.phase == "tutorial":
             fuse(screen, max(0.0, self.tut / TUT_SECONDS) if TUT_SECONDS else 0.0,
                  ACCENT, self.clock)
-        if self.dialog:
+        if self.phase == "go":
+            # The budget stays on top, the countdown takes the pane area:
+            # the one thing to see before the arm starts to count.
+            draw(screen, f["mid"], self.t("get_ready"), 960, 470, WHITE)
+            draw(screen, f["big"], max(1, math.ceil(self.go)), 960, 680,
+                 CANDY[math.ceil(self.go) % len(CANDY)])
+        elif self.dialog:
             self.dialog.draw(screen, f)
         else:
             self.bar(screen)
@@ -1246,6 +1277,10 @@ class DisplayScoreScene(SceneBase):
             self.ctx.music.sfx("ok")
         if self.done:
             self.dialog.update(dt)
+            # Pages turn themselves like everywhere else (29.9.): a player
+            # who walked off held the machine for the full IDLE_TIMEOUT.
+            if self.dialog.due:
+                self.handle("right")
         if self.idle > IDLE_TIMEOUT:
             self.switch_to(IdleScene(self.ctx))
 
@@ -1319,7 +1354,7 @@ if __name__ == "__main__":
 
     # Panes aren't a draw(), but they still count toward overlap.
     panes = [("pane", x - w//2 - 4, y - h//2 - 4, x + w//2 + 4, y + h//2 + 4)
-             for (x, y), (w, h) in zip(CAM_POS, CAM_VIEWS)][0 if ARM_PANE else 1:]
+             for (x, y), (w, h) in zip(CAM_POS, CAM_VIEWS)]
     G = GameScene
     bar = [("bar", G.BAR.x, G.BAR.y - G.GOAL_OVER, G.BAR.right, G.BAR.bottom + G.GOAL_OVER)]
     fuse_ = [("fuse", 0, 0, WIDTH, FUSE_W), ("fuse", 0, HEIGHT - FUSE_W, WIDTH, HEIGHT),
@@ -1385,7 +1420,7 @@ if __name__ == "__main__":
         T = TEXT[lang]
         # Every speech line fits the box: at most three lines per page.
         for key in ("hello", "help", "welcome", "tut_intro", "tut", "tut_done",
-                    "order", "think_q", "remember"):
+                    "tut_fail", "order", "think_q", "remember"):
             for page in T[key].format(**widest).split("|"):
                 n = len(textwrap.wrap(page, Dialog.COLS))
                 assert n <= 3, f"{lang}.{key}: {n} lines: {page!r}"
@@ -1448,19 +1483,36 @@ if __name__ == "__main__":
         assert g.phase == "tutorial", "the question times out"
         g.handle("right")
         assert g.phase == "read", "▶▶ skips"
-        # Nobody manages the practice: its clock ends it
+        # Nobody manages the practice: its clock ends it -- but only once
+        # Bella's line stands, and it lands on "no problem", not on Oskar.
         g = GameScene(ctx, 999, "WWW")
         read(g.dialog)
         g.handle("right")
-        g.update(TUT_SECONDS + 0.1)
-        assert g.phase == "read", "the practice times out"
-        g.update(0.1)
-        assert g.next is g and g.phase == "read", "no button in practice is no walk-away"
+        for _ in range(8):
+            g.update(0.25)
+        assert g.tut == TUT_SECONDS, "the fuse burns while Bella still types"
+        for _ in range(4 * (TUT_SECONDS + TUT_GRACE + 2)):    # + typing
+            g.update(0.25)
+        assert g.phase == "tut_done" and g.dialog.pages[0] == \
+            textwrap.wrap(T["tut_fail"], Dialog.COLS), "the practice times out softly"
+        check(f"{lang} tut_fail", g, panes)
+        assert g.next is g, "no button in practice is no walk-away"
         # Nobody presses anything: every reading page turns itself, then
         # the think time runs out -- the round starts without a button.
-        for _ in range(200):
+        for _ in range(400):
             g.update(0.25)
         assert g.phase == "play" and g.next is g
+        # A leftover that blinks out under the arm and back is no placement
+        _s.tray = {9: [(.3, .3)] * 4}
+        g = GameScene(ctx, 999, "WWW")
+        read(g.dialog)
+        g.handle("right")
+        _s.tray = {}
+        g.update(0.05)
+        _s.tray = {9: [(.3, .3)] * 4}
+        g.update(0.05)
+        assert g.phase == "tutorial", "a leftover ended the practice"
+        _s.tray = {}
         # ... but the practice never skips itself
         g = GameScene(ctx, 999, "WWW")
         read(g.dialog)
@@ -1491,14 +1543,21 @@ if __name__ == "__main__":
         assert g.phase == "order"
         check(f"{lang} order", g, fuse_)
         read(g.dialog)
-        assert g.handle("right") == "start" and g.phase == "play"
-        # Nobody presses ▶: the think time runs out and the round starts itself
+        g.handle("right")
+        assert g.phase == "go" and g.dialog is None, "▶ goes to the 3-2-1"
+        for go in (2.5, 1.5, 0.5):
+            check(f"{lang} go {go}", g, [], go=go)
+        g.update(GO_SECONDS + 0.1)
+        assert g.phase == "play"
+        # Nobody presses ▶: the think time runs out, the same 3-2-1, the round
         g2 = GameScene(ctx, 999, "WWW", tutorial=False)
         assert g2.phase == "read"
         read(g2.dialog)
         g2.handle("right")
         g2.update(THINK_SECONDS + 0.1)
-        assert g2.phase == "play" and g2.dialog is None
+        assert g2.phase == "go" and g2.dialog is None
+        g2.update(GO_SECONDS + 0.1)
+        assert g2.phase == "play"
         # Four treats off the actual price list, not four literal IDs: which
         # markers exist is print-day data since 2026-09-25.
         _s.tray = {i: [(.3, .3)] * 4 for i in sorted(VALUES)[:4]}
@@ -1527,6 +1586,10 @@ if __name__ == "__main__":
             sc.handle("right")                  # Oskar done -> Bella, the number
             assert sc.bye, "the last ▶ hands over to Bella, not to idle"
             check(f"{lang} score bye {stars}", sc, shown=res.score, done=True, now=2.5)
+            sc = DisplayScoreScene(ctx, res, 999)
+            for _ in range(4 * 25):
+                sc.update(0.25)
+            assert isinstance(sc.next, IdleScene), "the score pages turn themselves"
 
     # The fuse: full at the start, gone at the end, never outside the screen.
     surf = pygame.Surface((WIDTH, HEIGHT))

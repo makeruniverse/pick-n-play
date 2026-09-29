@@ -145,17 +145,16 @@ pnp-think() {
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "think $1 s, game restarted"
 }
 
-# Camera layout: pnp-layout top (default: top-down big in the center, arm cam
-# small), split (the two equal panes), solo (top-down only, no arm cam) or
-# fpv (arm cam big, top-down cropped to the tray small).
+# Camera layout: pnp-layout split (default: two equal panes, top-down left,
+# arm cam right) or top (top-down big in the center, arm cam small).
 # Restarts the game.
 pnp-layout() {
     local d=/etc/systemd/system/pnp-expo.service.d
     if [ -z "$1" ]; then
-        grep -ho 'PNP_LAYOUT=[a-z]*' $d/layout.conf 2>/dev/null || echo "default (top)"
+        grep -ho 'PNP_LAYOUT=[a-z]*' $d/layout.conf 2>/dev/null || echo "default (split)"
         return
     fi
-    case $1 in top|split|solo|fpv) ;; *) echo "pnp-layout top|split|solo|fpv"; return 1;; esac
+    case $1 in top|split) ;; *) echo "pnp-layout split|top"; return 1;; esac
     sudo mkdir -p $d
     printf '[Service]\nEnvironment=PNP_LAYOUT=%s\n' "$1" | sudo tee $d/layout.conf >/dev/null
     sudo systemctl daemon-reload && sudo systemctl restart pnp-expo && echo "layout $1, game restarted"
@@ -167,7 +166,7 @@ pnp-layout() {
 pnp-mirror() {
     local d=/etc/systemd/system/pnp-expo.service.d m u
     if [ -z "$1" ]; then
-        cat $d/mirror.conf 2>/dev/null | grep -o 'PNP_ARM_[A-Z]*=[01]' || echo "default (off)"
+        cat $d/mirror.conf 2>/dev/null | grep -o 'PNP_ARM_[A-Z]*=[01]' || echo "default (on)"
         return
     fi
     case $1 in on) m=1 u=0;; ud) m=0 u=1;; 180) m=1 u=1;; off) m=0 u=0;;

@@ -73,12 +73,13 @@ TEXT = {
         practice_n="PRACTICE: {n}",
         tut_intro="IMPORTANT: THE ARM MUST NOT BLOCK THE CAMERA. MOVE IT AWAY AFTER YOU DROP A TREAT!",
         tut_done="NICE! THAT ONE IS {price}. OH, HERE COMES A CUSTOMER!",
+        tut_fail="NO WORRIES, THAT WAS JUST PRACTICE! OH, HERE COMES A CUSTOMER!",
         skip="▶ SKIP", skip_ok="▶ AGAIN TO SKIP", quit="◀ QUIT", quit_ok="◀ AGAIN TO QUIT",
         order_head="BUDGET", think="TIME TO PLAN: {n}",
         order="HI! IT'S MY BIRTHDAY. PICK ME TREATS THAT ADD UP TO EXACTLY {goal}!|"
               "YOU GET {think} SECONDS TO DO THE MATH, THEN THE CLOCK STARTS FOR THE ARM.",
         think_q="WHICH TREATS MAKE {goal}?", ready="▶ READY",
-        go="▶ START", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
+        go="▶ START", get_ready="GET READY!", add="ADD", over="OVER BUDGET", hold="HANDS OFF! {n}",
         perfect="PERFECT", player="PLAYER #{no}",
         score="SCORE", rank="#{place} OF {count} TODAY",
         remember="WANT ANOTHER GO? JUST REMEMBER YOUR NUMBER: #{no}",
@@ -112,6 +113,7 @@ TEXT = {
         tut_intro="WICHTIG: DER ARM DARF DIE KAMERA NICHT VERDECKEN. NACH "
                   "DEM ABLEGEN ARM WEG!",
         tut_done="SUPER! DIE KOSTET {price}. OH, DA KOMMT SCHON KUNDSCHAFT!",
+        tut_fail="KEIN PROBLEM, WAR JA NUR ZUM ÜBEN! OH, DA KOMMT SCHON KUNDSCHAFT!",
         skip="▶ ÜBERSPRINGEN", skip_ok="▶ NOCHMAL ZUM ÜBERSPRINGEN",
         quit="◀ ABBRECHEN",
         quit_ok="◀ NOCHMAL ZUM ABBRECHEN",
@@ -119,7 +121,7 @@ TEXT = {
         order="HALLO! ICH HAB GEBURTSTAG. SUCH MIR SÜßIGKEITEN FÜR GENAU {goal} AUS!|"
               "DU HAST {think} SEKUNDEN ZUM RECHNEN, DANN LÄUFT DIE UHR FÜR DEN ARM.",
         think_q="{goal}: WELCHE SÜßIGKEITEN PASSEN?", ready="▶ BEREIT",
-        go="▶ LOS GEHT'S", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
+        go="▶ LOS GEHT'S", get_ready="GLEICH GEHT'S LOS!", add="ES FEHLEN NOCH", over="ÜBER BUDGET",
         hold="NICHT MEHR ANFASSEN! {n}",
         perfect="PERFEKT", player="SPIELER #{no}",
         score="PUNKTE", rank="PLATZ {place} VON {count} HEUTE",
